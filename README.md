@@ -50,4 +50,4 @@ System oparty jest na architekturze klient-serwer, co zapewnia skalowalność i 
 ---
 
 ## 🚀 Status Projektu
-Projekt jest w fazie rozwoju (Development). Planowana data ukończenia i obrony to przełom roku 2026 i 2027.
+Projekt jest w fazie rozwoju. Planowana data ukończenia - lato 2026, obrony - przełom roku 2026 i 2027.
