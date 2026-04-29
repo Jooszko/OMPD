@@ -25,9 +25,9 @@ Celem projektu jest stworzenie centralnej platformy zarządzania danymi, która 
 ## 🏗 2. Architektura i Technologie
 System oparty jest na architekturze klient-serwer, co zapewnia skalowalność i bezpieczeństwo danych poprzez separację warstwy prezentacji od logiki biznesowej.
 
-* **Backend:** Django (Python) – stabilna i bezpieczna logika serwerowa.
-* **Frontend:** React.js – nowoczesny, responsywny interfejs użytkownika.
-* **Baza danych:** PostgreSQL – zaawansowane relacyjne przechowywanie danych.
+* **Backend:** Django (Python)
+* **Frontend:** React.js
+* **Baza danych:** PostgreSQL
 * **Komunikacja:** REST API.
 
 ---
