@@ -1,0 +1,101 @@
+# ============================================================
+#  PYTHON / DJANGO
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Wirtualne środowiska
+venv/
+.venv/
+env/
+ENV/
+
+# Zmienne środowiskowe — NIGDY nie commituj haseł
+.env
+.env.*
+!.env.example
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Migracje — commitujemy (są częścią projektu)
+# !apps/*/migrations/*.py
+# !apps/*/migrations/__init__.py
+
+# ============================================================
+#  NODE.JS / REACT (frontend)
+# ============================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
+
+# Cache
+.npm/
+.eslintcache
+.parcel-cache/
+.vite/
+
+# ============================================================
+#  IDE
+# ============================================================
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+
+# ============================================================
+#  SYSTEM OPERACYJNY
+# ============================================================
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ============================================================
+#  INNE
+# ============================================================
+*.bak
+*.tmp
+*.temp
+.cache/
+plan_developmentu.txt
