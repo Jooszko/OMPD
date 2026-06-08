@@ -1,54 +1,40 @@
 from django.db import models
 
-from clients.models import Client
-from products.models import Product
-
-
-class StandingOrder(models.Model):
-    DAY_CHOICES = [
-        (0, 'Poniedziałek'),
-        (1, 'Wtorek'),
-        (2, 'Środa'),
-        (3, 'Czwartek'),
-        (4, 'Piątek'),
-        (5, 'Sobota'),
-        (6, 'Niedziela'),
-    ]
-
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='standing_orders')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='standing_orders')
-    day_of_week = models.IntegerField(choices=DAY_CHOICES)
-    quantity = models.IntegerField()
-    is_active = models.BooleanField(default=True)
+class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'standing_orders'
+        abstract = True
+
+class StandingOrder(TimeStampedModel):
+    so_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey('clients.Client', on_delete=models.CASCADE, related_name='standing_orders')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='standing_orders')
+    day_of_week = models.IntegerField()
+    quantity = models.IntegerField()
+    price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f'{self.client} — {self.product} ({self.get_day_of_week_display()})'
-
-
-class DailyOrder(models.Model):
+        dni = ["Pn", "Wt", "Śr", "Cz", "Pt", "Sb", "Nd"]
+        return f"[Szablon] {self.client.name} - {dni[self.day_of_week-1]}: {self.product.name}"
+    
+class DailyOrder(TimeStampedModel):
     STATUS_CHOICES = [
-        ('pending', 'Oczekuje'),
-        ('confirmed', 'Potwierdzone'),
+        ('planned', 'Zaplanowane'),
+        ('in_production', 'W produkcji'),
+        ('in_delivery', 'W dostawie'),
         ('delivered', 'Dostarczone'),
         ('cancelled', 'Anulowane'),
     ]
-
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='daily_orders')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='daily_orders')
+    do_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey('clients.Client', on_delete=models.CASCADE, related_name='daily_orders')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='daily_orders')
     order_date = models.DateField()
     quantity = models.IntegerField()
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'daily_orders'
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
 
     def __str__(self):
-        return f'{self.client} — {self.product} ({self.order_date})'
+        return f"{self.order_date} - {self.client.name} ({self.status})"

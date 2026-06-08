@@ -1,38 +1,26 @@
-from django.conf import settings
 from django.db import models
 
-
-class Route(models.Model):
-    route_name = models.CharField(max_length=255)
-    driver = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='driven_routes',
-    )
+class TimeStampedModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'routes'
+        abstract = True
+
+class Route(TimeStampedModel):
+    route_id = models.AutoField(primary_key=True)
+    route_name = models.CharField(max_length=100)
+    driver = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='routes')
 
     def __str__(self):
         return self.route_name
-
-
-class Client(models.Model):
-    name = models.CharField(max_length=255)
+    
+class Client(TimeStampedModel):
+    client_id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=200)
     address = models.TextField()
-    route = models.ForeignKey(
-        Route,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='clients',
-    )
+    route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='clients')
     is_active = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'clients'
 
     def __str__(self):
         return self.name

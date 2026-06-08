@@ -1,13 +1,11 @@
 from django.contrib import admin
 from .models import Client, Route
 
-
 class ClientInline(admin.TabularInline):
     model = Client
     extra = 0
     fields = ('name', 'address', 'is_active')
     show_change_link = True
-
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
@@ -18,7 +16,6 @@ class RouteAdmin(admin.ModelAdmin):
     @admin.display(description='Liczba klientów')
     def client_count(self, obj):
         return obj.clients.count()
-
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
