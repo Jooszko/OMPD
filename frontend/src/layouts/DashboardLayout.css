@@ -223,3 +223,39 @@ html, body {
   height: 100%;
   min-height: 500px;
 }
+
+
+
+
+
+/* typ użytkownika wybieranie*/
+
+.role-simulator {
+  margin-bottom: 12px;
+}
+
+.role-simulator-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.role-simulator-select {
+  width: 100%;
+  background-color: #27272a; 
+  color: var(--text-light);
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.role-simulator-select:focus {
+  border-color: var(--accent-color); 
+}
+
+/* koniec typu */
