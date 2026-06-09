@@ -1,9 +1,9 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
+import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
 
-const HomeDashboard = () => <div className="page-card"><h2>Strona Główna / Dashboard</h2><p>Tu będą wykresy obciążenia produkcji.</p></div>;
 const OrdersPage = () => <div className="page-card"><h2>Moduł Zamówień</h2><p>Zarządzanie zamówieniami codziennymi i stałymi.</p></div>;
 const WarehousePage = () => <div className="page-card"><h2>Magazyn i Surowce</h2><p>Stany magazynowe składników i dostawy.</p></div>;
 const LogisticsPage = () => <div className="page-card"><h2>Logistyka i Trasy</h2><p>Planowanie tras dla kierowców.</p></div>;
