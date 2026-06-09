@@ -1,11 +1,5 @@
 from django.db import models
-
-class TimeStampedModel(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
+from common.models import TimeStampedModel
 
 class Ingredient(TimeStampedModel):
     ingredient_id = models.AutoField(primary_key=True)
@@ -41,4 +35,4 @@ class Recipe(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=3)
 
     def __str__(self):
-        return f"{self.amount} <- {self.ingredient.name} ({self.amount})"
+        return f"{self.amount} <- {self.ingredient.name} ({self.product.name})"

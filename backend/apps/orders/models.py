@@ -1,17 +1,22 @@
 from django.db import models
-
-class TimeStampedModel(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
+from django.core.validators import MinValueValidator, MaxValueValidator
+from common.models import TimeStampedModel
 
 class StandingOrder(TimeStampedModel):
+    DAYS_CHOICES = [
+        (0, 'Pn'),
+        (1, 'Wt'),
+        (2, ' Śr'),
+        (3, 'Czw'),
+        (4, 'Pt'),
+        (5, 'Sb'),
+        (6, 'Nd'),
+    ]
+
     so_id = models.AutoField(primary_key=True)
     client = models.ForeignKey('clients.Client', on_delete=models.CASCADE, related_name='standing_orders')
     product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='standing_orders')
-    day_of_week = models.IntegerField()
+    day_of_week = models.IntegerField(choices=DAYS_CHOICES, validators=[MinValueValidator(0),MaxValueValidator(6)], help_text="0 = Monday, 6 = Sunday")
     quantity = models.IntegerField()
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
     is_active = models.BooleanField(default=True)
