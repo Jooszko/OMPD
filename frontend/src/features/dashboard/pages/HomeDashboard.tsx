@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useDashboard } from '../hooks/useDashboard';
 import type { TodayOrder } from '../../../services/api';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type UserRole = 'admin' | 'baker' | 'driver';
 
@@ -59,7 +61,7 @@ export const HomeDashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col gap-6 text-bakery-dark">
+    <div className="flex flex-col gap-6 text-bakery-dark w-full">
 
       <div className="block">
         <h1 className="m-0 mb-2 text-2xl font-bold">Dzień dobry</h1>
@@ -74,79 +76,86 @@ export const HomeDashboard: React.FC = () => {
 
             <div className="flex gap-5 w-full">
 
-              <div className="flex-[6.5] bg-bakery-inactive border border-bakery-btnBorder rounded-md p-4 min-h-[220px] flex flex-col shadow-sm box-border">
-                <div className="flex justify-between items-center mb-[14px] pb-2 border-b border-bakery-btnBorder font-semibold text-sm box-border">
-                  <span>Zamówienia</span>
-                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">Suma: {data?.today_orders.length ?? 0}</span>
-                </div>
-
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full border-collapse text-sm text-left">
-                    <thead>
-                      <tr>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider">Nazwa firmy</th>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-center">Ilość produktów</th>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data?.today_orders.map((order, idx) => (
-                        <tr key={idx} className="group">
-                          <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg font-semibold group-hover:bg-bakery-inactive">{order.client_name}</td>
-                          <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg text-center group-hover:bg-bakery-inactive">{order.quantity} szt.</td>
-                          <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg text-center group-hover:bg-bakery-inactive">
-                            <span className={`inline-block px-2 py-1 rounded text-[11px] font-bold uppercase ${
-                              order.status === 'planned' ? 'bg-gray-300 text-gray-700' :
-                              order.status === 'in_production' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                              order.status === 'in_delivery' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                              order.status === 'cancelled' ? 'bg-red-100 text-red-700 border border-red-200' :
-                              'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                            }`}>
-                              {getStatusLabel(order.status)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {/* Tabela Zamówień oparta o shadcn */}
+              <Card className="flex-[6.5] bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border">
+                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
+                  <CardTitle className="text-sm font-semibold text-bakery-dark">Zamówienia</CardTitle>
+                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">
+                    Suma: {data?.today_orders.length ?? 0}
+                  </span>
+                </CardHeader>
+                <CardContent className="pt-4 p-4">
+                  <div className="w-full overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa firmy</TableHead>
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-center text-bakery-dark h-10 px-2">Ilość produktów</TableHead>
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-center text-bakery-dark h-10 px-2">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data?.today_orders.map((order, idx) => (
+                          <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                            <TableCell className="p-2 font-semibold text-bakery-dark">{order.client_name}</TableCell>
+                            <TableCell className="p-2 text-center text-bakery-dark">{order.quantity} szt.</TableCell>
+                            <TableCell className="p-2 text-center">
+                              <span className={`inline-block px-2 py-1 rounded text-[11px] font-bold uppercase ${
+                                order.status === 'planned' ? 'bg-gray-300 text-gray-700' :
+                                order.status === 'in_production' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                order.status === 'in_delivery' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                order.status === 'cancelled' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {getStatusLabel(order.status)}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
 
               <div className="flex-[3.5] flex flex-col gap-5">
 
-                <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md p-3 min-h-[90px] flex flex-col items-center justify-center text-center shadow-sm box-border">
+                {/* Karta Metryki ilości produktów */}
+                <Card className="bg-bakery-inactive border-bakery-btnBorder p-3 min-h-[90px] flex flex-col items-center justify-center text-center shadow-sm box-border">
                   <p className="text-sm text-gray-600 mb-1.5 font-semibold">Łączna ilość produktów do wysyłki</p>
-                  <p className="text-3xl font-bold text-blue-900 m-0">
+                  <p className="text-3xl font-bold text-blue-950 m-0">
                     {data?.total_items_for_shipment ?? 0} szt.
                   </p>
-                </div>
+                </Card>
 
-                <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md p-4 flex flex-col justify-start shadow-sm box-border flex-1">
-                  <div className="flex justify-between items-center mb-[14px] pb-2 border-b border-bakery-btnBorder font-semibold text-sm box-border">
-                    <span className="text-sm text-gray-600 font-semibold">Dzisiejsze wykorzystane składniki</span>
-                  </div>
-
-                  <div className="w-full overflow-x-auto max-h-[140px] overflow-y-auto">
-                    <table className="w-full border-collapse text-sm text-left">
-                      <thead>
-                        <tr>
-                          <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider">Składnik</th>
-                          <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-right">Ilość</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data?.ingredients_used_today.map((ing, idx) => (
-                          <tr key={idx} className="group">
-                            <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg font-semibold group-hover:bg-bakery-inactive">{ing.name}</td>
-                            <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg text-right font-mono font-bold group-hover:bg-bakery-inactive">
-                              {parseFloat(ing.total_amount).toFixed(2)} {ing.unit}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                {/* Karta Składników oparta o shadcn z zachowanym scrollem */}
+                <Card className="bg-bakery-inactive border-bakery-btnBorder flex flex-col justify-start shadow-sm box-border flex-1">
+                  <CardHeader className="pb-2 border-b border-bakery-btnBorder">
+                    <CardTitle className="text-sm text-gray-600 font-semibold">Dzisiejsze wykorzystane składniki</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 p-4 flex-1">
+                    <div className="w-full max-h-[140px] overflow-y-auto overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Składnik</TableHead>
+                            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Ilość</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data?.ingredients_used_today.map((ing, idx) => (
+                            <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                              <TableCell className="p-2 font-semibold text-bakery-dark">{ing.name}</TableCell>
+                              <TableCell className="p-2 text-right font-mono font-bold text-bakery-dark">
+                                {parseFloat(ing.total_amount).toFixed(2)} {ing.unit}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
 
               </div>
 
@@ -162,32 +171,37 @@ export const HomeDashboard: React.FC = () => {
             <div className="text-sm font-semibold text-center text-gray-700 mb-1">Podsumowanie finansowe daily</div>
             <div className="grid grid-cols-3 gap-5">
 
-              <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md p-4 flex flex-col justify-start shadow-sm box-border">
-                <div className="flex justify-between items-center mb-[14px] pb-2 border-b border-bakery-btnBorder font-semibold text-sm box-border">
-                  <span>Dzisiejsze wpływy</span>
-                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">Suma: {data?.revenue_per_client.length ?? 0}</span>
-                </div>
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full border-collapse text-sm text-left">
-                    <thead>
-                      <tr>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider">Nazwa firmy</th>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-right">Wartość zamówienia</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data?.revenue_per_client.map((row, idx) => (
-                        <tr key={idx} className="group">
-                          <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg font-semibold group-hover:bg-bakery-inactive">{row.client_name}</td>
-                          <td className="p-2 border-b border-bakery-btnBorder bg-bakery-rowBg text-right font-mono group-hover:bg-bakery-inactive">{parseFloat(row.total_revenue).toFixed(2)} PLN</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {/* Finanse: wpływy */}
+              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border">
+                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
+                  <CardTitle className="text-sm font-semibold text-bakery-dark">Dzisiejsze wpływy</CardTitle>
+                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">
+                    Suma: {data?.revenue_per_client.length ?? 0}
+                  </span>
+                </CardHeader>
+                <CardContent className="pt-4 p-4">
+                  <div className="w-full overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa firmy</TableHead>
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Wartość</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data?.revenue_per_client.map((row, idx) => (
+                          <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                            <TableCell className="p-2 font-semibold text-bakery-dark">{row.client_name}</TableCell>
+                            <TableCell className="p-2 text-right font-mono text-bakery-dark">{parseFloat(row.total_revenue).toFixed(2)} PLN</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
                 {data?.financial_summary ? (
                   <>
                     <p className="text-sm text-gray-600 mb-2 font-semibold">Przychód dzienny</p>
@@ -196,9 +210,9 @@ export const HomeDashboard: React.FC = () => {
                 ) : (
                   <p className="m-0 text-gray-800 leading-balanced">Brak raportu finansowego na dziś</p>
                 )}
-              </div>
+              </Card>
 
-              <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
                 {data?.financial_summary ? (
                   <>
                     <p className="text-sm text-gray-600 mb-2 font-semibold">Zysk netto</p>
@@ -207,7 +221,7 @@ export const HomeDashboard: React.FC = () => {
                 ) : (
                   <p className="m-0 text-gray-800 leading-balanced">Brak raportu finansowego na dziś</p>
                 )}
-              </div>
+              </Card>
 
             </div>
           </section>
@@ -221,35 +235,38 @@ export const HomeDashboard: React.FC = () => {
             <div className="text-sm font-semibold text-center text-gray-700 mb-1">Podsumowanie stanów magazynowych</div>
             <div className="grid grid-cols-3 gap-5">
 
-              <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md p-4 flex flex-col justify-start shadow-sm box-border col-span-3">
-                <div className="flex justify-between items-center mb-[14px] pb-2 border-b border-bakery-btnBorder font-semibold text-sm box-border">
-                  <span>Składniki</span>
+              {/* Magazyn oparty o shadcn */}
+              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border col-span-3">
+                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
+                  <CardTitle className="text-sm font-semibold text-bakery-dark">Składniki</CardTitle>
                   <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">Pozycji: {data?.warehouse_stock.length ?? 0}</span>
-                </div>
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full border-collapse text-sm text-left">
-                    <thead>
-                      <tr>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider">Nazwa</th>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-right">Stan obecny</th>
-                        <th className="bg-bakery-btnBorder text-bakery-dark p-2 text-[11px] font-semibold uppercase tracking-wider text-right">Min. stan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data?.warehouse_stock.map((item, idx) => {
-                        const isWarning = parseFloat(item.current_stock) <= parseFloat(item.min_stock_level);
-                        return (
-                          <tr key={idx} className="group">
-                            <td className={`p-2 border-b border-bakery-btnBorder font-semibold group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'bg-bakery-rowBg'}`}>{item.name}</td>
-                            <td className={`p-2 border-b border-bakery-btnBorder text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900 font-bold' : 'bg-bakery-rowBg'}`}>{parseFloat(item.current_stock).toFixed(2)} {item.unit}</td>
-                            <td className={`p-2 border-b border-bakery-btnBorder text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'bg-bakery-rowBg'}`}>{parseFloat(item.min_stock_level).toFixed(2)} {item.unit}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent className="pt-4 p-4">
+                  <div className="w-full overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa</TableHead>
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Stan obecny</TableHead>
+                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Min. stan</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data?.warehouse_stock.map((item, idx) => {
+                          const isWarning = parseFloat(item.current_stock) <= parseFloat(item.min_stock_level);
+                          return (
+                            <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                              <TableCell className={`p-2 font-semibold group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'text-bakery-dark'}`}>{item.name}</TableCell>
+                              <TableCell className={`p-2 text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900 font-bold' : 'text-bakery-dark'}`}>{parseFloat(item.current_stock).toFixed(2)} {item.unit}</TableCell>
+                              <TableCell className={`p-2 text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'text-bakery-dark'}`}>{parseFloat(item.min_stock_level).toFixed(2)} {item.unit}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
 
             </div>
           </section>
@@ -262,9 +279,9 @@ export const HomeDashboard: React.FC = () => {
           <section className="flex flex-col gap-4">
             <div className="text-sm font-semibold text-center text-gray-700 mb-1">Panel Logistyki Kierowcy</div>
             <div className="grid grid-cols-3 gap-5">
-              <div className="bg-bakery-inactive border border-bakery-btnBorder rounded-md min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border col-span-3">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border col-span-3">
                 <p className="m-0 text-gray-800 leading-balanced">Twoje dzisiejsze trasy i punkty wydań towaru znajdują się w sekcji "Logistyka".</p>
-              </div>
+              </Card>
             </div>
           </section>
         </>
