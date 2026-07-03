@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bakery-main: #d3cdcd;
+  --color-bakery-dark: #1a1a1a;
+  --color-bakery-inactive: #e2dede;
+  --color-bakery-border: #a19c9c;
+  --color-bakery-btnBorder: #c5c1c1;
+  --color-bakery-accent: #f49f1c;
+  --color-bakery-rowBg: #ebe7e7;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #d3cdcd;
+}
