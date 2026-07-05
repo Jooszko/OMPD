@@ -6,7 +6,6 @@ type UserRole = 'admin' | 'baker' | 'driver';
 
 export const DashboardLayout: React.FC = () => {
   const location = useLocation();
-
   const [currentRole, setCurrentRole] = useState<UserRole>('admin');
 
   const menuItems = [
@@ -33,11 +32,11 @@ export const DashboardLayout: React.FC = () => {
   return (
     <div className="flex w-screen h-screen bg-bakery-main overflow-hidden font-sans select-none">
       
-      <aside className="w-[240px] min-w-[240px] bg-bakery-main border-r border-bakery-border flex flex-col justify-between h-full box-border">
+      <aside className="w-[240px] min-w-[240px] bg-bakery-main border-r border-bakery-border flex flex-col justify-between h-full box-border overflow-hidden">
         
-        <div className="flex flex-col w-full">
+        <div className="flex flex-col w-full min-h-0 flex-1">
           
-          <div className="h-[120px] bg-bakery-dark p-4 flex items-center gap-3 border-b border-bakery-border box-border">
+          <div className="h-[120px] bg-bakery-dark p-4 flex items-center gap-3 border-b border-bakery-border box-border shrink-0">
             <div className="w-12 h-12 bg-bakery-accent rounded-xl flex items-center justify-center shadow-md box-border">
               <span className="text-white text-2xl font-bold">🍞</span>
             </div>
@@ -47,7 +46,7 @@ export const DashboardLayout: React.FC = () => {
             </div>
           </div>
           
-          <nav className="flex flex-col gap-2 p-3 mt-2">
+          <nav className="flex flex-col gap-1.5 p-3 mt-2 overflow-y-auto flex-1 min-h-0 pr-1.5">
             {visibleMenuItems.map((item) => {
               const isActive = location.pathname === item.path;
               
@@ -55,7 +54,7 @@ export const DashboardLayout: React.FC = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`w-full h-[45px] flex items-center justify-center no-underline text-sm font-medium rounded shadow-sm transition-all duration-150 box-border ${
+                  className={`w-full h-[40px] min-h-[40px] flex items-center justify-center no-underline text-sm font-medium rounded shadow-sm transition-all duration-150 box-border shrink-0 ${
                     isActive 
                       ? 'bg-bakery-dark text-white border border-bakery-dark' 
                       : 'bg-bakery-inactive text-bakery-dark border border-bakery-btnBorder hover:bg-[#dcd8d8] active:scale-[0.99]'
@@ -68,9 +67,9 @@ export const DashboardLayout: React.FC = () => {
           </nav>
         </div>
 
-        <div className="bg-bakery-dark p-4 border-t border-bakery-border text-white flex flex-col gap-2 box-border">
+        <div className="bg-bakery-dark p-4 border-t border-bakery-border text-white flex flex-col gap-2 box-border shrink-0">
           
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="text-[10px] text-gray-400 block mb-1">
               Widok roli:
             </label>
@@ -86,7 +85,7 @@ export const DashboardLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-bakery-accent text-black font-bold rounded-full flex items-center justify-center">
+            <div className="w-9 h-9 min-w-[36px] bg-bakery-accent text-black font-bold rounded-full flex items-center justify-center text-sm shrink-0">
               {currentRole === 'admin' ? 'M' : currentRole === 'baker' ? 'P' : 'K'}
             </div>
             <div className="flex flex-col min-w-0">
@@ -97,7 +96,7 @@ export const DashboardLayout: React.FC = () => {
           
           <button 
             onClick={() => console.log('Wylogowywanie...')}
-            className="flex items-center gap-2 text-xs text-gray-400 bg-none border-none border-t border-[#27272a] pt-2 mt-2 w-full text-left cursor-pointer transition-colors duration-150 hover:text-bakery-accent"
+            className="flex items-center gap-2 text-xs text-gray-400 bg-none border-none border-t border-[#27272a] pt-2 mt-1 w-full text-left cursor-pointer transition-colors duration-150 hover:text-bakery-accent"
           >
             <LogOut size={14} />
             <span>Wyloguj</span>
@@ -106,8 +105,8 @@ export const DashboardLayout: React.FC = () => {
 
       </aside>
 
-      <main className="flex-1 h-full overflow-x-hidden overflow-y-auto bg-bakery-main p-8 box-border">
-        <div className="w-full h-full min-h-[500px]">
+      <main className="flex-1 h-full overflow-x-hidden overflow-y-auto bg-bakery-main p-6 box-border">
+        <div className="w-full h-full">
           <Outlet context={{ currentRole }} />
         </div>
       </main>

@@ -38,122 +38,110 @@ export const HomeDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 text-bakery-dark">
-        <div className="block">
-          <h1 className="m-0 mb-2 text-2xl font-bold">Dzień dobry</h1>
-          <div className="text-sm text-gray-600">{currentDateTime}</div>
-        </div>
-        <p className="p-8">Ładowanie danych...</p>
+      <div className="p-6 max-w-7xl mx-auto text-bakery-dark">
+        <h1 className="text-2xl font-bold mb-2">Dzień dobry</h1>
+        <p>Ładowanie danych...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col gap-6 text-bakery-dark">
-        <div className="block">
-          <h1 className="m-0 mb-2 text-2xl font-bold">Dzień dobry</h1>
-          <div className="text-sm text-gray-600">{currentDateTime}</div>
-        </div>
-        <p className="p-8 text-red-600">Błąd połączenia z serwerem: {error}</p>
+      <div className="p-6 max-w-7xl mx-auto text-bakery-dark">
+        <h1 className="text-2xl font-bold mb-2">Dzień dobry</h1>
+        <p className="text-red-600">Błąd połączenia z serwerem: {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 text-bakery-dark w-full">
+
+    <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
 
       <div className="block">
-        <h1 className="m-0 mb-2 text-2xl font-bold">Dzień dobry</h1>
-        <div className="text-sm text-gray-600">{currentDateTime}</div>
+        <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight">Dzień dobry</h1>
+        <div className="text-xs text-gray-500 font-medium">{currentDateTime}</div>
       </div>
 
       {(currentRole === 'admin' || currentRole === 'baker') && (
         <>
-          <hr className="border-0 border-t border-bakery-border my-3" />
-          <section className="flex flex-col gap-4">
-            <div className="text-sm font-semibold text-center text-gray-700 mb-1">Dzisiejsze zamówienia</div>
+          <hr className="border-0 border-t border-bakery-border my-1" />
+          <section className="flex flex-col gap-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 text-center mb-1">Dzisiejsze zamówienia</div>
 
-            <div className="flex gap-5 w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
 
-              {/* Tabela Zamówień oparta o shadcn */}
-              <Card className="flex-[6.5] bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border">
-                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
-                  <CardTitle className="text-sm font-semibold text-bakery-dark">Zamówienia</CardTitle>
-                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">
+              <Card className="lg:col-span-2 bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[320px] flex flex-col overflow-hidden">
+                <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">Zamówienia</CardTitle>
+                  <span className="bg-bakery-dark text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
                     Suma: {data?.today_orders.length ?? 0}
                   </span>
                 </CardHeader>
-                <CardContent className="pt-4 p-4">
-                  <div className="w-full overflow-x-auto">
+                <CardContent className="p-2 flex-1 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                      <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">Nazwa firmy</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-center text-bakery-dark h-8 px-3">Ilość produktów</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-center text-bakery-dark h-8 px-3">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data?.today_orders.map((order, idx) => (
+                        <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                          <TableCell className="py-2 px-3 text-sm font-semibold text-bakery-dark">{order.client_name}</TableCell>
+                          <TableCell className="py-2 px-3 text-sm text-center text-bakery-dark">{order.quantity} szt.</TableCell>
+                          <TableCell className="py-2 px-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              order.status === 'planned' ? 'bg-gray-300 text-gray-700' :
+                              order.status === 'in_production' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                              order.status === 'in_delivery' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              order.status === 'cancelled' ? 'bg-red-100 text-red-700 border border-red-200' :
+                              'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            }`}>
+                              {getStatusLabel(order.status)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <div className="flex flex-col gap-4 h-[320px]">
+
+                <Card className="bg-bakery-inactive border-bakery-btnBorder py-3 px-4 flex flex-col items-center justify-center text-center shadow-sm shrink-0">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">Łączna ilość do wysyłki</p>
+                  <p className="text-2xl font-black text-blue-950 tracking-tight">
+                    {data?.total_items_for_shipment ?? 0} <span className="text-lg font-bold">szt.</span>
+                  </p>
+                </Card>
+
+                <Card className="bg-bakery-inactive border-bakery-btnBorder flex flex-col shadow-sm flex-1 overflow-hidden">
+                  <CardHeader className="py-2 px-4 border-b border-bakery-btnBorder shrink-0">
+                    <CardTitle className="text-xs font-bold uppercase tracking-wide text-gray-500">Dzisiejsze składniki</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-2 flex-1 overflow-y-auto">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
                         <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa firmy</TableHead>
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-center text-bakery-dark h-10 px-2">Ilość produktów</TableHead>
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-center text-bakery-dark h-10 px-2">Status</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">Składnik</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase tracking-wider text-right text-bakery-dark h-8 px-3">Ilość</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {data?.today_orders.map((order, idx) => (
+                        {data?.ingredients_used_today.map((ing, idx) => (
                           <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
-                            <TableCell className="p-2 font-semibold text-bakery-dark">{order.client_name}</TableCell>
-                            <TableCell className="p-2 text-center text-bakery-dark">{order.quantity} szt.</TableCell>
-                            <TableCell className="p-2 text-center">
-                              <span className={`inline-block px-2 py-1 rounded text-[11px] font-bold uppercase ${
-                                order.status === 'planned' ? 'bg-gray-300 text-gray-700' :
-                                order.status === 'in_production' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                                order.status === 'in_delivery' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                                order.status === 'cancelled' ? 'bg-red-100 text-red-700 border border-red-200' :
-                                'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                              }`}>
-                                {getStatusLabel(order.status)}
-                              </span>
+                            <TableCell className="py-1.5 px-3 text-sm font-semibold text-bakery-dark">{ing.name}</TableCell>
+                            <TableCell className="py-1.5 px-3 text-right font-mono text-sm font-bold text-bakery-dark">
+                              {parseFloat(ing.total_amount).toFixed(2)} {ing.unit}
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex-[3.5] flex flex-col gap-5">
-
-                {/* Karta Metryki ilości produktów */}
-                <Card className="bg-bakery-inactive border-bakery-btnBorder p-3 min-h-[90px] flex flex-col items-center justify-center text-center shadow-sm box-border">
-                  <p className="text-sm text-gray-600 mb-1.5 font-semibold">Łączna ilość produktów do wysyłki</p>
-                  <p className="text-3xl font-bold text-blue-950 m-0">
-                    {data?.total_items_for_shipment ?? 0} szt.
-                  </p>
-                </Card>
-
-                {/* Karta Składników oparta o shadcn z zachowanym scrollem */}
-                <Card className="bg-bakery-inactive border-bakery-btnBorder flex flex-col justify-start shadow-sm box-border flex-1">
-                  <CardHeader className="pb-2 border-b border-bakery-btnBorder">
-                    <CardTitle className="text-sm text-gray-600 font-semibold">Dzisiejsze wykorzystane składniki</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4 p-4 flex-1">
-                    <div className="w-full max-h-[140px] overflow-y-auto overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
-                            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Składnik</TableHead>
-                            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Ilość</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data?.ingredients_used_today.map((ing, idx) => (
-                            <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
-                              <TableCell className="p-2 font-semibold text-bakery-dark">{ing.name}</TableCell>
-                              <TableCell className="p-2 text-right font-mono font-bold text-bakery-dark">
-                                {parseFloat(ing.total_amount).toFixed(2)} {ing.unit}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
                   </CardContent>
                 </Card>
 
@@ -166,60 +154,54 @@ export const HomeDashboard: React.FC = () => {
 
       {currentRole === 'admin' && (
         <>
-          <hr className="border-0 border-t border-bakery-border my-3" />
-          <section className="flex flex-col gap-4">
-            <div className="text-sm font-semibold text-center text-gray-700 mb-1">Podsumowanie finansowe daily</div>
-            <div className="grid grid-cols-3 gap-5">
+          <hr className="border-0 border-t border-bakery-border my-1" />
+          <section className="flex flex-col gap-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 text-center mb-1">Podsumowanie finansowe daily</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-              {/* Finanse: wpływy */}
-              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border">
-                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
-                  <CardTitle className="text-sm font-semibold text-bakery-dark">Dzisiejsze wpływy</CardTitle>
-                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">
-                    Suma: {data?.revenue_per_client.length ?? 0}
-                  </span>
+              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[200px] flex flex-col overflow-hidden">
+                <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">Wpływy per klient</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-4 p-4">
-                  <div className="w-full overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa firmy</TableHead>
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Wartość</TableHead>
+                <CardContent className="p-2 flex-1 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                      <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">Nazwa firmy</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-right text-bakery-dark h-8 px-3">Wartość</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data?.revenue_per_client.map((row, idx) => (
+                        <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                          <TableCell className="py-1.5 px-3 text-sm font-semibold text-bakery-dark">{row.client_name}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-right font-mono text-sm text-bakery-dark">{parseFloat(row.total_revenue).toFixed(2)} PLN</TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data?.revenue_per_client.map((row, idx) => (
-                          <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
-                            <TableCell className="p-2 font-semibold text-bakery-dark">{row.client_name}</TableCell>
-                            <TableCell className="p-2 text-right font-mono text-bakery-dark">{parseFloat(row.total_revenue).toFixed(2)} PLN</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
 
-              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[200px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 {data?.financial_summary ? (
                   <>
-                    <p className="text-sm text-gray-600 mb-2 font-semibold">Przychód dzienny</p>
-                    <p className="text-2xl font-bold text-bakery-dark m-0">{parseFloat(data.financial_summary.total_revenue).toFixed(2)} PLN</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">Przychód dzienny</p>
+                    <p className="text-xl font-black text-bakery-dark tracking-tight">{parseFloat(data.financial_summary.total_revenue).toFixed(2)} PLN</p>
                   </>
                 ) : (
-                  <p className="m-0 text-gray-800 leading-balanced">Brak raportu finansowego na dziś</p>
+                  <p className="text-sm text-gray-500">Brak raportu finansowego</p>
                 )}
               </Card>
 
-              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[200px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 {data?.financial_summary ? (
                   <>
-                    <p className="text-sm text-gray-600 mb-2 font-semibold">Zysk netto</p>
-                    <p className="text-2xl font-bold text-bakery-dark m-0">{parseFloat(data.financial_summary.net_profit).toFixed(2)} PLN</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">Zysk netto</p>
+                    <p className="text-xl font-black text-emerald-800 tracking-tight">{parseFloat(data.financial_summary.net_profit).toFixed(2)} PLN</p>
                   </>
                 ) : (
-                  <p className="m-0 text-gray-800 leading-balanced">Brak raportu finansowego na dziś</p>
+                  <p className="text-sm text-gray-500">Brak raportu finansowego</p>
                 )}
               </Card>
 
@@ -230,59 +212,51 @@ export const HomeDashboard: React.FC = () => {
 
       {(currentRole === 'admin' || currentRole === 'baker') && (
         <>
-          <hr className="border-0 border-t border-bakery-border my-3" />
-          <section className="flex flex-col gap-4">
-            <div className="text-sm font-semibold text-center text-gray-700 mb-1">Podsumowanie stanów magazynowych</div>
-            <div className="grid grid-cols-3 gap-5">
-
-              {/* Magazyn oparty o shadcn */}
-              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm box-border col-span-3">
-                <CardHeader className="flex flex-row justify-between items-center pb-2 border-b border-bakery-btnBorder space-y-0">
-                  <CardTitle className="text-sm font-semibold text-bakery-dark">Składniki</CardTitle>
-                  <span className="bg-bakery-dark text-white text-[11px] px-2 py-0.5 rounded-xl font-bold">Pozycji: {data?.warehouse_stock.length ?? 0}</span>
-                </CardHeader>
-                <CardContent className="pt-4 p-4">
-                  <div className="w-full overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-bakery-dark h-10 px-2">Nazwa</TableHead>
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Stan obecny</TableHead>
-                          <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-right text-bakery-dark h-10 px-2">Min. stan</TableHead>
+          <hr className="border-0 border-t border-bakery-border my-1" />
+          <section className="flex flex-col gap-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 text-center mb-1">Podsumowanie stanów magazynowych</div>
+            
+            <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[240px] flex flex-col overflow-hidden">
+              <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
+                <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">Składniki w magazynie</CardTitle>
+                <span className="bg-bakery-dark text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Pozycji: {data?.warehouse_stock.length ?? 0}</span>
+              </CardHeader>
+              <CardContent className="p-2 flex-1 overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                    <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
+                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">Nazwa</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-right text-bakery-dark h-8 px-3">Stan obecny</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-right text-bakery-dark h-8 px-3">Min. stan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data?.warehouse_stock.map((item, idx) => {
+                      const isWarning = parseFloat(item.current_stock) <= parseFloat(item.min_stock_level);
+                      return (
+                        <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
+                          <TableCell className={`py-1.5 px-3 text-sm font-semibold ${isWarning ? 'bg-red-50 text-red-900' : 'text-bakery-dark'}`}>{item.name}</TableCell>
+                          <TableCell className={`py-1.5 px-3 text-right font-mono text-sm ${isWarning ? 'bg-red-50 text-red-900 font-bold' : 'text-bakery-dark'}`}>{parseFloat(item.current_stock).toFixed(2)} {item.unit}</TableCell>
+                          <TableCell className={`py-1.5 px-3 text-right font-mono text-sm ${isWarning ? 'bg-red-50 text-red-900' : 'text-bakery-dark'}`}>{parseFloat(item.min_stock_level).toFixed(2)} {item.unit}</TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data?.warehouse_stock.map((item, idx) => {
-                          const isWarning = parseFloat(item.current_stock) <= parseFloat(item.min_stock_level);
-                          return (
-                            <TableRow key={idx} className="bg-bakery-rowBg hover:bg-bakery-inactive border-b border-bakery-btnBorder transition-colors">
-                              <TableCell className={`p-2 font-semibold group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'text-bakery-dark'}`}>{item.name}</TableCell>
-                              <TableCell className={`p-2 text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900 font-bold' : 'text-bakery-dark'}`}>{parseFloat(item.current_stock).toFixed(2)} {item.unit}</TableCell>
-                              <TableCell className={`p-2 text-right font-mono group-hover:bg-bakery-inactive ${isWarning ? 'bg-red-100 text-red-900' : 'text-bakery-dark'}`}>{parseFloat(item.min_stock_level).toFixed(2)} {item.unit}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-
-            </div>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </section>
         </>
       )}
 
       {currentRole === 'driver' && (
         <>
-          <hr className="border-0 border-t border-bakery-border my-3" />
-          <section className="flex flex-col gap-4">
-            <div className="text-sm font-semibold text-center text-gray-700 mb-1">Panel Logistyki Kierowcy</div>
-            <div className="grid grid-cols-3 gap-5">
-              <Card className="bg-bakery-inactive border-bakery-btnBorder min-h-[180px] p-5 flex flex-col items-center justify-center text-center shadow-sm box-border col-span-3">
-                <p className="m-0 text-gray-800 leading-balanced">Twoje dzisiejsze trasy i punkty wydań towaru znajdują się w sekcji "Logistyka".</p>
-              </Card>
-            </div>
+          <hr className="border-0 border-t border-bakery-border my-1" />
+          <section className="flex flex-col gap-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 text-center mb-1">Panel Logistyki Kierowcy</div>
+            <Card className="bg-bakery-inactive border-bakery-btnBorder p-6 text-center shadow-sm">
+              <p className="text-sm text-gray-600">Twoje dzisiejsze trasy i punkty wydań towaru znajdują się w sekcji "Logistyka".</p>
+            </Card>
           </section>
         </>
       )}

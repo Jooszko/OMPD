@@ -13,7 +13,7 @@ const UsersPage = () => <div className="page-card"><h2>Użytkownicy i Pracownicy
 const ClientsPage = () => <div className="page-card"><h2>Baza Klientów</h2><p>Lista odbiorców (sklepy, punkty sprzedaży).</p></div>;
 const ContractorsPage = () => <div className="page-card"><h2>Kontrahenci / Dostawcy</h2><p>Hurtownie mąki, drożdży itp.</p></div>;
 
-const NotFoundPage = () => <div className="page-card"><h2>⚠️ Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
+const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
 
 export const AppRoutes: React.FC = () => {
   return (
