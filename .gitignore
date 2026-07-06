@@ -55,6 +55,12 @@ frontend/out/
 .parcel-cache/
 .vite/
 
+.log/
+docs/
+css/
+export.scss
+export/
+
 # ============================================================
 #  IDE
 # ============================================================
@@ -99,3 +105,4 @@ $RECYCLE.BIN/
 *.temp
 .cache/
 plan_developmentu.txt
+comands.txt
