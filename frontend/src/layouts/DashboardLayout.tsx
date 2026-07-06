@@ -13,7 +13,7 @@ export const DashboardLayout: React.FC = () => {
     { path: '/orders', label: 'Zamówienia', roles: ['admin'] },
     { path: '/warehouse', label: 'Magazyn', roles: ['admin', 'baker'] },
     { path: '/logistics', label: 'Logistyka', roles: ['admin', 'driver'] },
-    { path: '/recipes', label: 'Receptury', roles: ['admin', 'baker'] },
+    { path: '/products', label: 'Produkty', roles: ['admin', 'baker'] },
     { path: '/finance', label: 'Finanse', roles: ['admin'] },
     { path: '/users', label: 'Użytkownicy', roles: ['admin'] },
     { path: '/clients', label: 'Klienci', roles: ['admin'] },

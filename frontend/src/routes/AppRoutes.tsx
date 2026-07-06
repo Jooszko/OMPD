@@ -4,12 +4,12 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
 import ZamowieniaPanel from '../features/dashboard/pages/Orders';
+import Produkty from '../features/dashboard/pages/Products';
 
 
 
 const WarehousePage = () => <div className="page-card"><h2>Magazyn i Surowce</h2><p>Stany magazynowe składników i dostawy.</p></div>;
 const LogisticsPage = () => <div className="page-card"><h2>Logistyka i Trasy</h2><p>Planowanie tras dla kierowców.</p></div>;
-const RecipesPage = () => <div className="page-card"><h2>Receptury i Produkty</h2><p>Zarządzanie składem produktów i pieczywa.</p></div>;
 const FinancePage = () => <div className="page-card"><h2>Finanse i Wydatki</h2><p>Analiza kosztów, przychodów i raporty COGS.</p></div>;
 const UsersPage = () => <div className="page-card"><h2>Użytkownicy i Pracownicy</h2><p>Zarządzanie kontami adminów, piekarzy i kierowców.</p></div>;
 const ClientsPage = () => <div className="page-card"><h2>Baza Klientów</h2><p>Lista odbiorców (sklepy, punkty sprzedaży).</p></div>;
@@ -28,7 +28,7 @@ export const AppRoutes: React.FC = () => {
         
         <Route path="warehouse" element={<WarehousePage />} />
         <Route path="logistics" element={<LogisticsPage />} />
-        <Route path="recipes" element={<RecipesPage />} />
+        <Route path="products" element={<Produkty />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="clients" element={<ClientsPage />} />
