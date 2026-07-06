@@ -5,6 +5,7 @@ class Route(TimeStampedModel):
     route_id = models.AutoField(primary_key=True)
     route_name = models.CharField(max_length=100)
     driver = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='routes')
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.route_name
