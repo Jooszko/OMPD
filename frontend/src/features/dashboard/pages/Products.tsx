@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import {  Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
 
 interface Product {
   product_id: number;
@@ -65,7 +65,7 @@ const MOCK_RECIPES: Recipe[] = [
 
 export default function ProductsPanel() {
   const [activeTab, setActiveTab] = useState<'ceny' | 'receptury'>('ceny');
-  
+
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isEditingPrice, setIsEditingPrice] = useState(false);
@@ -75,10 +75,10 @@ export default function ProductsPanel() {
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
   const [recipeModalMode, setRecipeModalMode] = useState<'add' | 'edit'>('add');
   const [editingRecipeId, setEditingRecipeId] = useState<number | null>(null);
-  
+
   const [recipeProductName, setRecipeProductName] = useState<string>('');
   const [recipeProductCategory, setRecipeProductCategory] = useState<string>('');
-  
+
   const [recipeItems, setRecipeItems] = useState<RecipeItem[]>([]);
   const [selectedIngredientId, setSelectedIngredientId] = useState<number>(MOCK_INGREDIENTS[0].ingredient_id);
   const [ingredientAmount, setIngredientAmount] = useState<string>('');
@@ -153,7 +153,7 @@ export default function ProductsPanel() {
 
     if (recipeModalMode === 'add') {
       const newProductId = Date.now();
-      
+
       const newProduct: Product = {
         product_id: newProductId,
         name: recipeProductName.trim(),
@@ -183,7 +183,7 @@ export default function ProductsPanel() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
-      
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Zarządzanie Produktami</h1>
@@ -249,7 +249,7 @@ export default function ProductsPanel() {
             </div>
 
             <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
-              <button 
+              <button
                 onClick={handleStartEditPrice}
                 disabled={!selectedProductId}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
@@ -267,7 +267,7 @@ export default function ProductsPanel() {
               <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500">Edycja wartości</h2>
               <p className="text-[11px] text-gray-500 font-medium">Wprowadzanie zmian w cenniku handlowym przedsiębiorstwa.</p>
             </div>
-            
+
             <div className="flex-1 mt-4">
               {isEditingPrice && selectedProductId ? (
                 <div className="flex flex-col gap-4">
@@ -277,7 +277,7 @@ export default function ProductsPanel() {
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nowa cena podstawowa (PLN)</span>
-                    <input 
+                    <input
                       type="number"
                       step="0.01"
                       min="0"
@@ -366,10 +366,10 @@ export default function ProductsPanel() {
       {isRecipeModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
           <div className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[520px]">
-            
+
             <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
               <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-bakery-accent" /> 
+                <BookOpen className="w-4 h-4 text-bakery-accent" />
                 {recipeModalMode === 'add' ? 'Nowa Karta Technologiczna Receptury' : 'Modyfikacja Składu Receptury'}
               </h2>
               <button onClick={() => setIsRecipeModalOpen(false)} className="text-gray-400 hover:text-white transition">
@@ -378,7 +378,7 @@ export default function ProductsPanel() {
             </div>
 
             <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4 min-h-0">
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nazwa wypieku</label>

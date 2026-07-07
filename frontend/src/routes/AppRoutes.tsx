@@ -5,15 +5,15 @@ import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
 import ZamowieniaPanel from '../features/dashboard/pages/Orders';
 import Produkty from '../features/dashboard/pages/Products';
+import Finance from '../features/dashboard/pages/Finance';
+import Users from '../features/dashboard/pages/Users';
+import Clients from '../features/dashboard/pages/Clients';
+import Contractors from '../features/dashboard/pages/Contractors';
 
 
 
 const WarehousePage = () => <div className="page-card"><h2>Magazyn i Surowce</h2><p>Stany magazynowe składników i dostawy.</p></div>;
 const LogisticsPage = () => <div className="page-card"><h2>Logistyka i Trasy</h2><p>Planowanie tras dla kierowców.</p></div>;
-const FinancePage = () => <div className="page-card"><h2>Finanse i Wydatki</h2><p>Analiza kosztów, przychodów i raporty COGS.</p></div>;
-const UsersPage = () => <div className="page-card"><h2>Użytkownicy i Pracownicy</h2><p>Zarządzanie kontami adminów, piekarzy i kierowców.</p></div>;
-const ClientsPage = () => <div className="page-card"><h2>Baza Klientów</h2><p>Lista odbiorców (sklepy, punkty sprzedaży).</p></div>;
-const ContractorsPage = () => <div className="page-card"><h2>Kontrahenci / Dostawcy</h2><p>Hurtownie mąki, drożdży itp.</p></div>;
 
 const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
 
@@ -29,10 +29,10 @@ export const AppRoutes: React.FC = () => {
         <Route path="warehouse" element={<WarehousePage />} />
         <Route path="logistics" element={<LogisticsPage />} />
         <Route path="products" element={<Produkty />} />
-        <Route path="finance" element={<FinancePage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="clients" element={<ClientsPage />} />
-        <Route path="contractors" element={<ContractorsPage />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="users" element={<Users />} />
+        <Route path="clients" element={<Clients />} />
+        <Route path="contractors" element={<Contractors />} />
         
       </Route>
       <Route path="/404" element={<NotFoundPage />} />
