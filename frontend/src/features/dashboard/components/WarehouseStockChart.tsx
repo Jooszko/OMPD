@@ -80,7 +80,7 @@ export const WarehouseStockChart: React.FC<WarehouseStockChartProps> = ({ items 
         })}
       </div>
 
-      <div className="h-[420px] overflow-y-auto pr-1">
+      <div className="h-[420px] overflow-y-auto pr-1 pt-5">
         <div
           className="grid items-center"
           style={{ gridTemplateColumns: '160px 1fr 150px', gridAutoRows: ROW_HEIGHT }}
