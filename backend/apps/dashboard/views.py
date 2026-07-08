@@ -60,7 +60,7 @@ class DashboardView(APIView):
 
         warehouse_stock = list(
             Ingredient.objects
-            .values('name', 'unit', 'current_stock', 'min_stock_level')
+            .values('name', 'unit', 'stock__current_stock', 'stock__min_stock_level')
             .order_by('name')
         )
 
@@ -97,8 +97,8 @@ class DashboardView(APIView):
                 {
                     'name': row['name'],
                     'unit': row['unit'],
-                    'current_stock': str(row['current_stock']),
-                    'min_stock_level': str(row['min_stock_level']),
+                    'current_stock': str(row['stock__current_stock']),
+                    'min_stock_level': str(row['stock__min_stock_level']),
                 }
                 for row in warehouse_stock
             ],
