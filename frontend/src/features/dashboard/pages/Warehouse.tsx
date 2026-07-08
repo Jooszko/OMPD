@@ -1,4 +1,3 @@
-import React from 'react';
 import { useDashboard } from '../hooks/useDashboard';
 import { WarehouseStockChart } from '../components/WarehouseStockChart';
 import { computeStockStatus, STOCK_STATUS_COLORS, STOCK_STATUS_LABELS } from '../lib/warehouseStock';

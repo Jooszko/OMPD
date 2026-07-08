@@ -87,7 +87,7 @@ export const WarehouseStockChart: React.FC<WarehouseStockChartProps> = ({ items 
         >
           <div
             className="relative pointer-events-none"
-            style={{ gridColumn: 2, gridRow: `1 / ${rows.length + 1}` }}
+            style={{ gridColumn: 2, gridRow: `1 / ${rows.length + 1}`, alignSelf: 'stretch' }}
             aria-hidden="true"
           >
             {GRIDLINE_POSITIONS.map((pos) => (
