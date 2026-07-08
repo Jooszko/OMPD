@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle } from 'lucide-react';
-
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { fetchSuppliers, saveSupplier } from '../../../services/api';
 interface SupplierProduct {
     product_id: number;
     name: string;
@@ -12,38 +12,15 @@ interface Supplier {
     phone: string;
     email: string;
     address: string;
+    nip: string; 
     is_active: boolean;
     products: SupplierProduct[];
 }
 
-const MOCK_GLOBAL_PRODUCTS: SupplierProduct[] = [
-    { product_id: 1, name: 'Mąka pszenna typ 750' },
-    { product_id: 2, name: 'Drożdże piekarskie świeże' },
-    { product_id: 3, name: 'Sól kamienna piekarnicza' },
-    { product_id: 4, name: 'Cukier biały kryształ' },
-    { product_id: 5, name: 'Masło 82% tł.' },
-    { product_id: 6, name: 'Olej rzepakowy' },
-    { product_id: 7, name: 'Ziarna słonecznika' },
-];
-
-const MOCK_SUPPLIERS: Supplier[] = [
-    {
-        supplier_id: 1, name: 'Młyn „Złoty Kłos”', phone: '123-456-789', email: 'biuro@zlotyklos.pl', address: 'Cieszyn, ul. Młyńska 5', is_active: true, products: [
-            { product_id: 1, name: 'Mąka pszenna typ 750' },
-        ]
-    },
-    {
-        supplier_id: 2, name: 'Hurtownia Surowców „BakeryTrade”', phone: '987-654-321', email: 'zamowienia@bakerytrade.pl', address: 'Bielsko-Biała, ul. Piekarska 10', is_active: true, products: [
-            { product_id: 2, name: 'Drożdże piekarskie świeże' },
-            { product_id: 3, name: 'Sól kamienna piekarnicza' },
-            { product_id: 5, name: 'Masło 82% tł.' },
-        ]
-    },
-];
-
 export default function SuppliersPanel() {
-    const [suppliers, setSuppliers] = useState<Supplier[]>(MOCK_SUPPLIERS);
-    const [globalProducts, setGlobalProducts] = useState<SupplierProduct[]>(MOCK_GLOBAL_PRODUCTS);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [globalProducts, setGlobalProducts] = useState<SupplierProduct[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -54,11 +31,28 @@ export default function SuppliersPanel() {
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
+    const [nip, setNip] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
 
     const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
     const [newProductName, setNewProductName] = useState('');
+
+    useEffect(() => {
+        const loadSuppliers = async () => {
+            try {
+                setIsLoading(true);
+                const data = await fetchSuppliers();
+                setSuppliers(data);
+            } catch (error) {
+                console.error("Błąd podczas ładowania kontrahentów:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadSuppliers();
+    }, []);
 
     const handleOpenAdd = () => {
         setModalMode('add');
@@ -66,6 +60,7 @@ export default function SuppliersPanel() {
         setPhone('');
         setEmail('');
         setAddress('');
+        setNip('');
         setIsActive(true);
         setSupplierProducts([]);
         setIsModalOpen(true);
@@ -79,43 +74,46 @@ export default function SuppliersPanel() {
             setPhone(supplier.phone);
             setEmail(supplier.email);
             setAddress(supplier.address);
+            setNip(supplier.nip || '');
             setIsActive(supplier.is_active);
             setSupplierProducts([...supplier.products]);
             setIsModalOpen(true);
         }
     };
 
-    const handleSaveSupplier = (e: React.FormEvent) => {
+    const handleSaveSupplier = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) {
             alert('Nazwa kontrahenta jest wymagana.');
             return;
         }
 
-        if (modalMode === 'add') {
-            const newSupplier: Supplier = {
-                supplier_id: Date.now(),
-                name: name.trim(),
-                phone: phone.trim(),
-                email: email.trim(),
-                address: address.trim(),
-                is_active: isActive,
-                products: supplierProducts,
-            };
-            setSuppliers([newSupplier, ...suppliers]);
-        } else {
-            setSuppliers(suppliers.map(s => s.supplier_id === selectedSupplierId ? {
-                ...s,
-                name: name.trim(),
-                phone: phone.trim(),
-                email: email.trim(),
-                address: address.trim(),
-                is_active: isActive,
-                products: supplierProducts,
-            } : s));
+        const payload = {
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            address: address.trim(),
+            nip: nip.trim() || null, 
+            is_active: isActive,
+            products: supplierProducts
+        };
+
+        try {
+            if (modalMode === 'add') {
+                const savedData = await saveSupplier(payload, null);
+                setSuppliers([savedData, ...suppliers]);
+            } else {
+                const savedData = await saveSupplier(payload, selectedSupplierId);
+                setSuppliers(suppliers.map(s => s.supplier_id === selectedSupplierId ? savedData : s));
+            }
+            
+            setIsModalOpen(false);
+            setSelectedSupplierId(null);
+            alert('Kontrahent został pomyślnie zapisany w bazie danych.');
+        } catch (error: any) {
+            console.error("Błąd podczas zapisu w komponencie:", error);
+            alert(`Nie udało się zapisać kontrahenta w bazie. Sprawdź konsolę.`);
         }
-        setIsModalOpen(false);
-        setSelectedSupplierId(null);
     };
 
     const handleAddProductToSupplier = (productToAdd: SupplierProduct) => {
@@ -150,6 +148,7 @@ export default function SuppliersPanel() {
 
     const filteredSuppliers = suppliers.filter(s =>
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nip.includes(searchTerm) ||
         s.products.some(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
@@ -165,7 +164,7 @@ export default function SuppliersPanel() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-bakery-border w-4 h-4" />
                     <input
                         type="text"
-                        placeholder="Szukaj po nazwie firmy lub surowca..."
+                        placeholder="Szukaj po nazwie firmy, NIP lub surowca..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-4 py-1.5 border border-bakery-btnBorder rounded text-xs bg-bakery-rowBg focus:bg-white text-bakery-dark font-medium outline-none focus:border-bakery-accent"
@@ -178,65 +177,79 @@ export default function SuppliersPanel() {
             <div className="flex flex-col gap-4 w-full">
                 <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-2 relative">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-bakery-inactive z-10">
-                                <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
-                                    <th className="py-2 px-3 w-12 text-center h-8">Wybór</th>
-                                    <th className="py-2 px-3 h-8">Nazwa Firmy</th>
-                                    <th className="py-2 px-3 h-8">Dane Kontaktowe</th>
-                                    <th className="py-2 px-3 h-8">Lokalizacja</th>
-                                    <th className="py-2 px-3 h-8 text-center">Status relacji</th>
-                                    <th className="py-2 px-3 h-8">Produkty dostawcy</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                                {filteredSuppliers.map((supplier) => (
-                                    <tr key={supplier.supplier_id} className={`bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder ${selectedSupplierId === supplier.supplier_id ? 'bg-[#c9c3c3]' : ''}`}>
-                                        <td className="py-2 px-3 text-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedSupplierId === supplier.supplier_id}
-                                                onChange={() => setSelectedSupplierId(selectedSupplierId === supplier.supplier_id ? null : supplier.supplier_id)}
-                                                className="rounded border-bakery-border text-bakery-dark focus:ring-bakery-accent w-4 h-4 accent-bakery-dark cursor-pointer"
-                                            />
-                                        </td>
-                                        <td className="py-2 px-3 font-bold text-bakery-dark">{supplier.name}</td>
-                                        <td className="py-2 px-3 space-y-0.5">
-                                            <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Phone className="w-3.5 h-3.5" /> {supplier.phone}</div>
-                                            <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Mail className="w-3.5 h-3.5" /> {supplier.email}</div>
-                                        </td>
-                                        <td className="py-2 px-3 text-xs font-semibold text-gray-600"><MapPin className="w-3.5 h-3.5 inline mr-1 text-gray-400" /> {supplier.address}</td>
-                                        <td className="py-2 px-3 text-center">
-                                            <div className="flex items-center justify-center gap-1">
-                                                {supplier.is_active ? (
-                                                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                                                        <CheckCircle className="w-3 h-3" /> Aktywny
-                                                    </span>
-                                                ) : (
-                                                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                                                        <XCircle className="w-3 h-3" /> Nieaktywny
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="py-2 px-3 text-xs">
-                                            <div className="flex flex-wrap gap-1">
-                                                {supplier.products.slice(0, 3).map(p => (
-                                                    <span key={p.product_id} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[10px]">{p.name}</span>
-                                                ))}
-                                                {supplier.products.length > 3 && (
-                                                    <span className="text-[10px] text-gray-500 font-semibold italic">+{supplier.products.length - 3} więcej</span>
-                                                )}
-                                                {supplier.products.length === 0 && (
-                                                    <span className="text-[10px] text-gray-400 font-medium italic">Nie przypisano produktów</span>
-                                                )}
-                                            </div>
-                                        </td>
+                        {isLoading ? (
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-bakery-inactive z-10">
+                                    <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
+                                        <th className="py-2 px-3 w-12 text-center h-8">Wybór</th>
+                                        <th className="py-2 px-3 h-8">Nazwa Firmy</th>
+                                        <th className="py-2 px-3 h-8">Identyfikatory</th>
+                                        <th className="py-2 px-3 h-8">Dane Kontaktowe</th>
+                                        <th className="py-2 px-3 h-8">Lokalizacja</th>
+                                        <th className="py-2 px-3 h-8 text-center">Status relacji</th>
+                                        <th className="py-2 px-3 h-8">Produkty dostawcy</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {filteredSuppliers.length === 0 && (
+                                </thead>
+                                <tbody className="divide-y divide-bakery-btnBorder text-sm">
+                                    {filteredSuppliers.map((supplier) => (
+                                        <tr key={supplier.supplier_id} className={`bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder ${selectedSupplierId === supplier.supplier_id ? 'bg-[#c9c3c3]' : ''}`}>
+                                            <td className="py-2 px-3 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedSupplierId === supplier.supplier_id}
+                                                    onChange={() => setSelectedSupplierId(selectedSupplierId === supplier.supplier_id ? null : supplier.supplier_id)}
+                                                    className="rounded border-bakery-border text-bakery-dark focus:ring-bakery-accent w-4 h-4 accent-bakery-dark cursor-pointer"
+                                                />
+                                            </td>
+                                            <td className="py-2 px-3 font-bold text-bakery-dark">{supplier.name}</td>
+                                            <td className="py-2 px-3 text-xs font-semibold text-gray-600">
+                                                {supplier.nip ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <FileText className="w-3.5 h-3.5 text-gray-400" /> NIP: <span className="font-mono font-bold">{supplier.nip}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400 italic">Brak NIP</span>
+                                                )}
+                                            </td>
+                                            <td className="py-2 px-3 space-y-0.5">
+                                                <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Phone className="w-3.5 h-3.5" /> {supplier.phone}</div>
+                                                <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Mail className="w-3.5 h-3.5" /> {supplier.email}</div>
+                                            </td>
+                                            <td className="py-2 px-3 text-xs font-semibold text-gray-600"><MapPin className="w-3.5 h-3.5 inline mr-1 text-gray-400" /> {supplier.address}</td>
+                                            <td className="py-2 px-3 text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    {supplier.is_active ? (
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                                            <CheckCircle className="w-3 h-3" /> Aktywny
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                                                            <XCircle className="w-3 h-3" /> Nieaktywny
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="py-2 px-3 text-xs">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {supplier.products && supplier.products.slice(0, 3).map(p => (
+                                                        <span key={p.product_id} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[10px]">{p.name}</span>
+                                                    ))}
+                                                    {supplier.products && supplier.products.length > 3 && (
+                                                        <span className="text-[10px] text-gray-500 font-semibold italic">+{supplier.products.length - 3} więcej</span>
+                                                    )}
+                                                    {(!supplier.products || supplier.products.length === 0) && (
+                                                        <span className="text-[10px] text-gray-400 font-medium italic">Nie przypisano produktów</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                        {!isLoading && filteredSuppliers.length === 0 && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-gray-400 p-8">
                                 <SearchCheck className="w-12 h-12 mb-4" />
                                 <p className="text-sm font-semibold m-0">Brak kontrahentów spełniających kryteria.</p>
@@ -268,7 +281,7 @@ export default function SuppliersPanel() {
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
-                    <form onSubmit={handleSaveSupplier} className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-4xl overflow-hidden flex flex-col h-[550px]">
+                    <form onSubmit={handleSaveSupplier} className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-4xl overflow-hidden flex flex-col h-[560px]">
 
                         <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
                             <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
@@ -287,6 +300,10 @@ export default function SuppliersPanel() {
                                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" required />
                                 </div>
                                 <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Numer NIP (Opcjonalnie)</label>
+                                    <input type="text" value={nip} onChange={(e) => setNip(e.target.value)} placeholder="np. 1234567890" className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent font-mono" />
+                                </div>
+                                <div>
                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Adres siedziby</label>
                                     <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" />
                                 </div>
@@ -294,7 +311,7 @@ export default function SuppliersPanel() {
                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Telefon kontaktowy</label>
                                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-bold rounded text-xs p-2 outline-none focus:border-bakery-accent font-mono" />
                                 </div>
-                                <div>
+                                <div className="col-span-2">
                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Adres e-mail</label>
                                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" />
                                 </div>
@@ -346,7 +363,7 @@ export default function SuppliersPanel() {
                                                 </button>
                                             </div>
                                         )) : (
-                                            <div className="text-center py-12 text-gray-400 text-xs font-semibold italic">Lista asortymentu jest pusta.<br />Dodaj produkty z ogólnej bazy po lewej stronie.</div>
+                                            <div className="text-center py-12 text-gray-400 text-xs font-semibold italic">Lista asorytmentu jest pusta.<br />Dodaj produkty z ogólnej bazy po lewej stronie.</div>
                                         )}
                                     </div>
                                 </div>

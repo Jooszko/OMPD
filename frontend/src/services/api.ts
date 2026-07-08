@@ -100,3 +100,56 @@ export async function fetchDashboard(): Promise<any> {
   }
   return response.json();
 }
+
+
+export async function fetchSuppliers(): Promise<any[]> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/finance/suppliers/`, { headers });
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    throw new Error(`Błąd serwera: ${response.status}`);
+  }
+  return response.json();
+}
+
+
+export async function saveSupplier(payload: any, supplierId: number | null = null): Promise<any> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const url = supplierId 
+    ? `${API_BASE}/finance/suppliers/${supplierId}/` 
+    : `${API_BASE}/finance/suppliers/`;
+    
+  const method = supplierId ? 'PUT' : 'POST';
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(JSON.stringify(errorData) || `Błąd serwera: ${response.status}`);
+  }
+
+  return response.json();
+}
