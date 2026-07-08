@@ -43,9 +43,59 @@ export interface DashboardData {
   financial_summary: FinancialSummary | null;
 }
 
-export async function fetchDashboard(): Promise<DashboardData> {
-  const response = await fetch(`${API_BASE}/dashboard/`);
+// export async function fetchDashboard(): Promise<DashboardData> {
+//   const response = await fetch(`${API_BASE}/dashboard/`);
+//   if (!response.ok) {
+//     throw new Error(`Błąd serwera: ${response.status}`);
+//   }
+//   return response.json();
+// }
+
+export interface LoginResponse {
+  refresh: string;
+  access: string;
+}
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem('access_token');
+}
+
+export async function loginUser(username: string, password: string): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE}/auth/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+
   if (!response.ok) {
+    throw new Error('Błędna nazwa użytkownika lub hasło');
+  }
+
+  const data: LoginResponse = await response.json();
+  localStorage.setItem('access_token', data.access);
+  localStorage.setItem('refresh_token', data.refresh);
+  return data;
+}
+
+export function logoutUser(): void {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+}
+
+export async function fetchDashboard(): Promise<any> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/dashboard/`, { headers });
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
     throw new Error(`Błąd serwera: ${response.status}`);
   }
   return response.json();
