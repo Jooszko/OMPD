@@ -10,22 +10,37 @@ import Users from '../features/dashboard/pages/Users';
 import Clients from '../features/dashboard/pages/Clients';
 import Contractors from '../features/dashboard/pages/Contractors';
 
-
+import { Login } from '../features/dashboard/pages/Login';
+import { getAuthToken } from '../services/api';
 
 const WarehousePage = () => <div className="page-card"><h2>Magazyn i Surowce</h2><p>Stany magazynowe składników i dostawy.</p></div>;
 const LogisticsPage = () => <div className="page-card"><h2>Logistyka i Trasy</h2><p>Planowanie tras dla kierowców.</p></div>;
 
 const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
 
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const token = getAuthToken();
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      <Route path="/" element={<DashboardLayout />}>
-        
+      <Route path="/login" element={<Login />} />
+
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<HomeDashboard />} />
-        
         <Route path="orders" element={<ZamowieniaPanel />} />
-        
         <Route path="warehouse" element={<WarehousePage />} />
         <Route path="logistics" element={<LogisticsPage />} />
         <Route path="products" element={<Produkty />} />
@@ -33,8 +48,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="users" element={<Users />} />
         <Route path="clients" element={<Clients />} />
         <Route path="contractors" element={<Contractors />} />
-        
       </Route>
+
       <Route path="/404" element={<NotFoundPage />} />
       <Route path="*" element={<Navigate to="/404" replace />} />
     </Routes>
