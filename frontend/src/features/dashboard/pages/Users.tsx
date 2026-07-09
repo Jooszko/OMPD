@@ -1,24 +1,10 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Edit, Trash2, UserPlus, Shield, CheckCircle, XCircle, Key, X } from 'lucide-react';
-
-interface User {
-    user_id: number;
-    username: string;
-    password_hash: string;
-    role: 'admin' | 'baker' | 'driver';
-    full_name: string;
-    is_active: boolean;
-}
-
-const MOCK_USERS: User[] = [
-    { user_id: 1, username: 'mklukowski', password_hash: 'haslo123', role: 'admin', full_name: 'Mikołaj Klukowski', is_active: true },
-    { user_id: 2, username: 'anowak', password_hash: 'piekarz2026', role: 'baker', full_name: 'Arkadiusz Nowak', is_active: true },
-    { user_id: 3, username: 'jkrasinski', password_hash: 'kierowca1', role: 'driver', full_name: 'Jan Krasiński', is_active: true },
-    { user_id: 4, username: 'kowalski_test', password_hash: 'start123', role: 'baker', full_name: 'Tomasz Kowalski', is_active: false },
-];
+import { fetchUsers, createUser, updateUser, deleteUser, type AppUser } from '../../../services/api';
 
 export default function UsersPanel() {
-    const [users, setUsers] = useState<User[]>(MOCK_USERS);
+    const [users, setUsers] = useState<AppUser[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -28,6 +14,22 @@ export default function UsersPanel() {
     const [role, setRole] = useState<'admin' | 'baker' | 'driver'>('baker');
     const [fullName, setFullName] = useState('');
     const [isActive, setIsActive] = useState(true);
+
+    useEffect(() => {
+        const loadUsers = async () => {
+            try {
+                setIsLoading(true);
+                const data = await fetchUsers();
+                setUsers(data);
+            } catch (error) {
+                console.error('Błąd podczas ładowania użytkowników:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadUsers();
+    }, []);
 
     const getRoleLabel = (roleStr: 'admin' | 'baker' | 'driver') => {
         const labels = {
@@ -53,7 +55,7 @@ export default function UsersPanel() {
         if (user) {
             setModalMode('edit');
             setUsername(user.username);
-            setPassword(user.password_hash);
+            setPassword('');
             setRole(user.role);
             setFullName(user.full_name);
             setIsActive(user.is_active);
@@ -61,45 +63,50 @@ export default function UsersPanel() {
         }
     };
 
-    const handleSaveUser = (e: React.FormEvent) => {
+    const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username.trim() || !password.trim() || !fullName.trim()) {
+        if (!username.trim() || !fullName.trim() || (modalMode === 'add' && !password.trim())) {
             alert('Wszystkie pola formularza muszą zostać uzupełnione.');
             return;
         }
 
-        if (modalMode === 'add') {
-            if (users.some(u => u.username.toLowerCase() === username.trim().toLowerCase())) {
-                alert('Użytkownik o takim loginie (username) już istnieje w systemie.');
-                return;
-            }
-            const newUser: User = {
-                user_id: Date.now(),
-                username: username.trim(),
-                password_hash: password,
-                role,
-                full_name: fullName.trim(),
-                is_active: isActive
-            };
-            setUsers([...users, newUser]);
-        } else {
-            setUsers(users.map(u => u.user_id === selectedUserId ? {
-                ...u,
-                username: username.trim(),
-                password_hash: password,
-                role,
-                full_name: fullName.trim(),
-                is_active: isActive
-            } : u));
+        const payload: any = {
+            username: username.trim(),
+            role,
+            full_name: fullName.trim(),
+            is_active: isActive,
+        };
+        if (password.trim()) {
+            payload.password = password;
         }
-        setIsModalOpen(false);
-        setSelectedUserId(null);
+
+        try {
+            if (modalMode === 'add') {
+                const savedUser = await createUser(payload);
+                setUsers([...users, savedUser]);
+            } else if (selectedUserId) {
+                const savedUser = await updateUser(selectedUserId, payload);
+                setUsers(users.map(u => u.user_id === selectedUserId ? savedUser : u));
+            }
+            setIsModalOpen(false);
+            setSelectedUserId(null);
+        } catch (error) {
+            console.error('Błąd podczas zapisu użytkownika:', error);
+            alert('Nie udało się zapisać użytkownika. Sprawdź czy login nie jest już zajęty.');
+        }
     };
 
-    const handleDeleteUser = () => {
+    const handleDeleteUser = async () => {
+        if (!selectedUserId) return;
         if (confirm('Czy na pewno chcesz bezpowrotnie usunąć tego użytkownika z systemu ERP?')) {
-            setUsers(users.filter(u => u.user_id !== selectedUserId));
-            setSelectedUserId(null);
+            try {
+                await deleteUser(selectedUserId);
+                setUsers(users.filter(u => u.user_id !== selectedUserId));
+                setSelectedUserId(null);
+            } catch (error) {
+                console.error('Błąd podczas usuwania użytkownika:', error);
+                alert('Nie udało się usunąć użytkownika.');
+            }
         }
     };
 
@@ -117,7 +124,10 @@ export default function UsersPanel() {
 
             <div className="flex flex-col gap-4 w-full">
                 <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-2">
+                    <div className="flex-1 overflow-y-auto p-2 relative">
+                        {isLoading ? (
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                        ) : (
                         <table className="w-full text-left border-collapse">
                             <thead className="sticky top-0 bg-bakery-inactive z-10">
                                 <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
@@ -166,6 +176,7 @@ export default function UsersPanel() {
                                 ))}
                             </tbody>
                         </table>
+                        )}
                     </div>
                 </div>
 
@@ -237,10 +248,12 @@ export default function UsersPanel() {
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Hasło startowe</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                                    {modalMode === 'add' ? 'Hasło startowe' : 'Nowe hasło (opcjonalnie)'}
+                                </label>
                                 <input
                                     type="text"
-                                    placeholder="Wpisz hasło tymczasowe"
+                                    placeholder={modalMode === 'add' ? 'Wpisz hasło tymczasowe' : 'Pozostaw puste, aby nie zmieniać'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-bold font-mono rounded text-xs p-2 outline-none focus:border-bakery-accent"
