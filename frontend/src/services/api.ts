@@ -102,6 +102,80 @@ export async function fetchDashboard(): Promise<any> {
 }
 
 
+export interface LogisticsOrder {
+  do_id: number;
+  product_name: string;
+  quantity: number;
+  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+}
+
+export interface LogisticsStop {
+  client_id: number;
+  name: string;
+  address: string;
+  orders: LogisticsOrder[];
+}
+
+export interface LogisticsRoute {
+  route_id: number;
+  route_name: string;
+  driver: { user_id: number; full_name: string } | null;
+  stops: LogisticsStop[];
+}
+
+export interface LogisticsData {
+  date: string;
+  routes: LogisticsRoute[];
+  unassigned: LogisticsStop[];
+}
+
+export async function fetchLogistics(): Promise<LogisticsData> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/logistics/`, { headers });
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    throw new Error(`Błąd serwera: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateOrderStatus(
+  orderId: number,
+  newStatus: LogisticsOrder['status']
+): Promise<{ do_id: number; status: string }> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/logistics/orders/${orderId}/status/`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ status: newStatus }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    throw new Error(`Błąd serwera: ${response.status}`);
+  }
+  return response.json();
+}
+
+
 export async function fetchSuppliers(): Promise<any[]> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
