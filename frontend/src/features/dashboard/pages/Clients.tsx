@@ -1,25 +1,11 @@
-import React, { useState } from 'react';
-import { Plus, Edit, UserPlus, CheckCircle, XCircle, MapPin, X, FileText } from 'lucide-react';
-
-interface Client {
-    client_id: number;
-    name: string;
-    address: string;
-    nip: string;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-const MOCK_CLIENTS: Client[] = [
-    { client_id: 101, name: 'Sklep Spożywczy "U Gosi"', address: 'Górki Wielkie, Główna 12', nip: '5482345678', is_active: true, created_at: '2026-05-10 08:30:00', updated_at: '2026-07-06 14:22:10' },
-    { client_id: 102, name: 'Restauracja Pod Jelenie', address: 'Bielsko-Biała, Rynek 4', nip: '9371234567', is_active: true, created_at: '2026-05-12 11:15:00', updated_at: '2026-07-05 09:45:30' },
-    { client_id: 103, name: 'Społem Ustroń', address: 'Ustroń, Rynek 2', nip: '5480001122', is_active: true, created_at: '2026-06-01 07:00:00', updated_at: '2026-07-06 19:10:00' },
-    { client_id: 104, name: 'Prywatne - Jan Kowalski', address: 'Bielsko-Biała, Szeroka 5', nip: '', is_active: false, created_at: '2026-06-15 16:40:00', updated_at: '2026-06-30 12:00:00' },
-];
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, UserPlus, CheckCircle, XCircle, MapPin, X, FileText, Truck } from 'lucide-react';
+import { fetchClients, saveClient, fetchRoutes, type AppClient, type RouteOption } from '../../../services/api';
 
 export default function ClientsPanel() {
-    const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
+    const [clients, setClients] = useState<AppClient[]>([]);
+    const [routes, setRoutes] = useState<RouteOption[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -27,13 +13,32 @@ export default function ClientsPanel() {
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [nip, setNip] = useState('');
+    const [routeId, setRouteId] = useState<number | ''>('');
     const [isActive, setIsActive] = useState(true);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setIsLoading(true);
+                const [clientsData, routesData] = await Promise.all([fetchClients(), fetchRoutes()]);
+                setClients(clientsData);
+                setRoutes(routesData);
+            } catch (error) {
+                console.error('Błąd podczas ładowania klientów:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     const handleOpenAdd = () => {
         setModalMode('add');
         setName('');
         setAddress('');
         setNip('');
+        setRouteId(routes[0]?.route_id ?? '');
         setIsActive(true);
         setIsModalOpen(true);
     };
@@ -45,43 +50,41 @@ export default function ClientsPanel() {
             setName(client.name);
             setAddress(client.address);
             setNip(client.nip || '');
+            setRouteId(client.route);
             setIsActive(client.is_active);
             setIsModalOpen(true);
         }
     };
 
-    const handleSaveClient = (e: React.FormEvent) => {
+    const handleSaveClient = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim() || !address.trim()) {
-            alert('Pola Nazwa i Adres są wymagane.');
+        if (!name.trim() || !address.trim() || !routeId) {
+            alert('Pola Nazwa, Adres i Trasa są wymagane.');
             return;
         }
 
-        const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const payload = {
+            name: name.trim(),
+            address: address.trim(),
+            nip: nip.trim() || null,
+            route: routeId,
+            is_active: isActive,
+        };
 
-        if (modalMode === 'add') {
-            const newClient: Client = {
-                client_id: Date.now(),
-                name: name.trim(),
-                address: address.trim(),
-                nip: nip.trim(),
-                is_active: isActive,
-                created_at: nowStr,
-                updated_at: nowStr
-            };
-            setClients([...clients, newClient]);
-        } else {
-            setClients(clients.map(c => c.client_id === selectedClientId ? {
-                ...c,
-                name: name.trim(),
-                address: address.trim(),
-                nip: nip.trim(),
-                is_active: isActive,
-                updated_at: nowStr
-            } : c));
+        try {
+            if (modalMode === 'add') {
+                const savedClient = await saveClient(payload, null);
+                setClients([savedClient, ...clients]);
+            } else if (selectedClientId) {
+                const savedClient = await saveClient(payload, selectedClientId);
+                setClients(clients.map(c => c.client_id === selectedClientId ? savedClient : c));
+            }
+            setIsModalOpen(false);
+            setSelectedClientId(null);
+        } catch (error) {
+            console.error('Błąd podczas zapisu klienta:', error);
+            alert('Nie udało się zapisać klienta w bazie.');
         }
-        setIsModalOpen(false);
-        setSelectedClientId(null);
     };
 
     return (
@@ -98,7 +101,10 @@ export default function ClientsPanel() {
 
             <div className="flex flex-col gap-4 w-full">
                 <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-2">
+                    <div className="flex-1 overflow-y-auto p-2 relative">
+                        {isLoading ? (
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                        ) : (
                         <table className="w-full text-left border-collapse">
                             <thead className="sticky top-0 bg-bakery-inactive z-10">
                                 <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
@@ -106,9 +112,8 @@ export default function ClientsPanel() {
                                     <th className="py-2 px-3 h-8">Nazwa Kontrahenta / Odbiorcy</th>
                                     <th className="py-2 px-3 h-8">NIP</th>
                                     <th className="py-2 px-3 h-8">Adres Dostaw</th>
+                                    <th className="py-2 px-3 h-8">Trasa</th>
                                     <th className="py-2 px-3 h-8 text-center">Status relacji</th>
-                                    <th className="py-2 px-3 h-8">Utworzono</th>
-                                    <th className="py-2 px-3 h-8">Aktualizacja</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-bakery-btnBorder text-sm">
@@ -124,8 +129,15 @@ export default function ClientsPanel() {
                                         </td>
                                         <td className="py-2 px-3 font-bold text-bakery-dark">{client.name}</td>
                                         <td className="py-2 px-3 font-mono text-xs text-gray-700 font-semibold">{client.nip || <span className="text-gray-400 italic font-sans text-[11px] font-normal">Brak (Osobisty)</span>}</td>
-                                        <td className="py-2 px-3 font-semibold text-gray-600 flex items-center gap-1">
-                                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {client.address}
+                                        <td className="py-2 px-3 font-semibold text-gray-600">
+                                            <div className="flex items-center gap-1">
+                                                <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {client.address}
+                                            </div>
+                                        </td>
+                                        <td className="py-2 px-3 text-xs font-semibold text-gray-600">
+                                            <div className="flex items-center gap-1">
+                                                <Truck className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {client.route_details?.route_name ?? '-'}
+                                            </div>
                                         </td>
                                         <td className="py-2 px-3 text-center">
                                             <div className="flex items-center justify-center gap-1">
@@ -140,12 +152,11 @@ export default function ClientsPanel() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="py-2 px-3 font-mono text-xs text-gray-500">{client.created_at}</td>
-                                        <td className="py-2 px-3 font-mono text-xs text-gray-500">{client.updated_at}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        )}
                     </div>
                 </div>
 
@@ -221,6 +232,20 @@ export default function ClientsPanel() {
                                     onChange={(e) => setAddress(e.target.value)}
                                     className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Przypisana trasa dostaw</label>
+                                <select
+                                    value={routeId}
+                                    onChange={(e) => setRouteId(Number(e.target.value))}
+                                    className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none cursor-pointer focus:border-bakery-accent"
+                                >
+                                    <option value="" disabled>Wybierz trasę...</option>
+                                    {routes.map((route) => (
+                                        <option key={route.route_id} value={route.route_id}>{route.route_name}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className="flex items-center gap-2 pt-1">
