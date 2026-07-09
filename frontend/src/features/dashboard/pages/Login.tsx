@@ -17,8 +17,12 @@ export const Login: React.FC = () => {
     try {
       await loginUser(username, password);
       navigate('/'); 
-    } catch (err: any) {
-      setError(err.message || 'Wystąpił błąd logowania.');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Wystąpił nieoczekiwany błąd logowania.');
+      }
     } finally {
       setLoading(false);
     }

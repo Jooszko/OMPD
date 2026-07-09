@@ -50,7 +50,7 @@ export default function Warehouse() {
       </div>
 
       <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-bakery-inactive z-10">
               <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">

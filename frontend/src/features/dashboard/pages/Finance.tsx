@@ -296,7 +296,7 @@ export default function FinancePanel() {
 
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm col-span-1 lg:col-span-2 flex flex-col gap-3">
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block text-center">Trend zysku netto na przestrzeni wybranego okresu</span>
-                                <div className="w-full flex items-end justify-around h-36 bg-bakery-rowBg border border-bakery-btnBorder rounded p-4 pt-8 shadow-inner overflow-hidden gap-1">
+                                <div className="w-full flex items-end justify-around h-40 bg-bakery-rowBg border border-bakery-btnBorder rounded p-4 pt-8 shadow-inner overflow-hidden gap-1">
                                     {profitTrend.map((t) => {
                                         const value = parseFloat(t.net_profit);
                                         const heightPx = Math.max(4, (Math.abs(value) / maxTrendAbs) * 90);
@@ -332,7 +332,7 @@ export default function FinancePanel() {
                         </div>
 
                         <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[320px] flex flex-col overflow-hidden">
-                            <div className="flex-1 overflow-y-auto p-2">
+                            <div className="flex-1 overflow-y-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="sticky top-0 bg-bakery-inactive z-10">
                                         <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
@@ -386,20 +386,20 @@ export default function FinancePanel() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
-                                            <span className="text-gray-600 font-semibold">1. Przychody całkowite (`total_revenue`):</span>
+                                            <span className="text-gray-600 font-semibold">1. Przychody całkowite:</span>
                                             <span className="font-bold font-mono text-blue-950">{parseFloat(selectedReport.total_revenue).toFixed(2)} PLN</span>
                                         </div>
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
-                                            <span className="text-gray-600 font-semibold">2. Koszt surowców / COGS (`total_cogs`):</span>
+                                            <span className="text-gray-600 font-semibold">2. Koszt surowców / COGS:</span>
                                             <span className="font-bold font-mono text-red-950">-{parseFloat(selectedReport.total_cogs).toFixed(2)} PLN</span>
                                         </div>
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
-                                            <span className="text-gray-600 font-semibold">3. Koszty stałe / Media (`total_operating_expenses`):</span>
+                                            <span className="text-gray-600 font-semibold">3. Koszty stałe / Media:</span>
                                             <span className="font-bold font-mono text-red-950">-{parseFloat(selectedReport.total_operating_expenses).toFixed(2)} PLN</span>
                                         </div>
                                     </div>
                                     <div className="pt-2 border-t-2 border-dashed border-bakery-btnBorder flex justify-between items-center bg-bakery-rowBg p-2 rounded">
-                                        <span className="font-bold text-bakery-dark uppercase tracking-wide text-[11px]">Zysk Netto (`net_profit`):</span>
+                                        <span className="font-bold text-bakery-dark uppercase tracking-wide text-[11px]">Zysk Netto:</span>
                                         <span className="text-base font-black text-emerald-800 font-mono">{parseFloat(selectedReport.net_profit).toFixed(2)} PLN</span>
                                     </div>
                                 </div>

@@ -110,9 +110,10 @@ export default function SuppliersPanel() {
             setIsModalOpen(false);
             setSelectedSupplierId(null);
             alert('Kontrahent został pomyślnie zapisany w bazie danych.');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Błąd podczas zapisu w komponencie:", error);
-            alert(`Nie udało się zapisać kontrahenta w bazie. Sprawdź konsolę.`);
+            const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
+            alert(`Nie udało się zapisać kontrahenta w bazie. ${errorMessage}`);
         }
     };
 
@@ -176,7 +177,7 @@ export default function SuppliersPanel() {
 
             <div className="flex flex-col gap-4 w-full">
                 <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-2 relative">
+                    <div className="flex-1 overflow-y-auto relative">
                         {isLoading ? (
                             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
                         ) : (
