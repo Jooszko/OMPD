@@ -102,6 +102,68 @@ export async function fetchDashboard(): Promise<any> {
 }
 
 
+export interface AppUser {
+  user_id: number;
+  username: string;
+  role: 'admin' | 'baker' | 'driver';
+  full_name: string;
+  is_active: boolean;
+}
+
+function authHeaders(): HeadersInit {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+async function handleJsonResponse(response: Response): Promise<any> {
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(JSON.stringify(errorData) || `Błąd serwera: ${response.status}`);
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+export async function fetchUsers(): Promise<AppUser[]> {
+  const response = await fetch(`${API_BASE}/users/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function createUser(payload: any): Promise<AppUser> {
+  const response = await fetch(`${API_BASE}/users/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function updateUser(userId: number, payload: any): Promise<AppUser> {
+  const response = await fetch(`${API_BASE}/users/${userId}/`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/users/${userId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
+}
+
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
