@@ -287,6 +287,23 @@ export async function deleteRecipe(productId: number): Promise<void> {
 }
 
 
+export async function fetchDailyOrders(dateStr?: string): Promise<any[]> {
+  const url = dateStr ? `${API_BASE}/orders/daily/?date=${dateStr}` : `${API_BASE}/orders/daily/`;
+  const response = await fetch(url, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchStandingOrders(): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/orders/standing/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchOrderHistory(): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
