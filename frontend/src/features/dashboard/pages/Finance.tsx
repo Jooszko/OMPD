@@ -1,120 +1,158 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart3, Plus, FileText, Trash2, Layers, X } from 'lucide-react';
+import {
+    fetchDailySummary,
+    fetchExpenses,
+    createExpense,
+    fetchCategoryBreakdown,
+    fetchPeriodIncomes,
+    fetchTopClients,
+    fetchProfitTrend,
+    fetchFinancialReports,
+    generateFinancialReport,
+    deleteFinancialReport,
+    type DailySummary,
+    type AppExpense,
+    type CategoryBreakdownRow,
+    type PeriodIncomeRow,
+    type TopClientRow,
+    type ProfitTrendRow,
+    type FinancialReport,
+} from '../../../services/api';
 
-interface FinancialReport {
-    report_date: string;
-    total_revenue: number;
-    total_cogs: number;
-    total_operating_expenses: number;
-    net_profit: number;
-    is_finalized: boolean;
-}
-
-interface Expense {
-    expense_id: number;
-    category: string;
-    amount: number;
-    description: string;
-    date: string;
-}
-
-interface IncomeRow {
-    client_name: string;
-    amount: number;
-    date: string;
-}
-
-
-const MOCK_DAILY_FINANCES = {
-    revenue: 3020.50,
-    expenses: 1270.00,
-    balance: 1750.50
-};
-
-const MOCK_PERIOD_EXPENSES: Expense[] = [
-    { expense_id: 1, category: 'Surowce', amount: 850.00, description: 'Mąka pszenna 500kg, drożdże', date: '2026-07-06' },
-    { expense_id: 2, category: 'Media', amount: 300.00, description: 'Faktura za gaz (piece)', date: '2026-07-04' },
-    { expense_id: 3, category: 'Logistyka', amount: 120.00, description: 'Paliwo - Trasa Bielsko', date: '2026-07-02' },
+const EXPENSE_CATEGORIES: { value: string; label: string }[] = [
+    { value: 'utility', label: 'Media (Prąd, Gaz, Woda)' },
+    { value: 'fuel', label: 'Paliwo (Logistyka, Amortyzacja aut)' },
+    { value: 'salary', label: 'Wynagrodzenia' },
+    { value: 'rent', label: 'Czynsz' },
+    { value: 'other', label: 'Inne koszty eksploatacyjne' },
 ];
 
-const MOCK_PERIOD_INCOMES: IncomeRow[] = [
-    { client_name: 'Biedronka - Skoczów', amount: 1850.00, date: '2026-07-06' },
-    { client_name: 'Społem Ustroń', amount: 780.50, date: '2026-07-05' },
-    { client_name: 'Restauracja Pod Jelenie', amount: 390.00, date: '2026-07-03' },
-];
+function todayStr(): string {
+    return new Date().toISOString().slice(0, 10);
+}
 
-const MOCK_REPORTS: FinancialReport[] = [
-    { report_date: '2026-07-06', total_revenue: 3020.50, total_cogs: 850.00, total_operating_expenses: 420.00, net_profit: 1750.50, is_finalized: true },
-    { report_date: '2026-07-05', total_revenue: 2840.00, total_cogs: 790.00, total_operating_expenses: 310.00, net_profit: 1740.00, is_finalized: true },
-    { report_date: '2026-07-04', total_revenue: 3150.00, total_cogs: 900.00, total_operating_expenses: 600.00, net_profit: 1650.00, is_finalized: true },
-];
+function daysAgoStr(days: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+}
 
 export default function FinancePanel() {
     const [activeTab, setActiveTab] = useState<'finanse' | 'raporty' | 'wydatki'>('finanse');
 
-    const [singleDate, setSingleDate] = useState<string>('2026-07-07');
-    const [rangeStart, setRangeStart] = useState<string>('2026-06-30');
-    const [rangeEnd, setRangeEnd] = useState<string>('2026-07-07');
-    const [monthStart, setMonthStart] = useState<string>('2026-07-01');
+    const [singleDate, setSingleDate] = useState<string>(todayStr());
+    const [rangeStart, setRangeStart] = useState<string>(daysAgoStr(7));
+    const [rangeEnd, setRangeEnd] = useState<string>(todayStr());
+    const [monthStart, setMonthStart] = useState<string>(daysAgoStr(30));
 
-    const [expenses, setExpenses] = useState<Expense[]>(MOCK_PERIOD_EXPENSES);
+    const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+    const [periodExpenses, setPeriodExpenses] = useState<AppExpense[]>([]);
+    const [categoryBreakdown, setCategoryBreakdown] = useState<CategoryBreakdownRow[]>([]);
+    const [periodIncomes, setPeriodIncomes] = useState<PeriodIncomeRow[]>([]);
+    const [topClients, setTopClients] = useState<TopClientRow[]>([]);
+    const [profitTrend, setProfitTrend] = useState<ProfitTrendRow[]>([]);
+    const [monthExpenses, setMonthExpenses] = useState<AppExpense[]>([]);
+
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-    const [newExpCategory, setNewExpCategory] = useState('Media');
+    const [newExpCategory, setNewExpCategory] = useState('utility');
     const [newExpAmount, setNewExpAmount] = useState('');
     const [newExpDesc, setNewExpDesc] = useState('');
-    const [newExpDate, setNewExpDate] = useState('2026-07-07');
+    const [newExpDate, setNewExpDate] = useState(todayStr());
 
-    const [reports, setReports] = useState<FinancialReport[]>(MOCK_REPORTS);
+    const [reports, setReports] = useState<FinancialReport[]>([]);
     const [selectedReport, setSelectedReport] = useState<FinancialReport | null>(null);
 
-    const handleAddExpense = (e: React.FormEvent) => {
+    const loadDailySummary = useCallback(() => {
+        fetchDailySummary(singleDate).then(setDailySummary).catch((err) => console.error('Błąd podsumowania dnia:', err));
+    }, [singleDate]);
+
+    const loadPeriodData = useCallback(() => {
+        fetchExpenses(rangeStart, rangeEnd).then(setPeriodExpenses).catch((err) => console.error('Błąd wydatków okresu:', err));
+        fetchCategoryBreakdown(rangeStart, rangeEnd).then(setCategoryBreakdown).catch((err) => console.error('Błąd kategorii kosztów:', err));
+        fetchPeriodIncomes(rangeStart, rangeEnd).then(setPeriodIncomes).catch((err) => console.error('Błąd przychodów okresu:', err));
+        fetchTopClients(rangeStart, rangeEnd).then(setTopClients).catch((err) => console.error('Błąd top klientów:', err));
+        fetchProfitTrend(rangeStart, rangeEnd).then(setProfitTrend).catch((err) => console.error('Błąd trendu zysku:', err));
+    }, [rangeStart, rangeEnd]);
+
+    const loadMonthExpenses = useCallback(() => {
+        fetchExpenses(monthStart, todayStr()).then(setMonthExpenses).catch((err) => console.error('Błąd listy wydatków:', err));
+    }, [monthStart]);
+
+    const loadReports = useCallback(() => {
+        fetchFinancialReports().then(setReports).catch((err) => console.error('Błąd listy raportów:', err));
+    }, []);
+
+    useEffect(() => { loadDailySummary(); }, [loadDailySummary]);
+    useEffect(() => { loadPeriodData(); }, [loadPeriodData]);
+    useEffect(() => { loadMonthExpenses(); }, [loadMonthExpenses]);
+    useEffect(() => { loadReports(); }, [loadReports]);
+
+    const handleAddExpense = async (e: React.FormEvent) => {
         e.preventDefault();
         const amt = parseFloat(newExpAmount);
         if (isNaN(amt) || amt <= 0) {
             alert('Wprowadź poprawną kwotę kosztu.');
             return;
         }
-        const newExpense: Expense = {
-            expense_id: Date.now(),
-            category: newExpCategory,
-            amount: amt,
-            description: newExpDesc.trim(),
-            date: newExpDate
-        };
-        setExpenses([newExpense, ...expenses]);
-        setIsExpenseModalOpen(false);
-        setNewExpAmount('');
-        setNewExpDesc('');
+        try {
+            await createExpense({
+                category: newExpCategory,
+                amount: amt,
+                description: newExpDesc.trim(),
+                date: newExpDate,
+            });
+            setIsExpenseModalOpen(false);
+            setNewExpAmount('');
+            setNewExpDesc('');
+            loadPeriodData();
+            loadMonthExpenses();
+            loadDailySummary();
+        } catch (error) {
+            console.error('Błąd podczas zapisu wydatku:', error);
+            alert('Nie udało się zapisać wydatku.');
+        }
     };
 
-    const handleGenerateReport = () => {
-        const todayStr = '2026-07-07';
-        if (reports.some(r => r.report_date === todayStr)) {
+    const handleGenerateReport = async () => {
+        if (reports.some(r => r.report_date === todayStr())) {
             alert('Raport za dzisiejszy dzień został już wygenerowany.');
             return;
         }
-        const currentReport: FinancialReport = {
-            report_date: todayStr,
-            total_revenue: MOCK_DAILY_FINANCES.revenue,
-            total_cogs: 950.00,
-            total_operating_expenses: 320.00,
-            net_profit: MOCK_DAILY_FINANCES.balance,
-            is_finalized: true
-        };
-        setReports([currentReport, ...reports]);
+        try {
+            await generateFinancialReport();
+            loadReports();
+        } catch (error) {
+            console.error('Błąd podczas generowania raportu:', error);
+            alert('Nie udało się wygenerować raportu.');
+        }
     };
 
-    const handleDeleteReport = (date: string) => {
-        const todayStr = '2026-07-07';
-        if (date !== todayStr) {
+    const handleDeleteReport = async (date: string) => {
+        if (date !== todayStr()) {
             alert('Uprawnienia administratora pozwalają na usuwanie wyłącznie raportu z bieżącego dnia roboczego.');
             return;
         }
         if (confirm('Czy na pewno chcesz usunąć dzisiejszy raport finansowy?')) {
-            setReports(reports.filter(r => r.report_date !== date));
-            if (selectedReport?.report_date === date) setSelectedReport(null);
+            try {
+                await deleteFinancialReport(date);
+                setReports(reports.filter(r => r.report_date !== date));
+                if (selectedReport?.report_date === date) setSelectedReport(null);
+            } catch (error) {
+                console.error('Błąd podczas usuwania raportu:', error);
+                alert('Nie udało się usunąć raportu.');
+            }
         }
     };
+
+    const revenue = dailySummary ? parseFloat(dailySummary.revenue) : 0;
+    const expensesVal = dailySummary ? parseFloat(dailySummary.expenses) : 0;
+    const balance = dailySummary ? parseFloat(dailySummary.balance) : 0;
+    const expensePct = revenue > 0 ? (expensesVal / revenue) * 100 : 0;
+
+    const maxCategoryTotal = Math.max(1, ...categoryBreakdown.map(c => parseFloat(c.total)));
+    const maxClientTotal = Math.max(1, ...topClients.map(c => parseFloat(c.total)));
+    const maxTrendAbs = Math.max(1, ...profitTrend.map(t => Math.abs(parseFloat(t.net_profit))));
 
     return (
         <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
@@ -152,30 +190,30 @@ export default function FinancePanel() {
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm flex items-center gap-4">
                                 <div className="w-10 h-10 bg-emerald-100 border border-emerald-200 rounded-lg flex items-center justify-center text-emerald-700 shrink-0"><ArrowUpCircle className="w-6 h-6" /></div>
                                 <div>
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Dzisiejsze Przychody</span>
-                                    <p className="text-xl font-black text-blue-950 font-mono m-0">+{MOCK_DAILY_FINANCES.revenue.toFixed(2)} PLN</p>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Przychody</span>
+                                    <p className="text-xl font-black text-blue-950 font-mono m-0">+{revenue.toFixed(2)} PLN</p>
                                 </div>
                             </div>
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm flex items-center gap-4">
                                 <div className="w-10 h-10 bg-red-100 border border-red-200 rounded-lg flex items-center justify-center text-red-700 shrink-0"><ArrowDownCircle className="w-6 h-6" /></div>
                                 <div>
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Dzisiejsze Wydatki</span>
-                                    <p className="text-xl font-black text-red-900 font-mono m-0">-{MOCK_DAILY_FINANCES.expenses.toFixed(2)} PLN</p>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Wydatki</span>
+                                    <p className="text-xl font-black text-red-900 font-mono m-0">-{expensesVal.toFixed(2)} PLN</p>
                                 </div>
                             </div>
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm flex items-center gap-4">
                                 <div className="w-10 h-10 bg-blue-100 border border-blue-200 rounded-lg flex items-center justify-center text-blue-950 shrink-0"><Wallet className="w-6 h-6" /></div>
                                 <div>
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Dzisiejszy Bilans</span>
-                                    <p className={`text-xl font-black font-mono m-0 ${MOCK_DAILY_FINANCES.balance >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>{MOCK_DAILY_FINANCES.balance.toFixed(2)} PLN</p>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">Bilans</span>
+                                    <p className={`text-xl font-black font-mono m-0 ${balance >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>{balance.toFixed(2)} PLN</p>
                                 </div>
                             </div>
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-3 rounded shadow-sm flex flex-col justify-center gap-1.5">
                                 <span className="text-[9px] font-bold text-gray-500 uppercase block tracking-wider text-center">Udział procentowy wydatków w przychodzie</span>
                                 <div className="w-full bg-emerald-700 h-5 rounded overflow-hidden flex shadow-inner border border-bakery-btnBorder relative">
-                                    <div className="bg-red-600 h-full transition-all duration-300" style={{ width: `${(MOCK_DAILY_FINANCES.expenses / MOCK_DAILY_FINANCES.revenue) * 100}%` }}></div>
+                                    <div className="bg-red-600 h-full transition-all duration-300" style={{ width: `${Math.min(100, expensePct)}%` }}></div>
                                     <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white font-mono">
-                                        {((MOCK_DAILY_FINANCES.expenses / MOCK_DAILY_FINANCES.revenue) * 100).toFixed(0)}% Koszty
+                                        {expensePct.toFixed(0)}% Koszty
                                     </span>
                                 </div>
                             </div>
@@ -199,12 +237,12 @@ export default function FinancePanel() {
                                     <div className="flex-1 overflow-y-auto p-1.5">
                                         <table className="w-full text-left border-collapse text-xs">
                                             <tbody>
-                                                {expenses.map((exp) => (
+                                                {periodExpenses.map((exp) => (
                                                     <tr key={exp.expense_id} className="bg-bakery-rowBg border-b border-bakery-btnBorder">
                                                         <td className="py-2 px-3 font-mono text-gray-500 font-bold">{exp.date}</td>
-                                                        <td className="py-2 px-3 font-bold text-bakery-dark">{exp.category}</td>
+                                                        <td className="py-2 px-3 font-bold text-bakery-dark">{exp.category_label}</td>
                                                         <td className="py-2 px-3 text-gray-600 font-medium max-w-[180px] truncate">{exp.description}</td>
-                                                        <td className="py-2 px-3 text-right font-mono font-bold text-red-900">-{exp.amount.toFixed(2)} zł</td>
+                                                        <td className="py-2 px-3 text-right font-mono font-bold text-red-900">-{parseFloat(exp.amount).toFixed(2)} zł</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -214,16 +252,13 @@ export default function FinancePanel() {
                                 <div className="bg-bakery-inactive border border-bakery-btnBorder p-3 rounded shadow-sm flex flex-col gap-2">
                                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Porównanie kategorii kosztów w okresie</span>
                                     <div className="flex flex-col gap-1.5 text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-20 font-semibold text-gray-600 truncate">Surowce</span>
-                                            <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-red-500 h-full w-[80%] rounded-r"></div></div>
-                                            <span className="font-mono font-bold w-16 text-right">850.00 zł</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-20 font-semibold text-gray-600 truncate">Media</span>
-                                            <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-amber-600 h-full w-[40%] rounded-r"></div></div>
-                                            <span className="font-mono font-bold w-16 text-right">300.00 zł</span>
-                                        </div>
+                                        {categoryBreakdown.map((cat) => (
+                                            <div key={cat.category} className="flex items-center gap-2">
+                                                <span className="w-20 font-semibold text-gray-600 truncate">{cat.category_label}</span>
+                                                <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-red-500 h-full rounded-r" style={{ width: `${(parseFloat(cat.total) / maxCategoryTotal) * 100}%` }}></div></div>
+                                                <span className="font-mono font-bold w-20 text-right">{parseFloat(cat.total).toFixed(2)} zł</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -234,11 +269,11 @@ export default function FinancePanel() {
                                     <div className="flex-1 overflow-y-auto p-1.5">
                                         <table className="w-full text-left border-collapse text-xs">
                                             <tbody>
-                                                {MOCK_PERIOD_INCOMES.map((inc, index) => (
+                                                {periodIncomes.map((inc, index) => (
                                                     <tr key={index} className="bg-bakery-rowBg border-b border-bakery-btnBorder">
                                                         <td className="py-2 px-3 font-mono text-gray-500 font-bold">{inc.date}</td>
                                                         <td className="py-2 px-3 font-bold text-bakery-dark">{inc.client_name}</td>
-                                                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">+{inc.amount.toFixed(2)} zł</td>
+                                                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">+{parseFloat(inc.amount).toFixed(2)} zł</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -248,42 +283,35 @@ export default function FinancePanel() {
                                 <div className="bg-bakery-inactive border border-bakery-btnBorder p-3 rounded shadow-sm flex flex-col gap-2">
                                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Główni płatnicy w wybranym okresie</span>
                                     <div className="flex flex-col gap-1.5 text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-32 font-semibold text-gray-600 truncate">Biedronka - Skoczów</span>
-                                            <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-emerald-600 h-full w-[90%] rounded-r"></div></div>
-                                            <span className="font-mono font-bold w-16 text-right">1850.00 zł</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-32 font-semibold text-gray-600 truncate">Społem Ustroń</span>
-                                            <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-teal-600 h-full w-[45%] rounded-r"></div></div>
-                                            <span className="font-mono font-bold w-16 text-right">780.50 zł</span>
-                                        </div>
+                                        {topClients.map((c) => (
+                                            <div key={c.client_name} className="flex items-center gap-2">
+                                                <span className="w-32 font-semibold text-gray-600 truncate">{c.client_name}</span>
+                                                <div className="flex-1 bg-bakery-rowBg h-3 rounded overflow-hidden border border-bakery-btnBorder shadow-inner"><div className="bg-emerald-600 h-full rounded-r" style={{ width: `${(parseFloat(c.total) / maxClientTotal) * 100}%` }}></div></div>
+                                                <span className="font-mono font-bold w-20 text-right">{parseFloat(c.total).toFixed(2)} zł</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
 
                             <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm col-span-1 lg:col-span-2 flex flex-col gap-3">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block text-center">Trend zysku netto na przestrzeni ostatnich dni (Wykres porównawczy)</span>
-                                <div className="w-full flex items-end justify-around h-36 bg-bakery-rowBg border border-bakery-btnBorder rounded p-4 pt-8 shadow-inner overflow-hidden">
-
-                                    <div className="flex flex-col items-center gap-1 w-16 group">
-                                        <span className="text-[10px] font-bold font-mono text-emerald-800 transition-transform group-hover:scale-105">1650 zł</span>
-                                        <div className="bg-emerald-700 w-8 h-16 rounded-t shadow-xs transition-all duration-200 group-hover:bg-emerald-600"></div>
-                                        <span className="text-[9px] text-gray-500 font-bold font-mono mt-0.5">04.07</span>
-                                    </div>
-
-                                    <div className="flex flex-col items-center gap-1 w-16 group">
-                                        <span className="text-[10px] font-bold font-mono text-emerald-800 transition-transform group-hover:scale-105">1740 zł</span>
-                                        <div className="bg-emerald-700 w-8 h-[72px] rounded-t shadow-xs transition-all duration-200 group-hover:bg-emerald-600"></div>
-                                        <span className="text-[9px] text-gray-500 font-bold font-mono mt-0.5">05.07</span>
-                                    </div>
-
-                                    <div className="flex flex-col items-center gap-1 w-16 group">
-                                        <span className="text-[10px] font-bold font-mono text-emerald-800 transition-transform group-hover:scale-105">1750 zł</span>
-                                        <div className="bg-emerald-700 w-8 h-[76px] rounded-t shadow-xs transition-all duration-200 group-hover:bg-emerald-600"></div>
-                                        <span className="text-[9px] text-gray-500 font-bold font-mono mt-0.5">06.07</span>
-                                    </div>
-
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block text-center">Trend zysku netto na przestrzeni wybranego okresu</span>
+                                <div className="w-full flex items-end justify-around h-36 bg-bakery-rowBg border border-bakery-btnBorder rounded p-4 pt-8 shadow-inner overflow-hidden gap-1">
+                                    {profitTrend.map((t) => {
+                                        const value = parseFloat(t.net_profit);
+                                        const heightPx = Math.max(4, (Math.abs(value) / maxTrendAbs) * 90);
+                                        const [, month, day] = t.date.split('-');
+                                        return (
+                                            <div key={t.date} className="flex flex-col items-center gap-1 w-16 group">
+                                                <span className={`text-[10px] font-bold font-mono transition-transform group-hover:scale-105 ${value >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>{value.toFixed(0)} zł</span>
+                                                <div
+                                                    className={`w-8 rounded-t shadow-xs transition-all duration-200 ${value >= 0 ? 'bg-emerald-700 group-hover:bg-emerald-600' : 'bg-red-600 group-hover:bg-red-500'}`}
+                                                    style={{ height: `${heightPx}px` }}
+                                                ></div>
+                                                <span className="text-[9px] text-gray-500 font-bold font-mono mt-0.5">{day}.{month}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -316,13 +344,13 @@ export default function FinancePanel() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                                        {reports.map((rep, index) => (
-                                            <tr key={index} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
+                                        {reports.map((rep) => (
+                                            <tr key={rep.report_date} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
                                                 <td className="py-2 px-3 font-mono text-xs font-bold text-bakery-dark">{rep.report_date}</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold text-blue-950">{rep.total_revenue.toFixed(2)} PLN</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">{rep.net_profit.toFixed(2)} PLN</td>
+                                                <td className="py-2 px-3 text-right font-mono font-bold text-blue-950">{parseFloat(rep.total_revenue).toFixed(2)} PLN</td>
+                                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">{parseFloat(rep.net_profit).toFixed(2)} PLN</td>
                                                 <td className="py-2 px-3 text-center">
-                                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 border border-emerald-200">Zatwierdzony</span>
+                                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${rep.is_finalized ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-200 text-gray-700 border-gray-300'}`}>{rep.is_finalized ? 'Zatwierdzony' : 'Roboczy'}</span>
                                                 </td>
                                                 <td className="py-2 px-3 text-center">
                                                     <div className="flex gap-1.5 justify-center">
@@ -340,7 +368,7 @@ export default function FinancePanel() {
                                 </table>
                             </div>
                         </div>
-                        <span className="text-[10px] text-gray-500 font-semibold italic">* Uwaga: System automatycznie zamknie dzień produkcyjny i sporządzi raport księgowy o godzinie 23:59 na backendzie, jeśli nie zrobiono tego ręcznie.</span>
+                        <span className="text-[10px] text-gray-500 font-semibold italic">* Uwaga: Ponowne wygenerowanie raportu za ten sam dzień nadpisze poprzednie dane najświeższym przeliczeniem.</span>
                     </div>
 
                     <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm p-4 flex flex-col h-[380px] overflow-hidden">
@@ -359,20 +387,20 @@ export default function FinancePanel() {
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
                                             <span className="text-gray-600 font-semibold">1. Przychody całkowite (`total_revenue`):</span>
-                                            <span className="font-bold font-mono text-blue-950">{selectedReport.total_revenue.toFixed(2)} PLN</span>
+                                            <span className="font-bold font-mono text-blue-950">{parseFloat(selectedReport.total_revenue).toFixed(2)} PLN</span>
                                         </div>
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
                                             <span className="text-gray-600 font-semibold">2. Koszt surowców / COGS (`total_cogs`):</span>
-                                            <span className="font-bold font-mono text-red-950">-{selectedReport.total_cogs.toFixed(2)} PLN</span>
+                                            <span className="font-bold font-mono text-red-950">-{parseFloat(selectedReport.total_cogs).toFixed(2)} PLN</span>
                                         </div>
                                         <div className="flex justify-between py-1 border-b border-bakery-btnBorder">
                                             <span className="text-gray-600 font-semibold">3. Koszty stałe / Media (`total_operating_expenses`):</span>
-                                            <span className="font-bold font-mono text-red-950">-{selectedReport.total_operating_expenses.toFixed(2)} PLN</span>
+                                            <span className="font-bold font-mono text-red-950">-{parseFloat(selectedReport.total_operating_expenses).toFixed(2)} PLN</span>
                                         </div>
                                     </div>
                                     <div className="pt-2 border-t-2 border-dashed border-bakery-btnBorder flex justify-between items-center bg-bakery-rowBg p-2 rounded">
                                         <span className="font-bold text-bakery-dark uppercase tracking-wide text-[11px]">Zysk Netto (`net_profit`):</span>
-                                        <span className="text-base font-black text-emerald-800 font-mono">{selectedReport.net_profit.toFixed(2)} PLN</span>
+                                        <span className="text-base font-black text-emerald-800 font-mono">{parseFloat(selectedReport.net_profit).toFixed(2)} PLN</span>
                                     </div>
                                 </div>
                             ) : (
@@ -411,16 +439,16 @@ export default function FinancePanel() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                                {expenses.map((exp) => (
+                                {monthExpenses.map((exp) => (
                                     <tr key={exp.expense_id} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
                                         <td className="py-2.5 px-4 font-mono font-bold text-xs text-bakery-dark">{exp.date}</td>
                                         <td className="py-2.5 px-4">
-                                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${exp.category === 'Surowce' ? 'bg-amber-100 text-amber-700 border border-amber-200' : exp.category === 'Media' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-300 text-gray-700'}`}>
-                                                {exp.category}
+                                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${exp.category === 'utility' ? 'bg-blue-100 text-blue-700 border border-blue-200' : exp.category === 'fuel' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-300 text-gray-700'}`}>
+                                                {exp.category_label}
                                             </span>
                                         </td>
                                         <td className="py-2.5 px-4 text-xs font-semibold text-gray-700">{exp.description}</td>
-                                        <td className="py-2.5 px-4 text-right font-mono font-bold text-red-900">-{exp.amount.toFixed(2)} PLN</td>
+                                        <td className="py-2.5 px-4 text-right font-mono font-bold text-red-900">-{parseFloat(exp.amount).toFixed(2)} PLN</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -444,10 +472,9 @@ export default function FinancePanel() {
                             <div>
                                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Kategoria kosztu</label>
                                 <select value={newExpCategory} onChange={(e) => setNewExpCategory(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none">
-                                    <option value="Media">Media (Prąd, Gaz, Woda)</option>
-                                    <option value="Surowce">Surowce (Zatowarowanie piekarni)</option>
-                                    <option value="Logistyka">Logistyka (Paliwo, Amortyzacja aut)</option>
-                                    <option value="Inne">Inne koszty eksploatacyjne</option>
+                                    {EXPENSE_CATEGORIES.map((c) => (
+                                        <option key={c.value} value={c.value}>{c.label}</option>
+                                    ))}
                                 </select>
                             </div>
 
