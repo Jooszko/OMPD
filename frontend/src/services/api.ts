@@ -164,6 +164,44 @@ export async function deleteUser(userId: number): Promise<void> {
 }
 
 
+export interface RouteOption {
+  route_id: number;
+  route_name: string;
+  is_active: boolean;
+}
+
+export interface AppClient {
+  client_id: number;
+  name: string;
+  address: string;
+  nip: string | null;
+  route: number;
+  route_details: RouteOption;
+  is_active: boolean;
+}
+
+export async function fetchRoutes(): Promise<RouteOption[]> {
+  const response = await fetch(`${API_BASE}/clients/routes/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchClients(): Promise<AppClient[]> {
+  const response = await fetch(`${API_BASE}/clients/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function saveClient(payload: any, clientId: number | null = null): Promise<AppClient> {
+  const url = clientId ? `${API_BASE}/clients/${clientId}/` : `${API_BASE}/clients/`;
+  const method = clientId ? 'PUT' : 'POST';
+  const response = await fetch(url, {
+    method,
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
