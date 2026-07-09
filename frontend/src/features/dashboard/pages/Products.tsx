@@ -1,128 +1,123 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
+import {
+  fetchProducts,
+  fetchIngredients,
+  fetchRecipes,
+  createRecipe,
+  updateRecipe,
+  deleteRecipe,
+  updateProductPrice,
+  type AppProduct,
+  type AppIngredient,
+  type AppRecipe,
+} from '../../../services/api';
 
-interface Product {
-  product_id: number;
-  name: string;
-  category: string;
-  base_price: number;
-}
+const CATEGORY_LABELS: Record<string, string> = {
+  bread: 'Chleby',
+  buns: 'Bułki/Drożdżówki',
+  pastry: 'Wyroby cukiernicze',
+  other: 'Inne',
+};
 
-interface Ingredient {
-  ingredient_id: number;
-  name: string;
-  unit: string;
-}
-
-interface RecipeItem {
+interface DraftItem {
   ingredient_id: number;
   amount: number;
 }
 
-interface Recipe {
-  recipe_id: number;
-  product_id: number;
-  items: RecipeItem[];
-}
-
-const MOCK_PRODUCTS: Product[] = [
-  { product_id: 1, name: 'Chleb Wiejski 500g', category: 'Chleb', base_price: 4.50 },
-  { product_id: 2, name: 'Bułka Kajzerka', category: 'Bułki', base_price: 0.80 },
-  { product_id: 3, name: 'Rogal Maślany', category: 'Cukiernictwo', base_price: 2.20 },
-  { product_id: 4, name: 'Chleb Razowy z ziarnami', category: 'Chleb', base_price: 5.20 },
-];
-
-const MOCK_INGREDIENTS: Ingredient[] = [
-  { ingredient_id: 10, name: 'Mąka pszenna typ 750', unit: 'kg' },
-  { ingredient_id: 11, name: 'Woda', unit: 'l' },
-  { ingredient_id: 12, name: 'Drożdże świeże', unit: 'kg' },
-  { ingredient_id: 13, name: 'Sól', unit: 'kg' },
-  { ingredient_id: 14, name: 'Cukier', unit: 'kg' },
-  { ingredient_id: 15, name: 'Masło', unit: 'kg' },
-];
-
-const MOCK_RECIPES: Recipe[] = [
-  {
-    recipe_id: 1,
-    product_id: 1,
-    items: [
-      { ingredient_id: 10, amount: 0.35 },
-      { ingredient_id: 11, amount: 0.22 },
-      { ingredient_id: 12, amount: 0.01 },
-      { ingredient_id: 13, amount: 0.005 },
-    ]
-  },
-  {
-    recipe_id: 2,
-    product_id: 2,
-    items: [
-      { ingredient_id: 10, amount: 0.06 },
-      { ingredient_id: 11, amount: 0.03 },
-      { ingredient_id: 12, amount: 0.002 },
-    ]
-  }
-];
-
 export default function ProductsPanel() {
   const [activeTab, setActiveTab] = useState<'ceny' | 'receptury'>('ceny');
 
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<AppProduct[]>([]);
+  const [ingredients, setIngredients] = useState<AppIngredient[]>([]);
+  const [recipes, setRecipes] = useState<AppRecipe[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isEditingPrice, setIsEditingPrice] = useState(false);
   const [newPrice, setNewPrice] = useState<string>('');
 
-  const [recipes, setRecipes] = useState<Recipe[]>(MOCK_RECIPES);
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
   const [recipeModalMode, setRecipeModalMode] = useState<'add' | 'edit'>('add');
-  const [editingRecipeId, setEditingRecipeId] = useState<number | null>(null);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
 
   const [recipeProductName, setRecipeProductName] = useState<string>('');
-  const [recipeProductCategory, setRecipeProductCategory] = useState<string>('');
+  const [recipeProductCategory, setRecipeProductCategory] = useState<string>('bread');
 
-  const [recipeItems, setRecipeItems] = useState<RecipeItem[]>([]);
-  const [selectedIngredientId, setSelectedIngredientId] = useState<number>(MOCK_INGREDIENTS[0].ingredient_id);
+  const [recipeItems, setRecipeItems] = useState<DraftItem[]>([]);
+  const [selectedIngredientId, setSelectedIngredientId] = useState<number | null>(null);
   const [ingredientAmount, setIngredientAmount] = useState<string>('');
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [productsData, ingredientsData, recipesData] = await Promise.all([
+          fetchProducts(),
+          fetchIngredients(),
+          fetchRecipes(),
+        ]);
+        setProducts(productsData);
+        setIngredients(ingredientsData);
+        setRecipes(recipesData);
+        if (ingredientsData.length > 0) {
+          setSelectedIngredientId(ingredientsData[0].ingredient_id);
+        }
+      } catch (error) {
+        console.error('Błąd podczas ładowania danych produktowych:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const handleStartEditPrice = () => {
     const prod = products.find(p => p.product_id === selectedProductId);
     if (prod) {
-      setNewPrice(prod.base_price.toFixed(2));
+      setNewPrice(parseFloat(prod.base_price).toFixed(2));
       setIsEditingPrice(true);
     }
   };
 
-  const handleSavePrice = () => {
+  const handleSavePrice = async () => {
     const parsedPrice = parseFloat(newPrice);
-    if (isNaN(parsedPrice) || parsedPrice < 0) {
+    if (isNaN(parsedPrice) || parsedPrice < 0 || !selectedProductId) {
       alert('Cena nie może być mniejsza niż zero.');
       return;
     }
-    setProducts(products.map(p => p.product_id === selectedProductId ? { ...p, base_price: parsedPrice } : p));
-    setIsEditingPrice(false);
-    setSelectedProductId(null);
+    try {
+      const updated = await updateProductPrice(selectedProductId, parsedPrice);
+      setProducts(products.map(p => p.product_id === selectedProductId ? updated : p));
+      setIsEditingPrice(false);
+      setSelectedProductId(null);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji ceny:', error);
+      alert('Nie udało się zapisać nowej ceny.');
+    }
   };
 
   const handleOpenAddRecipe = () => {
     setRecipeModalMode('add');
     setRecipeProductName('');
-    setRecipeProductCategory('');
+    setRecipeProductCategory('bread');
     setRecipeItems([]);
     setIsRecipeModalOpen(true);
   };
 
-  const handleOpenEditRecipe = (recipe: Recipe) => {
-    const linkedProduct = products.find(p => p.product_id === recipe.product_id);
+  const handleOpenEditRecipe = (recipe: AppRecipe) => {
     setRecipeModalMode('edit');
-    setEditingRecipeId(recipe.recipe_id);
-    setRecipeProductName(linkedProduct?.name ?? '');
-    setRecipeProductCategory(linkedProduct?.category ?? '');
-    setRecipeItems([...recipe.items]);
+    setEditingProductId(recipe.product_id);
+    setRecipeProductName(recipe.name);
+    setRecipeProductCategory(recipe.category);
+    setRecipeItems(recipe.items.map(i => ({ ingredient_id: i.ingredient_id, amount: parseFloat(i.amount) })));
     setIsRecipeModalOpen(true);
   };
 
   const handleAddItemToRecipe = () => {
     const amt = parseFloat(ingredientAmount);
-    if (isNaN(amt) || amt <= 0) {
+    if (isNaN(amt) || amt <= 0 || !selectedIngredientId) {
       alert('Wpisz poprawną ilość surowca.');
       return;
     }
@@ -138,12 +133,10 @@ export default function ProductsPanel() {
     setRecipeItems(recipeItems.filter(item => item.ingredient_id !== id));
   };
 
-  const handleSaveRecipe = () => {
-    if (recipeModalMode === 'add') {
-      if (!recipeProductName.trim() || !recipeProductCategory.trim()) {
-        alert('Nazwa produktu oraz kategoria nie mogą być puste.');
-        return;
-      }
+  const handleSaveRecipe = async () => {
+    if (recipeModalMode === 'add' && (!recipeProductName.trim() || !recipeProductCategory.trim())) {
+      alert('Nazwa produktu oraz kategoria nie mogą być puste.');
+      return;
     }
 
     if (recipeItems.length === 0) {
@@ -151,33 +144,36 @@ export default function ProductsPanel() {
       return;
     }
 
-    if (recipeModalMode === 'add') {
-      const newProductId = Date.now();
-
-      const newProduct: Product = {
-        product_id: newProductId,
-        name: recipeProductName.trim(),
-        category: recipeProductCategory.trim(),
-        base_price: 0.00
-      };
-
-      const newRecipe: Recipe = {
-        recipe_id: Date.now() + 1,
-        product_id: newProductId,
-        items: recipeItems
-      };
-
-      setProducts([...products, newProduct]);
-      setRecipes([...recipes, newRecipe]);
-    } else {
-      setRecipes(recipes.map(r => r.recipe_id === editingRecipeId ? { ...r, items: recipeItems } : r));
+    try {
+      if (recipeModalMode === 'add') {
+        const newRecipe = await createRecipe({
+          name: recipeProductName.trim(),
+          category: recipeProductCategory,
+          items: recipeItems,
+        });
+        setRecipes([...recipes, newRecipe]);
+        const [productsData] = await Promise.all([fetchProducts()]);
+        setProducts(productsData);
+      } else if (editingProductId) {
+        const updated = await updateRecipe(editingProductId, recipeItems);
+        setRecipes(recipes.map(r => r.product_id === editingProductId ? updated : r));
+      }
+      setIsRecipeModalOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas zapisu receptury:', error);
+      alert('Nie udało się zapisać receptury.');
     }
-    setIsRecipeModalOpen(false);
   };
 
-  const handleDeleteRecipe = (id: number) => {
+  const handleDeleteRecipe = async (productId: number) => {
     if (confirm('Czy na pewno chcesz bezpowrotnie usunąć tę recepturę?')) {
-      setRecipes(recipes.filter(r => r.recipe_id !== id));
+      try {
+        await deleteRecipe(productId);
+        setRecipes(recipes.filter(r => r.product_id !== productId));
+      } catch (error) {
+        console.error('Błąd podczas usuwania receptury:', error);
+        alert('Nie udało się usunąć receptury.');
+      }
     }
   };
 
@@ -212,7 +208,10 @@ export default function ProductsPanel() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
           <div className="lg:col-span-2 flex flex-col gap-4">
             <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-2">
+              <div className="flex-1 overflow-y-auto p-2 relative">
+                {isLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                ) : (
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 bg-bakery-inactive z-10">
                     <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
@@ -239,12 +238,13 @@ export default function ProductsPanel() {
                         </td>
                         <td className="py-2 px-3 font-mono text-xs text-gray-500">#{product.product_id}</td>
                         <td className="py-2 px-3 font-semibold text-bakery-dark">{product.name}</td>
-                        <td className="py-2 px-3 text-xs font-semibold text-gray-600">{product.category}</td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-blue-950">{product.base_price.toFixed(2)} PLN</td>
+                        <td className="py-2 px-3 text-xs font-semibold text-gray-600">{CATEGORY_LABELS[product.category] ?? product.category}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-blue-950">{parseFloat(product.base_price).toFixed(2)} PLN</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             </div>
 
@@ -325,38 +325,32 @@ export default function ProductsPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                {recipes.map((recipe) => {
-                  const linkedProduct = products.find(p => p.product_id === recipe.product_id);
-                  return (
-                    <tr key={recipe.recipe_id} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
-                      <td className="py-3 px-4 font-bold text-bakery-dark">{linkedProduct?.name ?? 'Nieznany produkt'}</td>
-                      <td className="py-3 px-4 text-xs font-semibold text-gray-600">{linkedProduct?.category ?? '-'}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-center text-blue-950 w-44">{recipe.items.length} składn.</td>
-                      <td className="py-3 px-4 text-xs">
-                        <div className="flex flex-wrap gap-1.5">
-                          {recipe.items.map((item, index) => {
-                            const ing = MOCK_INGREDIENTS.find(i => i.ingredient_id === item.ingredient_id);
-                            return (
-                              <span key={index} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[11px]">
-                                {ing?.name}: <span className="text-blue-950 font-bold">{item.amount} {ing?.unit}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex gap-1.5 justify-center">
-                          <button onClick={() => handleOpenEditRecipe(recipe)} className="text-bakery-dark hover:text-white p-1 rounded bg-bakery-inactive hover:bg-bakery-dark border border-bakery-btnBorder text-[11px] font-bold transition-all shadow-2xs">
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteRecipe(recipe.recipe_id)} className="text-red-700 hover:text-white p-1 rounded bg-red-50 hover:bg-red-700 border border-red-200 text-[11px] font-bold transition-all shadow-2xs">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {recipes.map((recipe) => (
+                  <tr key={recipe.product_id} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
+                    <td className="py-3 px-4 font-bold text-bakery-dark">{recipe.name}</td>
+                    <td className="py-3 px-4 text-xs font-semibold text-gray-600">{CATEGORY_LABELS[recipe.category] ?? recipe.category}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-center text-blue-950 w-44">{recipe.items.length} składn.</td>
+                    <td className="py-3 px-4 text-xs">
+                      <div className="flex flex-wrap gap-1.5">
+                        {recipe.items.map((item, index) => (
+                          <span key={index} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[11px]">
+                            {item.ingredient_name}: <span className="text-blue-950 font-bold">{item.amount} {item.unit}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex gap-1.5 justify-center">
+                        <button onClick={() => handleOpenEditRecipe(recipe)} className="text-bakery-dark hover:text-white p-1 rounded bg-bakery-inactive hover:bg-bakery-dark border border-bakery-btnBorder text-[11px] font-bold transition-all shadow-2xs">
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteRecipe(recipe.product_id)} className="text-red-700 hover:text-white p-1 rounded bg-red-50 hover:bg-red-700 border border-red-200 text-[11px] font-bold transition-all shadow-2xs">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -398,15 +392,17 @@ export default function ProductsPanel() {
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Kategoria</label>
                   {recipeModalMode === 'add' ? (
-                    <input
-                      type="text"
-                      placeholder="np. Chleb / Bułki"
+                    <select
                       value={recipeProductCategory}
                       onChange={(e) => setRecipeProductCategory(e.target.value)}
-                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
-                    />
+                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none cursor-pointer focus:border-bakery-accent"
+                    >
+                      {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
                   ) : (
-                    <p className="p-2 bg-bakery-rowBg border border-bakery-btnBorder rounded text-xs font-semibold text-gray-600">{recipeProductCategory}</p>
+                    <p className="p-2 bg-bakery-rowBg border border-bakery-btnBorder rounded text-xs font-semibold text-gray-600">{CATEGORY_LABELS[recipeProductCategory] ?? recipeProductCategory}</p>
                   )}
                 </div>
               </div>
@@ -416,11 +412,11 @@ export default function ProductsPanel() {
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
                     <select
-                      value={selectedIngredientId}
+                      value={selectedIngredientId ?? ''}
                       onChange={(e) => setSelectedIngredientId(parseInt(e.target.value))}
                       className="w-full border border-bakery-btnBorder bg-bakery-inactive text-bakery-dark font-semibold rounded text-xs p-1.5 outline-none"
                     >
-                      {MOCK_INGREDIENTS.map(i => (
+                      {ingredients.map(i => (
                         <option key={i.ingredient_id} value={i.ingredient_id}>{i.name} ({i.unit})</option>
                       ))}
                     </select>
@@ -446,7 +442,7 @@ export default function ProductsPanel() {
                 <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex-1 overflow-y-auto p-1.5 divide-y divide-bakery-btnBorder">
                   {recipeItems.length > 0 ? (
                     recipeItems.map((item, idx) => {
-                      const ing = MOCK_INGREDIENTS.find(i => i.ingredient_id === item.ingredient_id);
+                      const ing = ingredients.find(i => i.ingredient_id === item.ingredient_id);
                       return (
                         <div key={idx} className="py-2 px-2 flex justify-between items-center text-xs">
                           <span className="font-semibold text-bakery-dark">{ing?.name}</span>
