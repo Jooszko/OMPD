@@ -1,12 +1,30 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
+import { NotificationBell } from '../features/dashboard/components/NotificationBell';
+import { logoutUser, fetchCurrentUser, type AppUser } from '../services/api';
 
 type UserRole = 'admin' | 'baker' | 'driver';
 
 export const DashboardLayout: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>('admin');
+
+  useEffect(() => {
+    fetchCurrentUser()
+      .then((user) => {
+        setCurrentUser(user);
+        setCurrentRole(user.role);
+      })
+      .catch((err) => console.error('Błąd podczas ładowania danych konta:', err));
+  }, []);
+
+  const handleLogout = () => {
+    logoutUser();
+    navigate('/login', { replace: true });
+  };
 
   const menuItems = [
     { path: '/', label: 'Strona Główna', roles: ['admin', 'baker', 'driver'] },
@@ -47,6 +65,9 @@ export const DashboardLayout: React.FC = () => {
           </div>
           
           <nav className="flex flex-col gap-1.5 p-3 mt-2 overflow-y-auto flex-1 min-h-0 pr-1.5">
+            <NotificationBell />
+            <hr className="border-0 border-t border-bakery-border my-1 shrink-0" />
+
             {visibleMenuItems.map((item) => {
               const isActive = location.pathname === item.path;
               
@@ -86,16 +107,16 @@ export const DashboardLayout: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 min-w-[36px] bg-bakery-accent text-black font-bold rounded-full flex items-center justify-center text-sm shrink-0">
-              {currentRole === 'admin' ? 'M' : currentRole === 'baker' ? 'P' : 'K'}
+              {currentUser?.full_name ? currentUser.full_name.charAt(0).toUpperCase() : '…'}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold truncate">Mikołaj Klukowski</span>
+              <span className="text-sm font-semibold truncate">{currentUser?.full_name ?? 'Ładowanie...'}</span>
               <span className="text-[11px] text-gray-400">{getRoleLabel(currentRole)}</span>
             </div>
           </div>
           
-          <button 
-            onClick={() => console.log('Wylogowywanie...')}
+          <button
+            onClick={handleLogout}
             className="flex items-center gap-2 text-xs text-gray-400 bg-none border-none border-t border-[#27272a] pt-2 mt-1 w-full text-left cursor-pointer transition-colors duration-150 hover:text-bakery-accent"
           >
             <LogOut size={14} />

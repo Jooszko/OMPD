@@ -132,6 +132,11 @@ async function handleJsonResponse(response: Response): Promise<any> {
   return response.json();
 }
 
+export async function fetchCurrentUser(): Promise<AppUser> {
+  const response = await fetch(`${API_BASE}/users/me/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
 export async function fetchUsers(): Promise<AppUser[]> {
   const response = await fetch(`${API_BASE}/users/`, { headers: authHeaders() });
   return handleJsonResponse(response);
@@ -301,6 +306,64 @@ export async function fetchStandingOrders(): Promise<any[]> {
 export async function fetchOrderHistory(): Promise<any[]> {
   const response = await fetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
   return handleJsonResponse(response);
+}
+
+
+export interface AppNotification {
+  id: number;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  sender_id: number | null;
+  sender_name: string | null;
+}
+
+export function getCurrentUserId(): number | null {
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return decoded.user_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendMessage(recipientId: number, title: string, message: string): Promise<AppNotification> {
+  const response = await fetch(`${API_BASE}/users/notifications/send/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ recipient_id: recipientId, title, message }),
+  });
+  return handleJsonResponse(response);
+}
+
+export interface NotificationsResponse {
+  results: AppNotification[];
+  unread_count: number;
+}
+
+export async function fetchNotifications(): Promise<NotificationsResponse> {
+  const response = await fetch(`${API_BASE}/users/notifications/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function markNotificationRead(notificationId: number): Promise<AppNotification> {
+  const response = await fetch(`${API_BASE}/users/notifications/${notificationId}/read/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const response = await fetch(`${API_BASE}/users/notifications/mark-all-read/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
 }
 
 
