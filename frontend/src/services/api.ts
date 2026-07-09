@@ -202,6 +202,91 @@ export async function saveClient(payload: any, clientId: number | null = null): 
 }
 
 
+export interface AppIngredient {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+}
+
+export interface AppProduct {
+  product_id: number;
+  name: string;
+  category: string;
+  base_price: string;
+}
+
+export interface RecipeItem {
+  ingredient_id: number;
+  ingredient_name: string;
+  unit: string;
+  amount: string;
+}
+
+export interface AppRecipe {
+  product_id: number;
+  name: string;
+  category: string;
+  items: RecipeItem[];
+}
+
+export async function fetchIngredients(): Promise<AppIngredient[]> {
+  const response = await fetch(`${API_BASE}/products/ingredients/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchProducts(): Promise<AppProduct[]> {
+  const response = await fetch(`${API_BASE}/products/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function updateProductPrice(productId: number, basePrice: number): Promise<AppProduct> {
+  const response = await fetch(`${API_BASE}/products/${productId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ base_price: basePrice }),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function fetchRecipes(): Promise<AppRecipe[]> {
+  const response = await fetch(`${API_BASE}/products/recipes/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function createRecipe(payload: {
+  name: string;
+  category: string;
+  items: { ingredient_id: number; amount: number }[];
+}): Promise<AppRecipe> {
+  const response = await fetch(`${API_BASE}/products/recipes/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function updateRecipe(
+  productId: number,
+  items: { ingredient_id: number; amount: number }[]
+): Promise<AppRecipe> {
+  const response = await fetch(`${API_BASE}/products/recipes/${productId}/`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ items }),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function deleteRecipe(productId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/products/recipes/${productId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
+}
+
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
