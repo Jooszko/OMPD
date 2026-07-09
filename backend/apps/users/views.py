@@ -3,8 +3,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .models import User
-from .serializers import UserSerializer
+from .models import User, Notification
+from .serializers import UserSerializer, NotificationSerializer
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
 
 class UserListCreateView(APIView):
     # Blokujemy dostęp osobom nieautoryzowanym (pracowników dodawać mogą tylko zalogowani użytkownicy)
@@ -47,3 +54,64 @@ class UserDetailView(APIView):
         user = get_object_or_404(User, pk=pk)
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        notifications = Notification.objects.filter(user=request.user).select_related('sender')[:200]
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response({
+            'results': serializer.data,
+            'unread_count': Notification.objects.filter(user=request.user, is_read=False).count(),
+        })
+
+
+class NotificationMarkReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        notification = get_object_or_404(Notification, pk=pk, user=request.user)
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+        return Response(NotificationSerializer(notification).data)
+
+
+class NotificationMarkAllReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SendMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        recipient_id = request.data.get('recipient_id')
+        title = request.data.get('title', '').strip()
+        message = request.data.get('message', '').strip()
+
+        if not recipient_id or not title or not message:
+            return Response(
+                {'error': 'Odbiorca, tytuł i treść wiadomości są wymagane.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        recipient = get_object_or_404(User, pk=recipient_id)
+        if recipient.pk == request.user.pk:
+            return Response(
+                {'error': 'Nie można wysłać wiadomości do samego siebie.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        notification = Notification.objects.create(
+            user=recipient,
+            sender=request.user,
+            title=title,
+            message=message,
+            is_read=False,
+        )
+        return Response(NotificationSerializer(notification).data, status=status.HTTP_201_CREATED)

@@ -11,6 +11,7 @@ import Clients from '../features/dashboard/pages/Clients';
 import Contractors from '../features/dashboard/pages/Contractors';
 import Warehouse from '../features/dashboard/pages/Warehouse';
 import Logistics from '../features/dashboard/pages/Logistics';
+import Notifications from '../features/dashboard/pages/Notifications';
 
 import { Login } from '../features/dashboard/pages/Login';
 import { getAuthToken } from '../services/api';
@@ -48,6 +49,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="users" element={<Users />} />
         <Route path="clients" element={<Clients />} />
         <Route path="contractors" element={<Contractors />} />
+        <Route path="notifications" element={<Notifications />} />
       </Route>
 
       <Route path="/404" element={<NotFoundPage />} />
