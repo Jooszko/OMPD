@@ -304,6 +304,128 @@ export async function fetchOrderHistory(): Promise<any[]> {
 }
 
 
+export interface DailySummary {
+  date: string;
+  revenue: string;
+  expenses: string;
+  balance: string;
+}
+
+export interface AppExpense {
+  expense_id: number;
+  category: string;
+  category_label: string;
+  amount: string;
+  description: string;
+  date: string;
+}
+
+export interface CategoryBreakdownRow {
+  category: string;
+  category_label: string;
+  total: string;
+}
+
+export interface PeriodIncomeRow {
+  client_name: string;
+  amount: string;
+  date: string;
+}
+
+export interface TopClientRow {
+  client_name: string;
+  total: string;
+}
+
+export interface ProfitTrendRow {
+  date: string;
+  net_profit: string;
+}
+
+export interface FinancialReport {
+  report_date: string;
+  total_revenue: string;
+  total_cogs: string;
+  total_operating_expenses: string;
+  net_profit: string;
+  is_finalized: boolean;
+}
+
+function withDateRange(base: string, start?: string, end?: string): string {
+  const params = new URLSearchParams();
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export async function fetchDailySummary(dateStr?: string): Promise<DailySummary> {
+  const url = dateStr ? `${API_BASE}/finance/daily-summary/?date=${dateStr}` : `${API_BASE}/finance/daily-summary/`;
+  const response = await fetch(url, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchExpenses(start?: string, end?: string): Promise<AppExpense[]> {
+  const response = await fetch(withDateRange(`${API_BASE}/finance/expenses/`, start, end), { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function createExpense(payload: {
+  category: string;
+  amount: number;
+  description: string;
+  date: string;
+}): Promise<AppExpense> {
+  const response = await fetch(`${API_BASE}/finance/expenses/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function fetchCategoryBreakdown(start?: string, end?: string): Promise<CategoryBreakdownRow[]> {
+  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchPeriodIncomes(start?: string, end?: string): Promise<PeriodIncomeRow[]> {
+  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchTopClients(start?: string, end?: string): Promise<TopClientRow[]> {
+  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchProfitTrend(start?: string, end?: string): Promise<ProfitTrendRow[]> {
+  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function fetchFinancialReports(): Promise<FinancialReport[]> {
+  const response = await fetch(`${API_BASE}/finance/reports/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function generateFinancialReport(): Promise<FinancialReport> {
+  const response = await fetch(`${API_BASE}/finance/reports/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function deleteFinancialReport(reportDate: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/finance/reports/${reportDate}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
+}
+
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
