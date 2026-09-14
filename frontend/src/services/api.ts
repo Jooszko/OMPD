@@ -183,6 +183,9 @@ export interface AppClient {
   route: number;
   route_details: RouteOption;
   is_active: boolean;
+  latitude: string | null;
+  longitude: string | null;
+  geocoded_at: string | null;
 }
 
 export async function fetchRoutes(): Promise<RouteOption[]> {
@@ -510,13 +513,26 @@ export interface LogisticsRoute {
   stops: LogisticsStop[];
 }
 
+export interface LogisticsViewer {
+  role: 'admin' | 'baker' | 'driver';
+  is_preview: boolean;
+  driver_id: number | null;
+}
+
+export interface LogisticsDriverOption {
+  user_id: number;
+  full_name: string;
+}
+
 export interface LogisticsData {
   date: string;
   routes: LogisticsRoute[];
   unassigned: LogisticsStop[];
+  viewer: LogisticsViewer;
+  drivers: LogisticsDriverOption[];
 }
 
-export async function fetchLogistics(): Promise<LogisticsData> {
+export async function fetchLogistics(driverId?: number): Promise<LogisticsData> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -524,7 +540,8 @@ export async function fetchLogistics(): Promise<LogisticsData> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/logistics/`, { headers });
+  const url = driverId ? `${API_BASE}/logistics/?driver=${driverId}` : `${API_BASE}/logistics/`;
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {
       logoutUser();

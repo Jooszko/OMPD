@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, UserPlus, CheckCircle, XCircle, MapPin, X, FileText, Truck } from 'lucide-react';
+import { Plus, Edit, UserPlus, CheckCircle, XCircle, MapPin, X, FileText, Truck, Crosshair } from 'lucide-react';
 import { fetchClients, saveClient, fetchRoutes, type AppClient, type RouteOption } from '../../../services/api';
 
 export default function ClientsPanel() {
@@ -15,6 +15,9 @@ export default function ClientsPanel() {
     const [nip, setNip] = useState('');
     const [routeId, setRouteId] = useState<number | ''>('');
     const [isActive, setIsActive] = useState(true);
+    const [latitude, setLatitude] = useState('');
+    const [longitude, setLongitude] = useState('');
+    const [editingClient, setEditingClient] = useState<AppClient | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -40,6 +43,9 @@ export default function ClientsPanel() {
         setNip('');
         setRouteId(routes[0]?.route_id ?? '');
         setIsActive(true);
+        setLatitude('');
+        setLongitude('');
+        setEditingClient(null);
         setIsModalOpen(true);
     };
 
@@ -52,6 +58,9 @@ export default function ClientsPanel() {
             setNip(client.nip || '');
             setRouteId(client.route);
             setIsActive(client.is_active);
+            setLatitude('');
+            setLongitude('');
+            setEditingClient(client);
             setIsModalOpen(true);
         }
     };
@@ -63,13 +72,15 @@ export default function ClientsPanel() {
             return;
         }
 
-        const payload = {
+        const payload: Record<string, unknown> = {
             name: name.trim(),
             address: address.trim(),
             nip: nip.trim() || null,
             route: routeId,
             is_active: isActive,
         };
+        if (latitude.trim()) payload.latitude = latitude.trim();
+        if (longitude.trim()) payload.longitude = longitude.trim();
 
         try {
             if (modalMode === 'add') {
@@ -113,6 +124,7 @@ export default function ClientsPanel() {
                                     <th className="py-2 px-3 h-8">NIP</th>
                                     <th className="py-2 px-3 h-8">Adres Dostaw</th>
                                     <th className="py-2 px-3 h-8">Trasa</th>
+                                    <th className="py-2 px-3 h-8">Geolokalizacja</th>
                                     <th className="py-2 px-3 h-8 text-center">Status relacji</th>
                                 </tr>
                             </thead>
@@ -138,6 +150,16 @@ export default function ClientsPanel() {
                                             <div className="flex items-center gap-1">
                                                 <Truck className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {client.route_details?.route_name ?? '-'}
                                             </div>
+                                        </td>
+                                        <td className="py-2 px-3 text-xs font-mono text-gray-600">
+                                            {client.latitude && client.longitude ? (
+                                                <span className="flex items-center gap-1" title={client.geocoded_at ? `Zgeokodowano: ${new Date(client.geocoded_at).toLocaleString('pl-PL')}` : undefined}>
+                                                    <Crosshair className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                    {Number(client.latitude).toFixed(4)}, {Number(client.longitude).toFixed(4)}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 italic font-sans text-[11px] font-normal">Brak</span>
+                                            )}
                                         </td>
                                         <td className="py-2 px-3 text-center">
                                             <div className="flex items-center justify-center gap-1">
@@ -232,6 +254,31 @@ export default function ClientsPanel() {
                                     onChange={(e) => setAddress(e.target.value)}
                                     className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Współrzędne GPS (opcjonalnie, ręczna korekta)</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder={editingClient?.latitude ? `aktualnie: ${editingClient.latitude}` : 'szerokość (lat)'}
+                                        value={latitude}
+                                        onChange={(e) => setLatitude(e.target.value)}
+                                        className="w-1/2 border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-mono rounded text-xs p-2 outline-none focus:border-bakery-accent"
+                                    />
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder={editingClient?.longitude ? `aktualnie: ${editingClient.longitude}` : 'długość (lng)'}
+                                        value={longitude}
+                                        onChange={(e) => setLongitude(e.target.value)}
+                                        className="w-1/2 border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-mono rounded text-xs p-2 outline-none focus:border-bakery-accent"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-500 font-medium mt-1">
+                                    Zostaw puste, aby zachować automatyczne geokodowanie (adres jest geokodowany osobną komendą). Zmiana adresu bez podania współrzędnych wyczyści dotychczasowe.
+                                </p>
                             </div>
 
                             <div>
