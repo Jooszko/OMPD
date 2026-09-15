@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Truck, User, AlertTriangle, Eye } from 'lucide-react';
+import { Truck, User, AlertTriangle, Eye, Map } from 'lucide-react';
 import {
   fetchLogistics,
+  fetchRouteDirections,
   updateOrderStatus,
   type LogisticsData,
   type LogisticsOrder,
+  type RouteDirections,
 } from '../../../services/api';
 import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
+import { RouteMap } from '../components/RouteMap';
+import { RouteSummary } from '../components/RouteSummary';
 
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
@@ -15,6 +19,34 @@ export default function Logistics() {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
+  const [mapOpenRouteId, setMapOpenRouteId] = useState<number | null>(null);
+  const [directionsByRoute, setDirectionsByRoute] = useState<Record<number, RouteDirections>>({});
+  const [loadingDirectionsFor, setLoadingDirectionsFor] = useState<number | null>(null);
+  const [directionsErrorByRoute, setDirectionsErrorByRoute] = useState<Record<number, string>>({});
+
+  const handleToggleMap = async (routeId: number, date: string) => {
+    const opening = mapOpenRouteId !== routeId;
+    setMapOpenRouteId(opening ? routeId : null);
+    if (opening && !directionsByRoute[routeId] && loadingDirectionsFor !== routeId) {
+      setLoadingDirectionsFor(routeId);
+      setDirectionsErrorByRoute((prev) => {
+        const next = { ...prev };
+        delete next[routeId];
+        return next;
+      });
+      try {
+        const result = await fetchRouteDirections(routeId, date);
+        setDirectionsByRoute((prev) => ({ ...prev, [routeId]: result }));
+      } catch (err) {
+        setDirectionsErrorByRoute((prev) => ({
+          ...prev,
+          [routeId]: err instanceof Error ? err.message : 'Nieznany błąd',
+        }));
+      } finally {
+        setLoadingDirectionsFor(null);
+      }
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -152,10 +184,13 @@ export default function Logistics() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {routes.map((route) => (
+          {routes.map((route) => {
+            const hasDeliveriesToday = route.stops.some((s) => s.orders.length > 0);
+            const mapOpen = mapOpenRouteId === route.route_id;
+            return (
             <div
               key={route.route_id}
-              className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm flex flex-col overflow-hidden"
+              className={`bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm flex flex-col overflow-hidden ${mapOpen ? 'md:col-span-2' : ''}`}
             >
               <div className="bg-bakery-dark text-white p-3 flex items-center justify-between gap-2 shrink-0">
                 <span className="text-sm font-bold flex items-center gap-2">
@@ -166,6 +201,14 @@ export default function Logistics() {
                     <User className="w-3.5 h-3.5" />
                     {route.driver ? route.driver.full_name : 'Brak kierowcy'}
                   </span>
+                  {hasDeliveriesToday && (
+                    <button
+                      onClick={() => handleToggleMap(route.route_id, data.date)}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-bakery-accent text-black rounded shadow-xs transition active:scale-[0.98]"
+                    >
+                      <Map className="w-3 h-3" /> {mapOpen ? 'Ukryj mapę' : 'Mapa'}
+                    </button>
+                  )}
                   {route.driver && (
                     <button
                       onClick={() => setPreviewDriverId(route.driver!.user_id)}
@@ -176,6 +219,19 @@ export default function Logistics() {
                   )}
                 </div>
               </div>
+
+              {mapOpen && (
+                <>
+                  <div className="p-3 pb-0">
+                    <RouteMap stops={route.stops} directions={directionsByRoute[route.route_id] ?? null} />
+                  </div>
+                  <RouteSummary
+                    directions={directionsByRoute[route.route_id] ?? null}
+                    loading={loadingDirectionsFor === route.route_id}
+                    error={directionsErrorByRoute[route.route_id] ?? null}
+                  />
+                </>
+              )}
 
               <div className="p-3 flex flex-col gap-2">
                 {route.stops.length === 0 ? (
@@ -189,7 +245,8 @@ export default function Logistics() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

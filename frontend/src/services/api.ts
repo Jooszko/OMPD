@@ -503,6 +503,8 @@ export interface LogisticsStop {
   client_id: number;
   name: string;
   address: string;
+  latitude: string | null;
+  longitude: string | null;
   orders: LogisticsOrder[];
 }
 
@@ -541,6 +543,46 @@ export async function fetchLogistics(driverId?: number): Promise<LogisticsData> 
   }
 
   const url = driverId ? `${API_BASE}/logistics/?driver=${driverId}` : `${API_BASE}/logistics/`;
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    throw new Error(`Błąd serwera: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface OrderedStop {
+  client_id: number;
+  name: string;
+  latitude: string;
+  longitude: string;
+}
+
+export interface RouteDirections {
+  geometry: { coordinates: [number, number][] } | null;
+  distance_m: number | null;
+  duration_s: number | null;
+  provider: 'osrm' | 'ors' | null;
+  skipped_stops: string[];
+  note: string | null;
+  optimized: boolean;
+  ordered_stops: OrderedStop[];
+}
+
+export async function fetchRouteDirections(routeId: number, date?: string): Promise<RouteDirections> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const url = date
+    ? `${API_BASE}/logistics/routes/${routeId}/directions/?date=${encodeURIComponent(date)}`
+    : `${API_BASE}/logistics/routes/${routeId}/directions/`;
   const response = await fetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {

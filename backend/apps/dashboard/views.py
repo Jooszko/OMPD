@@ -12,6 +12,8 @@ from orders.models import DailyOrder
 from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
 from users.models import User
+from .services.optimize import optimize_stop_order
+from .services.routing import RoutingError, get_route_directions
 
 
 class DashboardView(APIView):
@@ -189,6 +191,8 @@ class LogisticsView(APIView):
                     'client_id': client.client_id,
                     'name': client.name,
                     'address': client.address,
+                    'latitude': client.latitude,
+                    'longitude': client.longitude,
                     'orders': orders_by_client.get(client.client_id, []),
                 })
 
@@ -210,6 +214,8 @@ class LogisticsView(APIView):
                     'client_id': client_id,
                     'name': client_by_id[client_id].name,
                     'address': client_by_id[client_id].address,
+                    'latitude': client_by_id[client_id].latitude,
+                    'longitude': client_by_id[client_id].longitude,
                     'orders': orders,
                 }
                 for client_id, orders in orders_by_client.items()
@@ -266,3 +272,91 @@ class UpdateOrderStatusView(APIView):
         order.status = new_status
         order.save(update_fields=['status'])
         return Response({'do_id': order.do_id, 'status': order.status})
+
+
+class RouteDirectionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        route = get_object_or_404(Route, pk=pk, is_active=True)
+
+        if user.role == 'driver' and route.driver_id != user.user_id:
+            return Response(
+                {'error': 'Nie masz dostępu do tej trasy.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        date_param = request.query_params.get('date')
+        if date_param:
+            try:
+                target_date = date.fromisoformat(date_param)
+            except ValueError:
+                return Response(
+                    {'error': 'Nieprawidłowy format daty (YYYY-MM-DD).'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            target_date = date.today()
+
+        client_ids_with_orders = set(
+            DailyOrder.objects
+            .filter(order_date=target_date, client__route=route)
+            .exclude(status='cancelled')
+            .values_list('client_id', flat=True)
+        )
+
+        stops = list(
+            route.clients
+            .filter(is_active=True, client_id__in=client_ids_with_orders)
+            .order_by('name')
+        )
+        routable = [c for c in stops if c.latitude is not None and c.longitude is not None]
+        skipped_stops = [c.name for c in stops if c.latitude is None or c.longitude is None]
+
+        if len(routable) < 2:
+            return Response({
+                'geometry': None,
+                'distance_m': None,
+                'duration_s': None,
+                'provider': None,
+                'skipped_stops': skipped_stops,
+                'note': 'Za mało zgeokodowanych przystanków, aby wyznaczyć trasę.',
+                'optimized': False,
+                'ordered_stops': [],
+            })
+
+        coordinates = [(float(c.latitude), float(c.longitude)) for c in routable]
+
+        optimized = False
+        if len(coordinates) > 2:
+            order = optimize_stop_order(coordinates)
+            coordinates = [coordinates[i] for i in order]
+            routable = [routable[i] for i in order]
+            optimized = True
+
+        try:
+            result = get_route_directions(coordinates)
+        except RoutingError as exc:
+            return Response({'error': str(exc)}, status=http_status.HTTP_502_BAD_GATEWAY)
+
+        return Response({
+            'geometry': {'coordinates': result['coordinates']},
+            'distance_m': result['distance_m'],
+            'duration_s': result['duration_s'],
+            'provider': result['provider'],
+            'skipped_stops': skipped_stops,
+            'note': None,
+            'optimized': optimized,
+            'ordered_stops': [
+                {'client_id': c.client_id, 'name': c.name, 'latitude': c.latitude, 'longitude': c.longitude}
+                for c in routable
+            ],
+        })
