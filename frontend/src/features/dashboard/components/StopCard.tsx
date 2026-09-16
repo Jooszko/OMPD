@@ -30,9 +30,9 @@ export function StopCard({
 
   return (
     <div
-      className={`border rounded p-3 flex flex-col gap-2 ${
+      className={`border rounded-lg p-3 flex flex-col gap-2 transition ${
         hasDeliveryToday
-          ? 'bg-bakery-rowBg border-bakery-btnBorder'
+          ? 'bg-bakery-rowBg border-bakery-btnBorder shadow-xs hover:shadow-sm'
           : 'bg-bakery-rowBg/40 border-bakery-btnBorder border-dashed opacity-60'
       }`}
     >

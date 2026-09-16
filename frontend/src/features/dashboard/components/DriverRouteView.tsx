@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Map, Truck } from 'lucide-react';
+import { ArrowLeft, Inbox, Truck } from 'lucide-react';
 import {
   fetchRouteDirections,
   type LogisticsOrder,
@@ -25,33 +25,34 @@ export function DriverRouteView({
   previewDriverName?: string;
   onExitPreview?: () => void;
 }) {
-  const [showMap, setShowMap] = useState(false);
   const [directions, setDirections] = useState<RouteDirections | null>(null);
   const [loadingDirections, setLoadingDirections] = useState(false);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const deliveriesToday = route?.stops.filter((s) => s.orders.length > 0).length ?? 0;
 
   useEffect(() => {
-    setShowMap(false);
     setDirections(null);
     setDirectionsError(null);
-  }, [route?.route_id]);
 
-  const handleToggleMap = async () => {
-    const opening = !showMap;
-    setShowMap(opening);
-    if (opening && route && !directions && !loadingDirections) {
-      setLoadingDirections(true);
-      setDirectionsError(null);
-      try {
-        setDirections(await fetchRouteDirections(route.route_id, date));
-      } catch (err) {
-        setDirectionsError(err instanceof Error ? err.message : 'Nieznany błąd');
-      } finally {
-        setLoadingDirections(false);
-      }
-    }
-  };
+    if (!route || deliveriesToday === 0) return;
+
+    let cancelled = false;
+    setLoadingDirections(true);
+    fetchRouteDirections(route.route_id, date)
+      .then((result) => {
+        if (!cancelled) setDirections(result);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setDirectionsError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDirections(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route?.route_id, date]);
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-5 text-bakery-dark">
@@ -83,46 +84,38 @@ export function DriverRouteView({
       <hr className="border-0 border-t border-bakery-border my-1" />
 
       {!route ? (
-        <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm p-8 text-center text-gray-500 text-sm font-semibold italic">
+        <div className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-sm p-8 flex flex-col items-center gap-2 text-center text-gray-500 text-sm font-semibold italic">
+          <Truck className="w-6 h-6 text-gray-400" />
           Nie masz przypisanej aktywnej trasy.
         </div>
       ) : (
-        <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm flex flex-col overflow-hidden">
-          <div className="bg-bakery-dark text-white p-3 flex items-center justify-between gap-2 shrink-0">
-            <span className="flex items-center gap-2 text-sm font-bold">
-              <Truck className="w-4 h-4 text-bakery-accent" />
-              {route.route_name}
-            </span>
-            {deliveriesToday > 0 && (
-              <button
-                onClick={handleToggleMap}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-bakery-accent text-black rounded shadow-xs transition active:scale-[0.98]"
-              >
-                <Map className="w-3 h-3" /> {showMap ? 'Ukryj mapę' : 'Mapa'}
-              </button>
-            )}
+        <div className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-md flex flex-col overflow-hidden">
+          <div className="bg-bakery-dark text-white p-3.5 flex items-center gap-2 shrink-0">
+            <Truck className="w-4 h-4 text-bakery-accent" />
+            <span className="text-sm font-bold">{route.route_name}</span>
           </div>
-
-          {showMap && (
-            <>
-              <div className="p-3 pb-0">
-                <RouteMap stops={route.stops} directions={directions} />
-              </div>
-              <RouteSummary directions={directions} loading={loadingDirections} error={directionsError} />
-            </>
-          )}
 
           <div className="p-3 flex flex-col gap-2">
             {route.stops.length === 0 ? (
-              <p className="text-xs text-gray-500 italic font-semibold text-center py-4">
+              <div className="flex flex-col items-center gap-1.5 text-gray-500 text-xs font-semibold italic text-center py-6">
+                <Inbox className="w-5 h-5 text-gray-400" />
                 Brak dostaw na tej trasie dzisiaj.
-              </p>
+              </div>
             ) : (
               route.stops.map((stop) => (
                 <StopCard key={stop.client_id} stop={stop} onAdvance={onAdvance} updatingId={updatingId} />
               ))
             )}
           </div>
+
+          {deliveriesToday > 0 && (
+            <>
+              <div className="p-3 pt-0">
+                <RouteMap stops={route.stops} directions={directions} />
+              </div>
+              <RouteSummary directions={directions} loading={loadingDirections} error={directionsError} />
+            </>
+          )}
         </div>
       )}
     </div>
