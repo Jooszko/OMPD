@@ -1,14 +1,20 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { type LogisticsStop, type RouteDirections } from '../../../services/api';
+
+const DELIVERY_COLOR = '#f49f1c';
+const NO_DELIVERY_COLOR = '#9ca3af';
 
 function statusIcon(hasDeliveryToday: boolean) {
   return L.divIcon({
     className: '',
     html: `<div style="
-      background:${hasDeliveryToday ? '#d4a418' : '#9ca3af'};
+      background:${hasDeliveryToday ? DELIVERY_COLOR : NO_DELIVERY_COLOR};
       width:16px;height:16px;
       border-radius:50%;
       border:2px solid white;
@@ -18,6 +24,91 @@ function statusIcon(hasDeliveryToday: boolean) {
     iconAnchor: [8, 8],
     popupAnchor: [0, -8],
   });
+}
+
+function MapLegend() {
+  return (
+    <div className="absolute bottom-2 left-2 z-[1000] bg-white/90 backdrop-blur-xs rounded-lg px-2 py-1.5 text-[10px] font-semibold text-bakery-dark shadow-sm border border-bakery-btnBorder flex flex-col gap-1">
+      <span className="flex items-center gap-1.5">
+        <span className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" style={{ background: DELIVERY_COLOR }} />
+        Dostawa dzisiaj
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" style={{ background: NO_DELIVERY_COLOR }} />
+        Brak dostawy dzisiaj
+      </span>
+    </div>
+  );
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function clusterIcon(cluster: L.MarkerCluster) {
+  const hasDelivery = cluster
+    .getAllChildMarkers()
+    .some((m) => (m as L.Marker & { __hasDelivery?: boolean }).__hasDelivery);
+  const count = cluster.getChildCount();
+
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      background:${hasDelivery ? DELIVERY_COLOR : NO_DELIVERY_COLOR};
+      color:#1f1f1f;
+      width:30px;height:30px;
+      border-radius:50%;
+      border:2px solid white;
+      box-shadow:0 1px 3px rgba(0,0,0,0.4);
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;font-weight:800;font-family:sans-serif;
+    ">${count}</div>`,
+    iconSize: [30, 30],
+  });
+}
+
+function ClusteredMarkers({ stops }: { stops: (LogisticsStop & { latitude: string; longitude: string })[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 45,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      iconCreateFunction: clusterIcon,
+    });
+
+    stops.forEach((stop) => {
+      const hasDelivery = stop.orders.length > 0;
+      const marker = L.marker([Number(stop.latitude), Number(stop.longitude)], {
+        icon: statusIcon(hasDelivery),
+      }) as L.Marker & { __hasDelivery?: boolean };
+      marker.__hasDelivery = hasDelivery;
+
+      marker.bindTooltip(escapeHtml(stop.name), {
+        direction: 'top',
+        offset: [0, -6],
+        opacity: 0.95,
+        className: 'text-[10px] font-bold',
+      });
+      marker.bindPopup(
+        `<strong>${escapeHtml(stop.name)}</strong><br/>${escapeHtml(stop.address)}` +
+          (hasDelivery ? '' : '<br/><em>Brak dostawy dzisiaj</em>')
+      );
+
+      clusterGroup.addLayer(marker);
+    });
+
+    map.addLayer(clusterGroup);
+
+    return () => {
+      map.removeLayer(clusterGroup);
+    };
+  }, [map, stops]);
+
+  return null;
 }
 
 function FitBounds({ points }: { points: [number, number][] }) {
@@ -51,7 +142,7 @@ export function RouteMap({
   if (geocodedStops.length === 0) {
     return (
       <div
-        className={`flex items-center justify-center bg-bakery-inactive border border-dashed border-bakery-btnBorder rounded text-xs text-gray-500 font-semibold italic ${className ?? 'h-72'}`}
+        className={`flex items-center justify-center bg-bakery-inactive border border-dashed border-bakery-btnBorder rounded-lg text-xs text-gray-500 font-semibold italic ${className ?? 'h-72'}`}
       >
         Brak zgeokodowanych przystanków na tej trasie.
       </div>
@@ -63,7 +154,7 @@ export function RouteMap({
   const fitPoints = linePoints.length > 0 ? linePoints : points;
 
   return (
-    <div className={`rounded overflow-hidden border border-bakery-btnBorder ${className ?? 'h-72'}`}>
+    <div className={`relative rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}>
       <MapContainer center={points[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -71,31 +162,11 @@ export function RouteMap({
         />
         <FitBounds points={fitPoints} />
         {linePoints.length > 0 && (
-          <Polyline positions={linePoints} pathOptions={{ color: '#d4a418', weight: 4, opacity: 0.85 }} />
+          <Polyline positions={linePoints} pathOptions={{ color: DELIVERY_COLOR, weight: 4, opacity: 0.85 }} />
         )}
-        {geocodedStops.map((stop) => (
-          <Marker
-            key={stop.client_id}
-            position={[Number(stop.latitude), Number(stop.longitude)]}
-            icon={statusIcon(stop.orders.length > 0)}
-          >
-            <Tooltip direction="top" offset={[0, -6]} opacity={0.95} className="text-[10px] font-bold">
-              {stop.name}
-            </Tooltip>
-            <Popup>
-              <strong>{stop.name}</strong>
-              <br />
-              {stop.address}
-              {stop.orders.length === 0 && (
-                <>
-                  <br />
-                  <em>Brak dostawy dzisiaj</em>
-                </>
-              )}
-            </Popup>
-          </Marker>
-        ))}
+        <ClusteredMarkers stops={geocodedStops} />
       </MapContainer>
+      <MapLegend />
     </div>
   );
 }
