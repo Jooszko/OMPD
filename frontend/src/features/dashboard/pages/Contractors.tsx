@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
-import { fetchSuppliers, saveSupplier } from '../../../services/api';
+import { fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
+
 interface SupplierProduct {
     product_id: number;
     name: string;
@@ -23,6 +24,7 @@ export default function SuppliersPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [ingredientSearch, setIngredientSearch] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -39,19 +41,38 @@ export default function SuppliersPanel() {
     const [newProductName, setNewProductName] = useState('');
 
     useEffect(() => {
-        const loadSuppliers = async () => {
+        let isMounted = true;
+
+        const loadData = async () => {
             try {
                 setIsLoading(true);
-                const data = await fetchSuppliers();
-                setSuppliers(data);
-            } catch (error) {
-                console.error("Błąd podczas ładowania kontrahentów:", error);
+                const [suppliersData, ingredientsData] = await Promise.all([
+                    fetchSuppliers(),
+                    fetchIngredients()
+                ]);
+
+                if (isMounted) {
+                    setSuppliers(suppliersData);
+                    const mappedProducts: SupplierProduct[] = ingredientsData.map((ing: AppIngredient) => ({
+                        product_id: ing.ingredient_id,
+                        name: `${ing.name} (${ing.unit})`
+                    }));
+                    setGlobalProducts(mappedProducts);
+                }
+            } catch (error: unknown) {
+                console.error("Błąd podczas ładowania kontrahentów i surowców:", error);
             } finally {
-                setIsLoading(false);
+                if (isMounted) {
+                    setIsLoading(false);
+                }
             }
         };
 
-        loadSuppliers();
+        loadData();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const handleOpenAdd = () => {
@@ -61,6 +82,7 @@ export default function SuppliersPanel() {
         setEmail('');
         setAddress('');
         setNip('');
+        setIngredientSearch('');
         setIsActive(true);
         setSupplierProducts([]);
         setIsModalOpen(true);
@@ -78,6 +100,7 @@ export default function SuppliersPanel() {
             setIsActive(supplier.is_active);
             setSupplierProducts([...supplier.products]);
             setIsModalOpen(true);
+            setIngredientSearch('');
         }
     };
 
@@ -335,40 +358,91 @@ export default function SuppliersPanel() {
                                 </label>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-5 flex-1 min-h-0">
-                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col">
-                                    <div className="p-3 border-b border-bakery-btnBorder flex justify-between items-center shrink-0">
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5"><Search className="w-3.5 h-3.5" /> Ogólna Baza Surowców</span>
-                                        <button type="button" onClick={() => setIsNewProductModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]">
-                                            <Plus className="w-3 h-3 text-bakery-accent" /> Zdefiniuj surowiec
-                                        </button>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                        {globalProducts.map(p => (
-                                            <div key={p.product_id} className="p-1.5 bg-bakery-inactive hover:bg-[#c9c3c3] rounded text-xs font-semibold text-bakery-dark flex justify-between items-center transition">
-                                                <span>{p.name}</span>
-                                                <button type="button" onClick={() => handleAddProductToSupplier(p)} className="text-bakery-dark p-0.5 hover:text-blue-700 transition">
-                                                    <Plus className="w-4 h-4" />
+                            <div className="grid grid-cols-2 gap-5 min-h-0">
+                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col h-56 overflow-hidden">
+                                    <div className="p-2 border-b border-bakery-btnBorder flex flex-col gap-1.5 shrink-0 bg-bakery-inactive">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                Ogólna Baza Surowców
+                                            </span>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setIsNewProductModalOpen(true)} 
+                                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
+                                            >
+                                                <Plus className="w-3 h-3 text-bakery-accent" /> Zdefiniuj
+                                            </button>
+                                        </div>
+
+                                        <div className="relative w-full">
+                                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 w-3 h-3" />
+                                            <input
+                                                type="text"
+                                                value={ingredientSearch}
+                                                onChange={(e) => setIngredientSearch(e.target.value)}
+                                                placeholder="Filtruj surowce..."
+                                                className="w-full pl-6 pr-6 py-1 border border-bakery-btnBorder rounded text-[11px] bg-white text-bakery-dark font-medium outline-none focus:border-bakery-accent"
+                                            />
+                                            {ingredientSearch && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIngredientSearch('')}
+                                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                                                >
+                                                    <X className="w-3 h-3" />
                                                 </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                        {globalProducts
+                                            .filter(p => !supplierProducts.some(sp => sp.product_id === p.product_id))
+                                            .filter(p => p.name.toLowerCase().includes(ingredientSearch.toLowerCase().trim()))
+                                            .map(p => (
+                                                <div 
+                                                    key={p.product_id} 
+                                                    className="p-1.5 px-2 bg-bakery-inactive hover:bg-[#c9c3c3] rounded text-xs font-semibold text-bakery-dark flex justify-between items-center transition"
+                                                >
+                                                    <span className="truncate pr-2">{p.name}</span>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => handleAddProductToSupplier(p)} 
+                                                        className="text-bakery-dark p-0.5 hover:text-blue-700 transition shrink-0" 
+                                                        title="Dodaj do kontrahenta"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+
+                                        {globalProducts
+                                            .filter(p => !supplierProducts.some(sp => sp.product_id === p.product_id))
+                                            .filter(p => p.name.toLowerCase().includes(ingredientSearch.toLowerCase().trim())).length === 0 && (
+                                            <div className="text-center py-8 text-gray-400 text-xs italic">
+                                                {ingredientSearch ? 'Nie znaleziono pasującego surowca.' : 'Wszystkie surowce zostały przypisane.'}
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col">
-                                    <div className="p-3 border-b border-bakery-btnBorder flex items-center gap-1.5 shrink-0">
-                                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"><Package className="w-3.5 h-3.5 text-bakery-dark" /> Surowce dostępne u Kontrahenta</span>
+                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col h-56 overflow-hidden">
+                                    <div className="p-2.5 px-3 border-b border-bakery-btnBorder flex items-center justify-between shrink-0 bg-bakery-inactive">
+                                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"><Package className="w-3.5 h-3.5 text-bakery-dark" /> Przypisane Surowce</span>
+                                        <span className="text-[10px] font-bold font-mono text-gray-500 bg-bakery-rowBg px-1.5 py-0.5 rounded border border-bakery-btnBorder">{supplierProducts.length}</span>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                        {supplierProducts.length > 0 ? supplierProducts.map(p => (
-                                            <div key={p.product_id} className="p-1.5 bg-bakery-inactive rounded text-xs font-semibold text-bakery-dark flex justify-between items-center">
-                                                <span>{p.name}</span>
-                                                <button type="button" onClick={() => handleRemoveProductFromSupplier(p.product_id)} className="text-red-700 p-0.5 hover:bg-red-100 transition rounded">
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center py-12 text-gray-400 text-xs font-semibold italic">Lista asorytmentu jest pusta.<br />Dodaj produkty z ogólnej bazy po lewej stronie.</div>
+                                        {supplierProducts.length > 0 ? (
+                                            supplierProducts.map(p => (
+                                                <div key={p.product_id} className="p-1.5 px-2 bg-bakery-inactive rounded text-xs font-semibold text-bakery-dark flex justify-between items-center">
+                                                    <span className="truncate pr-2">{p.name}</span>
+                                                    <button type="button" onClick={() => handleRemoveProductFromSupplier(p.product_id)} className="text-red-700 p-0.5 hover:bg-red-100 transition rounded shrink-0" title="Usuń powiązanie">
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-10 text-gray-400 text-xs font-semibold italic">Lista asortymentu jest pusta.<br />Dodaj produkty z listy po lewej stronie.</div>
                                         )}
                                     </div>
                                 </div>
