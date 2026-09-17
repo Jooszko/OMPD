@@ -147,11 +147,15 @@ export default function SuppliersPanel() {
         setNewProductName('');
     };
 
-    const filteredSuppliers = suppliers.filter(s =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.nip.includes(searchTerm) ||
-        s.products.some(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const query = searchTerm.toLowerCase().trim();
+
+    const filteredSuppliers = suppliers.filter(s => {
+        const matchesName = s.name?.toLowerCase().includes(query) ?? false;
+        const matchesNip = s.nip ? s.nip.toLowerCase().includes(query) : false;
+        const matchesProducts = s.products?.some(p => p.name?.toLowerCase().includes(query)) ?? false;
+
+        return matchesName || matchesNip || matchesProducts;
+    });
 
     return (
         <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
