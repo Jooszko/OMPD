@@ -28,7 +28,7 @@ export const DashboardLayout: React.FC = () => {
 
   const menuItems = [
     { path: '/', label: 'Strona Główna', roles: ['admin', 'baker', 'driver'] },
-    { path: '/orders', label: 'Zamówienia', roles: ['admin'] },
+    { path: '/orders', label: 'Zamówienia', roles: ['admin', 'baker'] },
     { path: '/warehouse', label: 'Magazyn', roles: ['admin', 'baker'] },
     { path: '/logistics', label: 'Logistyka', roles: ['admin', 'driver'] },
     { path: '/products', label: 'Produkty', roles: ['admin', 'baker'] },
