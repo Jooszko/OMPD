@@ -32,3 +32,11 @@ const NEXT_STEP: Partial<Record<OrderStatus, NextStep>> = {
 export function getNextStep(status: OrderStatus): NextStep | null {
   return NEXT_STEP[status] ?? null;
 }
+
+const DRIVER_NEXT_STEP: Partial<Record<OrderStatus, NextStep>> = {
+  in_delivery: { status: 'delivered', label: 'Oznacz jako dostarczone' },
+};
+
+export function getDriverNextStep(status: OrderStatus): NextStep | null {
+  return DRIVER_NEXT_STEP[status] ?? null;
+}
