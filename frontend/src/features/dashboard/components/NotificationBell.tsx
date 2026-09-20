@@ -25,7 +25,7 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: 320 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +62,12 @@ export function NotificationBell() {
   const handleToggle = () => {
     if (!isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.top, left: rect.right + 8 });
+      const width = Math.min(320, window.innerWidth - 16);
+      let left = rect.right + 8;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      setPanelPos({ top: rect.top, left, width });
       loadNotifications();
     }
     setIsOpen((prev) => !prev);
@@ -118,8 +123,8 @@ export function NotificationBell() {
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          style={{ top: panelPos.top, left: panelPos.left }}
-          className="fixed w-80 max-h-96 flex flex-col bg-bakery-inactive border border-bakery-border rounded shadow-xl z-50 overflow-hidden"
+          style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
+          className="fixed max-h-96 flex flex-col bg-bakery-inactive border border-bakery-border rounded shadow-xl z-50 overflow-hidden"
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-bakery-btnBorder bg-bakery-dark text-white shrink-0">
             <span className="text-xs font-bold uppercase tracking-wider">Powiadomienia</span>

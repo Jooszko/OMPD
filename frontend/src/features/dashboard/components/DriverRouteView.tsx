@@ -6,7 +6,7 @@ import {
   type LogisticsRoute,
   type RouteDirections,
 } from '../../../services/api';
-import { StopCard } from './StopCard';
+import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
 
@@ -103,7 +103,7 @@ export function DriverRouteView({
               </div>
             ) : (
               route.stops.map((stop) => (
-                <StopCard key={stop.client_id} stop={stop} onAdvance={onAdvance} updatingId={updatingId} />
+                <DriverStopCard key={stop.client_id} stop={stop} onAdvance={onAdvance} updatingId={updatingId} />
               ))
             )}
           </div>

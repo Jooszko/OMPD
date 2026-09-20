@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Navigate, useOutletContext } from 'react-router-dom';
 import { useDashboard } from '../hooks/useDashboard';
 import type { TodayOrder } from '../../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,10 @@ export const HomeDashboard: React.FC = () => {
     };
     return labels[status] ?? status;
   };
+
+  if (currentRole === 'driver') {
+    return <Navigate to="/logistics" replace />;
+  }
 
   if (loading) {
     return (
@@ -248,19 +252,6 @@ export const HomeDashboard: React.FC = () => {
           </section>
         </>
       )}
-
-      {currentRole === 'driver' && (
-        <>
-          <hr className="border-0 border-t border-bakery-border my-1" />
-          <section className="flex flex-col gap-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 text-center mb-1">Panel Logistyki Kierowcy</div>
-            <Card className="bg-bakery-inactive border-bakery-btnBorder p-6 text-center shadow-sm">
-              <p className="text-sm text-gray-600">Twoje dzisiejsze trasy i punkty wydań towaru znajdują się w sekcji "Logistyka".</p>
-            </Card>
-          </section>
-        </>
-      )}
-
     </div>
   );
 };

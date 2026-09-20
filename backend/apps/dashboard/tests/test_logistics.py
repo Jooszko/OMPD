@@ -116,7 +116,8 @@ class UpdateOrderStatusPermissionTests(TestCase):
         client_a = Client.objects.create(name='Klient A2', address='Adres A2', route=route_a)
         product = Product.objects.create(name='Bulka', category='bread', base_price=Decimal('5.00'))
         self.order = DailyOrder.objects.create(
-            client=client_a, product=product, order_date=date.today(), quantity=1, price_at_sale=Decimal('5.00')
+            client=client_a, product=product, order_date=date.today(), quantity=1, price_at_sale=Decimal('5.00'),
+            status='in_delivery',
         )
 
     def test_owning_driver_can_update_status(self):
@@ -135,3 +136,12 @@ class UpdateOrderStatusPermissionTests(TestCase):
         self.api.force_authenticate(self.admin)
         response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
         self.assertEqual(response.status_code, 200)
+
+    def test_driver_cannot_jump_from_planned_to_delivered(self):
+        self.order.status = 'planned'
+        self.order.save(update_fields=['status'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'planned')

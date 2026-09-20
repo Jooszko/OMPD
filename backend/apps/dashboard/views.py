@@ -243,6 +243,9 @@ class LogisticsView(APIView):
             'drivers': drivers,
         })
 
+DRIVER_ALLOWED_TRANSITIONS = {
+    'in_delivery': 'delivered',
+}
 
 class UpdateOrderStatusView(APIView):
     permission_classes = [IsAuthenticated]
@@ -258,11 +261,17 @@ class UpdateOrderStatusView(APIView):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        if user.role == 'driver' and order.client.route.driver_id != user.user_id:
-            return Response(
-                {'error': 'Nie masz dostępu do tego zamówienia.'},
-                status=http_status.HTTP_403_FORBIDDEN,
-            )
+        if user.role == 'driver':
+            if order.client.route.driver_id != user.user_id:
+                return Response(
+                    {'error': 'Nie masz dostępu do tego zamówienia.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
+            if DRIVER_ALLOWED_TRANSITIONS.get(order.status) != new_status:
+                return Response(
+                    {'error': 'Kierowca może jedynie oznaczyć zamówienie w dostawie jako "dostarczone".'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
         elif user.role not in ('admin', 'driver'):
             return Response(
                 {'error': 'Brak dostępu do modułu logistyki.'},
