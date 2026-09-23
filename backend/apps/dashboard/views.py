@@ -269,6 +269,11 @@ class UpdateOrderStatusView(APIView):
                     {'error': 'Nie masz dostępu do tego zamówienia.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
+            if order.order_date != date.today():
+                return Response(
+                    {'error': 'Kierowca może zmieniać statusy jedynie dla dzisiejszych zamówień.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
             if DRIVER_ALLOWED_TRANSITIONS.get(order.status) != new_status:
                 return Response(
                     {'error': 'Kierowca może jedynie oznaczyć zamówienie w dostawie jako "dostarczone".'},
