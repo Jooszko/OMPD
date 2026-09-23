@@ -50,7 +50,7 @@ class RouteDirectionsViewTests(TestCase):
         response = self.api.get(self._url(), {'date': 'not-a-date'})
         self.assertEqual(response.status_code, 400)
 
-    @mock.patch('dashboard.views.get_route_directions')
+    @mock.patch('dashboard.views.get_cached_route_directions')
     def test_owning_driver_gets_directions(self, mock_get_directions):
         mock_get_directions.return_value = {
             'coordinates': [[50.0, 18.0], [50.1, 18.1]],
@@ -82,14 +82,14 @@ class RouteDirectionsViewTests(TestCase):
         self.assertEqual(payload['skipped_stops'], ['Klient 2'])
         self.assertIsNotNone(payload['note'])
 
-    @mock.patch('dashboard.views.get_route_directions')
+    @mock.patch('dashboard.views.get_cached_route_directions')
     def test_routing_error_returns_502(self, mock_get_directions):
         mock_get_directions.side_effect = RoutingError('boom')
         self.api.force_authenticate(self.admin)
         response = self.api.get(self._url())
         self.assertEqual(response.status_code, 502)
 
-    @mock.patch('dashboard.views.get_route_directions')
+    @mock.patch('dashboard.views.get_cached_route_directions')
     def test_two_stops_are_not_reordered(self, mock_get_directions):
         # Nothing to optimize with only 2 points — order stays as given.
         mock_get_directions.return_value = {
@@ -102,7 +102,7 @@ class RouteDirectionsViewTests(TestCase):
         self.assertFalse(response.json()['optimized'])
         mock_get_directions.assert_called_once_with([(50.0, 18.0), (50.1, 18.1)])
 
-    @mock.patch('dashboard.views.get_route_directions')
+    @mock.patch('dashboard.views.get_cached_route_directions')
     def test_three_or_more_stops_are_optimized_automatically(self, mock_get_directions):
         # Client 3 sits right next to Client 1 (start), far from Client 2 —
         # the default (name) order visits 1, 2, 3; optimization always runs
