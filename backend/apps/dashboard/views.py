@@ -13,8 +13,8 @@ from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
 from users.models import User
 from .services.optimize import optimize_stop_order
-from .services.routing import RoutingError, get_route_directions
-
+from .services.directions_cache import get_cached_route_directions
+from .services.routing import RoutingError
 
 class DashboardView(APIView):
     def get(self, request):
@@ -352,7 +352,7 @@ class RouteDirectionsView(APIView):
             optimized = True
 
         try:
-            result = get_route_directions(coordinates)
+            result = get_cached_route_directions(coordinates)
         except RoutingError as exc:
             return Response({'error': str(exc)}, status=http_status.HTTP_502_BAD_GATEWAY)
 
