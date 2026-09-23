@@ -96,6 +96,18 @@ class LogisticsViewRoleTests(TestCase):
         self.api.force_authenticate(self.admin)
         response = self.api.get('/api/logistics/', {'driver': 999999})
         self.assertEqual(response.status_code, 404)
+        
+    def test_inactive_clients_are_hidden_from_route_stops(self):
+        Client.objects.create(
+            name='Klient nieaktywny', address='Adres X', route=self.route_a, is_active=False
+        )
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.get('/api/logistics/')
+
+        self.assertEqual(response.status_code, 200)
+        stop_names = [s['name'] for s in response.data['routes'][0]['stops']]
+        self.assertIn('Klient A', stop_names)
+        self.assertNotIn('Klient nieaktywny', stop_names)
 
 
 class UpdateOrderStatusPermissionTests(TestCase):

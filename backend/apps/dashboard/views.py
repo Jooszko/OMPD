@@ -1,13 +1,13 @@
 from datetime import date
 
-from django.db.models import DecimalField, ExpressionWrapper, F, Sum
+from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from clients.models import Route
+from clients.models import Client, Route
 from orders.models import DailyOrder
 from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
@@ -175,7 +175,9 @@ class LogisticsView(APIView):
             Route.objects
             .filter(is_active=True)
             .select_related('driver')
-            .prefetch_related('clients')
+            .prefetch_related(
+                Prefetch('clients', queryset=Client.objects.filter(is_active=True))
+            )
             .order_by('route_name')
         )
         if scoped_driver_id is not None:
@@ -185,7 +187,7 @@ class LogisticsView(APIView):
         routes_data = []
         for route in routes_qs:
             stops = []
-            for client in route.clients.filter(is_active=True):
+            for client in route.clients.all():
                 assigned_client_ids.add(client.client_id)
                 stops.append({
                     'client_id': client.client_id,
