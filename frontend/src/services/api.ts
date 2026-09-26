@@ -673,3 +673,46 @@ export async function saveSupplier(payload: any, supplierId: number | null = nul
 
   return response.json();
 }
+
+export async function saveDailyOrder(payload: {
+  client_id: number;
+  order_date?: string;
+  status?: string;
+  items: { product_id: number; qty: number }[];
+}): Promise<any> {
+  const response = await fetch(`${API_BASE}/orders/daily/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function deleteDailyOrder(orderId: string | number): Promise<void> {
+  const response = await fetch(`${API_BASE}/orders/daily/?id=${encodeURIComponent(orderId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
+}
+
+export async function deleteStandingOrder(clientId: string | number): Promise<void> {
+  const response = await fetch(`${API_BASE}/orders/standing/?client_id=${encodeURIComponent(clientId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  await handleJsonResponse(response);
+}
+
+export async function saveStandingOrder(payload: {
+  client_id: number;
+  days: number[];
+  items: { product_id: number; qty: number }[];
+}): Promise<any> {
+  const response = await fetch(`${API_BASE}/orders/standing/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}

@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Edit, Trash2, Calendar, RefreshCw, Clock, Eye } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Calendar, RefreshCw, Clock, Eye, X } from 'lucide-react';
 
 import { type Order, type OrderItem } from '../types';
-import { fetchDailyOrders, fetchStandingOrders, fetchOrderHistory } from '../../../services/api';
+import { 
+  fetchDailyOrders, 
+  fetchStandingOrders, 
+  fetchOrderHistory, 
+  fetchClients, 
+  fetchProducts, 
+  saveDailyOrder, 
+  saveStandingOrder,
+  deleteDailyOrder, 
+  deleteStandingOrder,
+  type AppClient,
+  type AppProduct 
+} from '../../../services/api';
 
 const STATUS_LABELS: Record<string, string> = {
   planned: 'Zaplanowane',
@@ -11,6 +23,16 @@ const STATUS_LABELS: Record<string, string> = {
   delivered: 'Dostarczone',
   cancelled: 'Anulowane',
 };
+
+const DAYS_OF_WEEK = [
+  { id: 0, label: 'Pn' },
+  { id: 1, label: 'Wt' },
+  { id: 2, label: 'Śr' },
+  { id: 3, label: 'Czw' },
+  { id: 4, label: 'Pt' },
+  { id: 5, label: 'Sb' },
+  { id: 6, label: 'Nd' },
+];
 
 export default function ZamowieniaPanel() {
   const [activeTab, setActiveTab] = useState<'dzisiejsze' | 'stale' | 'historia'>('dzisiejsze');
@@ -23,26 +45,43 @@ export default function ZamowieniaPanel() {
   const [standingOrders, setStandingOrders] = useState<Order[]>([]);
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [clients, setClients] = useState<AppClient[]>([]);
+  const [products, setProducts] = useState<AppProduct[]>([]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [formClientId, setFormClientId] = useState<number | ''>('');
+  const [formStatus, setFormStatus] = useState<string>('planned');
+  const [formItems, setFormItems] = useState<{ product_id: number; product_name: string; qty: number }[]>([]);
+  const [selectedProductIdToAdd, setSelectedProductIdToAdd] = useState<number | ''>('');
+  const [selectedProductQty, setSelectedProductQty] = useState<number>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formOrderDate, setFormOrderDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [formDays, setFormDays] = useState<number[]>([0, 1, 2, 3, 4]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [daily, standing, history, clientList, productList] = await Promise.all([
+        fetchDailyOrders(),
+        fetchStandingOrders(),
+        fetchOrderHistory(),
+        fetchClients(),
+        fetchProducts(),
+      ]);
+      setDailyOrders(daily);
+      setStandingOrders(standing);
+      setHistoryOrders(history);
+      setClients(clientList);
+      setProducts(productList);
+    } catch (error) {
+      console.error('Błąd podczas ładowania zamówień:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const [daily, standing, history] = await Promise.all([
-          fetchDailyOrders(),
-          fetchStandingOrders(),
-          fetchOrderHistory(),
-        ]);
-        setDailyOrders(daily);
-        setStandingOrders(standing);
-        setHistoryOrders(history);
-      } catch (error) {
-        console.error('Błąd podczas ładowania zamówień:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadData();
   }, []);
 
@@ -64,6 +103,149 @@ export default function ZamowieniaPanel() {
       if (sortBy === 'amount') return a.total_amount - b.total_amount;
       return (b.date ?? '').localeCompare(a.date ?? '');
     });
+
+  const handleOpenAdd = () => {
+    setModalMode('add');
+    setFormClientId(clients.length > 0 ? clients[0].client_id : '');
+    setFormOrderDate(new Date().toISOString().split('T')[0]);
+    setFormStatus('planned');
+    setFormDays([0, 1, 2, 3, 4]);
+    setFormItems([]);
+    setSelectedProductIdToAdd(products.length > 0 ? products[0].product_id : '');
+    setSelectedProductQty(1);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = () => {
+    if (activeTab === 'dzisiejsze') {
+      const orderToEdit = dailyOrders.find(o => o.id === selectedOrderId);
+      if (!orderToEdit) return;
+
+      setModalMode('edit');
+      setFormClientId(orderToEdit.client_id || '');
+      setFormOrderDate(orderToEdit.date || new Date().toISOString().split('T')[0]);
+      setFormStatus(orderToEdit.status || 'planned');
+      setFormItems(
+        (orderToEdit.items || []).map(i => ({
+          product_id: i.product_id,
+          product_name: i.product_name,
+          qty: i.qty,
+        }))
+      );
+    } else if (activeTab === 'stale') {
+      const orderToEdit = standingOrders.find(o => o.id === selectedOrderId);
+      if (!orderToEdit) return;
+
+      setModalMode('edit');
+      setFormClientId(orderToEdit.client_id || '');
+      // Wczytanie dokładnie tych dni, które są zaznaczone w bazie
+      setFormDays((orderToEdit as any).days_ids || [0, 1, 2, 3, 4]);
+      setFormItems(
+        (orderToEdit.items || []).map(i => ({
+          product_id: i.product_id,
+          product_name: i.product_name,
+          qty: i.qty,
+        }))
+      );
+    }
+
+    setSelectedProductIdToAdd(products.length > 0 ? products[0].product_id : '');
+    setSelectedProductQty(1);
+    setIsModalOpen(true);
+  };
+
+  const handleAddItemToForm = () => {
+    if (!selectedProductIdToAdd) return;
+    const prod = products.find(p => p.product_id === Number(selectedProductIdToAdd));
+    if (!prod) return;
+
+    const existingIndex = formItems.findIndex(i => i.product_id === prod.product_id);
+    if (existingIndex > -1) {
+      const updated = [...formItems];
+      updated[existingIndex].qty += selectedProductQty;
+      setFormItems(updated);
+    } else {
+      setFormItems([
+        ...formItems,
+        {
+          product_id: prod.product_id,
+          product_name: prod.name,
+          qty: selectedProductQty,
+        },
+      ]);
+    }
+    setSelectedProductQty(1);
+  };
+
+  const handleRemoveItemFromForm = (productId: number) => {
+    setFormItems(formItems.filter(i => i.product_id !== productId));
+  };
+
+  const handleSaveOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formClientId) {
+      alert('Proszę wybrać klienta.');
+      return;
+    }
+    if (formItems.length === 0) {
+      alert('Proszę dodać przynajmniej jeden produkt do zamówienia.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      if (activeTab === 'dzisiejsze') {
+        await saveDailyOrder({
+          client_id: Number(formClientId),
+          order_date: formOrderDate,
+          status: formStatus,
+          items: formItems.map(i => ({ product_id: i.product_id, qty: i.qty })),
+        });
+      } else if (activeTab === 'stale') {
+        if (formDays.length === 0) {
+          alert('Wybierz przynajmniej jeden dzień dostawy.');
+          setIsSubmitting(false);
+          return;
+        }
+        await saveStandingOrder({
+          client_id: Number(formClientId),
+          days: formDays,
+          items: formItems.map(i => ({ product_id: i.product_id, qty: i.qty })),
+        });
+      }
+
+      setIsModalOpen(false);
+      setSelectedOrderId(null);
+      await loadData();
+      alert('Zamówienie zostało zapisane.');
+    } catch (err) {
+      console.error(err);
+      alert('Błąd zapisu zamówienia.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedOrderId) return;
+    if (!window.confirm('Czy na pewno chcesz usunąć to zamówienie?')) return;
+
+    try {
+      if (activeTab === 'dzisiejsze') {
+        await deleteDailyOrder(selectedOrderId);
+      } else if (activeTab === 'stale') {
+        await deleteStandingOrder(selectedOrderId);
+      }
+      setSelectedOrderId(null);
+      setViewingOrder(null);
+      await loadData();
+      alert('Zamówienie zostało usunięte.');
+    } catch (err) {
+      console.error(err);
+      alert('Błąd podczas usuwania zamówienia.');
+    }
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
@@ -250,11 +432,15 @@ export default function ZamowieniaPanel() {
 
           {activeTab !== 'historia' && (
             <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
-              <button className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]">
+              <button 
+                onClick={handleOpenAdd}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
+              >
                 <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj {activeTab === 'dzisiejsze' ? 'jednorazowe' : 'stałe'}
               </button>
 
               <button
+                onClick={handleOpenEdit}
                 disabled={!selectedOrderId}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
               >
@@ -262,6 +448,7 @@ export default function ZamowieniaPanel() {
               </button>
 
               <button
+                onClick={handleDelete}
                 disabled={!selectedOrderId}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-red-50 border border-red-200 text-red-700 rounded shadow-2xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
               >
@@ -325,6 +512,192 @@ export default function ZamowieniaPanel() {
         </div>
 
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
+          <form onSubmit={handleSaveOrder} className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
+              <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-bakery-accent" />
+                {modalMode === 'add' 
+                  ? (activeTab === 'stale' ? 'Nowy Harmonogram Stały' : 'Nowe Zamówienie Jednorazowe') 
+                  : (activeTab === 'stale' ? 'Edycja Harmonogramu Stałego' : 'Edycja Zamówienia')}
+              </h2>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                  Klient / Odbiorca *
+                </label>
+                <select
+                  value={formClientId}
+                  onChange={(e) => setFormClientId(Number(e.target.value))}
+                  disabled={modalMode === 'edit'}
+                  className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent disabled:opacity-60"
+                  required
+                >
+                  <option value="" disabled>Wybierz klienta...</option>
+                  {clients.map(c => (
+                    <option key={c.client_id} value={c.client_id}>{c.name} ({c.address})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ZAKŁADKA DZISIEJSZE: DATA I STATUS */}
+              {activeTab === 'dzisiejsze' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                      Data realizacji zamówienia *
+                    </label>
+                    <input
+                      type="date"
+                      value={formOrderDate}
+                      onChange={(e) => setFormOrderDate(e.target.value)}
+                      disabled={modalMode === 'edit'}
+                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent disabled:opacity-60"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                      Status zamówienia
+                    </label>
+                    <select
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value)}
+                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
+                    >
+                      <option value="planned">Zaplanowane</option>
+                      <option value="in_production">W produkcji</option>
+                      <option value="in_delivery">W dostawie</option>
+                      <option value="delivered">Dostarczone</option>
+                      <option value="cancelled">Anulowane</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* ZAKŁADKA STAŁE: WYBÓR DNI TYGODNIA */}
+              {activeTab === 'stale' && (
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
+                    Dni realizacji dostaw *
+                  </label>
+                  <div className="grid grid-cols-7 gap-1">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const isSelected = formDays.includes(day.id);
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            setFormDays(
+                              isSelected
+                                ? formDays.filter(d => d !== day.id)
+                                : [...formDays, day.id].sort()
+                            );
+                          }}
+                          className={`py-2 text-xs font-bold rounded border transition-all ${
+                            isSelected
+                              ? 'bg-bakery-dark text-white border-bakery-dark shadow-xs'
+                              : 'bg-bakery-rowBg text-gray-600 border-bakery-btnBorder hover:bg-bakery-inactive'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-medium block mt-1">
+                    Kliknij dni, w które zamówienie ma być cyklicznie przygotowywane.
+                  </span>
+                </div>
+              )}
+
+              <div className="border-t border-bakery-btnBorder pt-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                  Dodaj wypiek / produkt
+                </label>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={selectedProductIdToAdd}
+                    onChange={(e) => setSelectedProductIdToAdd(Number(e.target.value))}
+                    className="flex-1 border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
+                  >
+                    {products.map(p => (
+                      <option key={p.product_id} value={p.product_id}>{p.name} ({p.base_price} PLN)</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    value={selectedProductQty}
+                    onChange={(e) => setSelectedProductQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none text-center"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddItemToForm}
+                    className="px-3 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-bakery-accent" /> Dodaj
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                  Wybrane pozycje:
+                </label>
+                <div className="bg-bakery-rowBg rounded border border-bakery-btnBorder divide-y divide-bakery-btnBorder max-h-48 overflow-y-auto">
+                  {formItems.length > 0 ? (
+                    formItems.map(item => (
+                      <div key={item.product_id} className="p-2 flex justify-between items-center text-xs">
+                        <span className="font-semibold text-bakery-dark">{item.product_name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-bold">{item.qty} szt.</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItemFromForm(item.product_id)}
+                            className="text-red-700 hover:text-red-900"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-xs text-center text-gray-400 italic">Brak dodanych produktów.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-bakery-rowBg p-3 border-t border-bakery-btnBorder flex justify-end gap-2 shrink-0">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded shadow-xs transition disabled:opacity-50"
+              >
+                {isSubmitting ? 'Zapisywanie...' : 'Zapisz Zamówienie'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold bg-bakery-inactive border border-bakery-btnBorder text-bakery-dark rounded transition"
+              >
+                Anuluj
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
