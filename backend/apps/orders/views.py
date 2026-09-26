@@ -1,9 +1,11 @@
 from datetime import date as date_cls
-
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from products.models import Product
 from .models import DailyOrder, StandingOrder
 
 DAY_LABELS = {0: 'Pn', 1: 'Wt', 2: 'Śr', 3: 'Czw', 4: 'Pt', 5: 'Sb', 6: 'Nd'}
@@ -39,6 +41,7 @@ def _group_daily_orders(queryset):
             'product_id': o.product_id,
             'product_name': o.product.name,
             'qty': o.quantity,
+            'price': float(o.price_at_sale)
         })
 
     for g in order_list:
@@ -62,6 +65,57 @@ class DailyOrdersView(APIView):
             .order_by('client__name')
         )
         return Response(_group_daily_orders(qs), status=status.HTTP_200_OK)
+
+    def post(self, request):
+        client_id = request.data.get('client_id')
+        order_date_str = request.data.get('order_date') or str(date_cls.today())
+        items = request.data.get('items', [])
+        order_status = request.data.get('status', 'planned')
+
+        if not client_id or not items:
+            return Response({'error': 'Wybierz klienta i dodaj przynajmniej jeden produkt.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order_date = date_cls.fromisoformat(order_date_str)
+        except ValueError:
+            return Response({'error': 'Błędny format daty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            DailyOrder.objects.filter(order_date=order_date, client_id=client_id).delete()
+            for item in items:
+                product = get_object_or_404(Product, pk=item['product_id'])
+                qty = int(item['qty'])
+                if qty > 0:
+                    DailyOrder.objects.create(
+                        client_id=client_id,
+                        product=product,
+                        order_date=order_date,
+                        quantity=qty,
+                        price_at_sale=product.base_price,
+                        status=order_status
+                    )
+
+        qs = DailyOrder.objects.filter(order_date=order_date, client_id=client_id).select_related('client', 'product')
+        return Response(_group_daily_orders(qs), status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        order_id = request.query_params.get('id')  # format: 'YYYY-MM-DD-client_id'
+        if not order_id:
+            return Response({'error': 'Brak parametru id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        parts = order_id.rsplit('-', 1)
+        if len(parts) != 2:
+            return Response({'error': 'Błędny format id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_date_str, client_id_str = parts
+        try:
+            target_date = date_cls.fromisoformat(target_date_str)
+            client_id = int(client_id_str)
+        except ValueError:
+            return Response({'error': 'Nieprawidłowe dane id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        DailyOrder.objects.filter(order_date=target_date, client_id=client_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class OrderHistoryView(APIView):
@@ -95,29 +149,73 @@ class StandingOrdersView(APIView):
                     'client_id': so.client_id,
                     'client_name': so.client.name,
                     'address': so.client.address,
-                    'days': set(),
-                    'total_quantity': 0,
-                    'total_amount': 0.0,
-                    'items': [],
+                    'days_set': set(),
+                    'items_map': {},
                 }
                 groups[key] = group
                 order_list.append(group)
 
             group = groups[key]
-            group['days'].add(so.day_of_week)
-            group['total_quantity'] += so.quantity
-            group['total_amount'] += float(so.quantity) * float(so.price_at_sale)
-            group['items'].append({
-                'product_id': so.product_id,
-                'product_name': so.product.name,
-                'day_label': DAY_LABELS[so.day_of_week],
-                'qty': so.quantity,
-            })
+            group['days_set'].add(so.day_of_week)
+
+            pid = so.product_id
+            if pid not in group['items_map']:
+                group['items_map'][pid] = {
+                    'product_id': pid,
+                    'product_name': so.product.name,
+                    'qty': so.quantity,
+                    'price': float(so.price_at_sale),
+                }
 
         for g in order_list:
-            days = sorted(g['days'])
+            days = sorted(g['days_set'])
+            g['days_ids'] = days
             g['day_of_week'] = 'Codziennie' if len(days) == 7 else ', '.join(DAY_LABELS[d] for d in days)
-            g['total_amount'] = round(g['total_amount'], 2)
-            del g['days']
+            
+            # Dokładny skład koszyka 1:1
+            g['items'] = list(g['items_map'].values())
+            
+            # Wartości dla pojedynczego zamówienia (bez mnożenia przez dni)
+            g['total_quantity'] = sum(item['qty'] for item in g['items'])
+            g['total_amount'] = round(sum(item['qty'] * item['price'] for item in g['items']), 2)
+
+            del g['days_set']
+            del g['items_map']
 
         return Response(order_list, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        client_id = request.data.get('client_id')
+        days = request.data.get('days', [])
+        items = request.data.get('items', [])
+
+        if not client_id or not days or not items:
+            return Response(
+                {'error': 'Wybierz klienta, przynajmniej jeden dzień tygodnia i co najmniej jeden produkt.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            StandingOrder.objects.filter(client_id=client_id).delete()
+            for day in days:
+                for item in items:
+                    product = get_object_or_404(Product, pk=item['product_id'])
+                    qty = int(item['qty'])
+                    if qty > 0:
+                        StandingOrder.objects.create(
+                            client_id=client_id,
+                            product=product,
+                            day_of_week=int(day),
+                            quantity=qty,
+                            price_at_sale=product.base_price,
+                            is_active=True
+                        )
+
+        return Response({'message': 'Harmonogram stały został zapisany.'}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        client_id = request.query_params.get('client_id')
+        if not client_id:
+            return Response({'error': 'Brak parametru client_id.'}, status=status.HTTP_400_BAD_REQUEST)
+        StandingOrder.objects.filter(client_id=client_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
