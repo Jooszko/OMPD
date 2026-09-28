@@ -9,6 +9,7 @@ import {
 import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
+import { orderStopsByRoute } from '../lib/stopOrder';
 
 export function DriverRouteView({
   date,
@@ -31,6 +32,7 @@ export function DriverRouteView({
   const [loadingDirections, setLoadingDirections] = useState(false);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const deliveriesToday = route?.stops.filter((s) => s.orders.length > 0).length ?? 0;
+  const sequencedStops = route ? orderStopsByRoute(route.stops, directions) : [];
 
   useEffect(() => {
     setDirections(null);
@@ -77,7 +79,7 @@ export function DriverRouteView({
           {route ? route.route_name : 'Moja trasa'}
         </h1>
         {routes.length > 1 && (
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Twoje trasy">
+          <div className="flex flex-wrap gap-2 my-2" role="tablist" aria-label="Twoje trasy">
             {routes.map((r) => {
               const isActive = r.route_id === route?.route_id;
               const count = r.stops.filter((s) => s.orders.length > 0).length;
@@ -129,8 +131,14 @@ export function DriverRouteView({
                 Brak dostaw na tej trasie dzisiaj.
               </div>
             ) : (
-              route.stops.map((stop) => (
-                <DriverStopCard key={stop.client_id} stop={stop} onAdvance={onAdvance} updatingId={updatingId} />
+              sequencedStops.map(({ stop, sequence }) => (
+                <DriverStopCard
+                  key={stop.client_id}
+                  stop={stop}
+                  sequence={sequence}
+                  onAdvance={onAdvance}
+                  updatingId={updatingId}
+                />
               ))
             )}
           </div>

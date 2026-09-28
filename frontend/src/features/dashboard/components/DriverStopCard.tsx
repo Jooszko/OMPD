@@ -19,10 +19,12 @@ function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
 
 export function DriverStopCard({
   stop,
+  sequence,
   onAdvance,
   updatingId,
 }: {
   stop: LogisticsStop;
+  sequence?: number | null;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
 }) {
@@ -37,11 +39,18 @@ export function DriverStopCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-bold text-sm text-bakery-dark m-0">{stop.name}</p>
-          <p className="text-xs text-gray-500 font-semibold flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {stop.address}
-          </p>
+        <div className="flex items-start gap-2.5">
+          {sequence != null && (
+            <span className="shrink-0 w-6 h-6 rounded-full bg-bakery-accent text-black text-xs font-extrabold flex items-center justify-center">
+              {sequence}
+            </span>
+          )}
+          <div>
+            <p className="font-bold text-sm text-bakery-dark m-0">{stop.name}</p>
+            <p className="text-xs text-gray-500 font-semibold flex items-center gap-1 mt-0.5">
+              <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {stop.address}
+            </p>
+          </div>
         </div>
         {!hasDeliveryToday && (
           <span className="text-[10px] font-bold uppercase text-gray-400 italic whitespace-nowrap">
