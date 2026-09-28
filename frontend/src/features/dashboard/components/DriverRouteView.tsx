@@ -12,19 +12,21 @@ import { RouteSummary } from './RouteSummary';
 
 export function DriverRouteView({
   date,
-  route,
+  routes,
   onAdvance,
   updatingId,
   previewDriverName,
   onExitPreview,
 }: {
   date?: string;
-  route: LogisticsRoute | null;
+  routes: LogisticsRoute[];
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
   previewDriverName?: string;
   onExitPreview?: () => void;
 }) {
+  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
+  const route = routes.find((r) => r.route_id === selectedRouteId) ?? routes[0] ?? null;
   const [directions, setDirections] = useState<RouteDirections | null>(null);
   const [loadingDirections, setLoadingDirections] = useState(false);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
@@ -74,6 +76,31 @@ export function DriverRouteView({
         <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">
           {route ? route.route_name : 'Moja trasa'}
         </h1>
+        {routes.length > 1 && (
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Twoje trasy">
+            {routes.map((r) => {
+              const isActive = r.route_id === route?.route_id;
+              const count = r.stops.filter((s) => s.orders.length > 0).length;
+              return (
+                <button
+                  key={r.route_id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setSelectedRouteId(r.route_id)}
+                  className={`min-h-[44px] sm:min-h-0 px-3.5 py-1.5 text-xs font-bold rounded-lg border transition active:scale-[0.98] ${
+                    isActive
+                      ? 'bg-bakery-dark text-white border-bakery-dark'
+                      : 'bg-bakery-rowBg text-bakery-dark border-bakery-btnBorder hover:bg-bakery-inactive'
+                  }`}
+                >
+                  {r.route_name}{' '}
+                  <span className={isActive ? 'text-bakery-accent' : 'text-gray-500'}>({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <p className="text-xs text-gray-500 font-medium">
           {route
             ? `Plan dostaw na dziś (${date}) — ${deliveriesToday} ${deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'}.`

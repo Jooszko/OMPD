@@ -92,7 +92,7 @@ export default function Logistics() {
       <div className="w-full max-w-7xl mx-auto px-8 py-6">
         <DriverRouteView
           date={data.date}
-          route={data.routes[0] ?? null}
+          routes={data.routes}
           onAdvance={handleAdvance}
           updatingId={updatingId}
           previewDriverName={previewDriverName}
