@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package } from 'lucide-react';
 import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getDriverNextStep } from '../lib/logisticsStatus';
-import { isStopDelivered } from '../lib/routeProgress';
+import { getStopDeliveredAt, isStopDelivered } from '../lib/routeProgress';
+import { formatTime } from '../lib/dateFormat';
 import { buildGoogleMapsStopUrl } from '../lib/navigationLinks';
 
 function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
@@ -54,6 +55,7 @@ export function DriverStopCard({
   const [expanded, setExpanded] = useState(false);
   const hasDeliveryToday = stop.orders.length > 0;
   const delivered = isStopDelivered(stop);
+  const deliveredAt = delivered ? getStopDeliveredAt(stop) : null;
 
   if (delivered && !expanded) {
     return (
@@ -71,6 +73,7 @@ export function DriverStopCard({
         <span className="flex-1 min-w-0 text-sm font-semibold text-gray-500 truncate">{stop.name}</span>
         <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 whitespace-nowrap">
           <CircleCheck className="w-3.5 h-3.5" /> Dostarczone
+          {deliveredAt && <span className="font-semibold normal-case">{formatTime(deliveredAt)}</span>}
         </span>
         <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
       </button>
@@ -150,7 +153,12 @@ export function DriverStopCard({
                   </span>
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <StatusBadge status={order.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={order.status} />
+                    {order.status === 'delivered' && order.delivered_at && (
+                      <span className="text-[11px] text-gray-500 font-medium">o {formatTime(order.delivered_at)}</span>
+                    )}
+                  </div>
                   {next && (
                     <button
                       onClick={() => onAdvance(order.do_id, next.status)}

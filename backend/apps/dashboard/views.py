@@ -169,6 +169,7 @@ class LogisticsView(APIView):
                 'product_name': o.product.name,
                 'quantity': o.quantity,
                 'status': o.status,
+                'delivered_at': o.delivered_at,
             })
             client_by_id[o.client_id] = o.client
 
@@ -287,9 +288,14 @@ class UpdateOrderStatusView(APIView):
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
+        if new_status == 'delivered' and order.status != 'delivered':
+            order.delivered_at = timezone.now()
+        elif new_status != 'delivered':
+            order.delivered_at = None
+
         order.status = new_status
-        order.save(update_fields=['status'])
-        return Response({'do_id': order.do_id, 'status': order.status})
+        order.save(update_fields=['status', 'delivered_at', 'updated_at'])
+        return Response({'do_id': order.do_id, 'status': order.status, 'delivered_at': order.delivered_at})
 
 class DeliverStopView(APIView):
     permission_classes = [IsAuthenticated]
@@ -323,12 +329,14 @@ class DeliverStopView(APIView):
                     {'error': 'U tego klienta nie ma dziś zamówień w dostawie.'},
                     status=http_status.HTTP_400_BAD_REQUEST,
                 )
+            now = timezone.now()
             DailyOrder.objects.filter(pk__in=delivered_ids).update(
                 status='delivered',
-                updated_at=timezone.now(),
+                delivered_at=now,
+                updated_at=now,
             )
 
-        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids})
+        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': now})
 
 class RouteDirectionsView(APIView):
     permission_classes = [IsAuthenticated]

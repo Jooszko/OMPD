@@ -11,3 +11,9 @@ export function getRouteProgress(stops: LogisticsStop[]): { done: number; total:
     total: withDelivery.length,
   };
 }
+
+export function getStopDeliveredAt(stop: LogisticsStop): string | null {
+  const times = stop.orders.map((o) => o.delivered_at).filter((t): t is string => t !== null);
+  if (times.length === 0) return null;
+  return times.reduce((latest, t) => (new Date(t) > new Date(latest) ? t : latest));
+}

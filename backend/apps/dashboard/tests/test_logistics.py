@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
-
+from django.utils import timezone
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -202,6 +202,25 @@ class UpdateOrderStatusPermissionTests(TestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'delivered')
 
+    def test_delivering_sets_delivered_at(self):
+        self.api.force_authenticate(self.driver_a)
+        before = timezone.now()
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertIsNotNone(self.order.delivered_at)
+        self.assertGreaterEqual(self.order.delivered_at, before)
+
+    def test_reverting_delivery_clears_delivered_at(self):
+        self.order.status = 'delivered'
+        self.order.delivered_at = timezone.now()
+        self.order.save(update_fields=['status', 'delivered_at'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertIsNone(self.order.delivered_at)
+
 class DeliverStopTests(TestCase):
     def setUp(self):
         self.api = APIClient()
@@ -269,3 +288,13 @@ class DeliverStopTests(TestCase):
         response = self.api.post(self.url)
 
         self.assertEqual(response.status_code, 400)
+
+    def test_deliver_stop_sets_delivered_at_only_for_delivered_orders(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url)
+        self.assertIsNotNone(response.data['delivered_at'])
+        for order in (self.in_delivery_1, self.in_delivery_2, self.planned):
+            order.refresh_from_db()
+        self.assertIsNotNone(self.in_delivery_1.delivered_at)
+        self.assertEqual(self.in_delivery_1.delivered_at, self.in_delivery_2.delivered_at)
+        self.assertIsNone(self.planned.delivered_at)

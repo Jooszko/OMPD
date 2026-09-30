@@ -51,13 +51,19 @@ export default function Logistics() {
     };
   }, [previewDriverId]);
 
-  const applyOrderStatus = (orderIds: number[], status: LogisticsOrder['status']) => {
+  const applyOrderStatus = (
+    orderIds: number[],
+    status: LogisticsOrder['status'],
+    deliveredAt: string | null = null
+  ) => {
     const ids = new Set(orderIds);
     setData((prev) => {
       if (!prev) return prev;
       const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
         ...stop,
-        orders: stop.orders.map((o) => (ids.has(o.do_id) ? { ...o, status } : o)),
+        orders: stop.orders.map((o) =>
+          ids.has(o.do_id) ? { ...o, status, delivered_at: status === 'delivered' ? deliveredAt : null } : o
+        ),
       });
       return {
         ...prev,
@@ -104,9 +110,9 @@ export default function Logistics() {
   const handleAdvance = async (orderId: number, nextStatus: LogisticsOrder['status']) => {
     setUpdatingId(orderId);
     try {
-      await updateOrderStatus(orderId, nextStatus);
+      const result = await updateOrderStatus(orderId, nextStatus);
       mutationVersion.current += 1;
-      applyOrderStatus([orderId], nextStatus);
+      applyOrderStatus([orderId], nextStatus, result.delivered_at);
       if (nextStatus === 'delivered') {
         setToast({
           variant: 'success',
@@ -127,7 +133,7 @@ export default function Logistics() {
     try {
       const result = await deliverStop(clientId);
       mutationVersion.current += 1;
-      applyOrderStatus(result.delivered_ids, 'delivered');
+      applyOrderStatus(result.delivered_ids, 'delivered', result.delivered_at);
       setToast({
         variant: 'success',
         text: `Przystanek oznaczony jako dostarczony (${result.delivered_ids.length} poz.).`,

@@ -40,6 +40,7 @@ class DailyOrder(TimeStampedModel):
     quantity = models.IntegerField()
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
+    delivered_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.order_date} - {self.client.name} ({self.status})"

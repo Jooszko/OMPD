@@ -506,6 +506,7 @@ export interface LogisticsOrder {
   product_name: string;
   quantity: number;
   status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+  delivered_at: string | null;
 }
 
 export interface LogisticsStop {
@@ -606,7 +607,7 @@ export async function fetchRouteDirections(routeId: number, date?: string): Prom
 export async function updateOrderStatus(
   orderId: number,
   newStatus: LogisticsOrder['status']
-): Promise<{ do_id: number; status: string }> {
+): Promise<{ do_id: number; status: string; delivered_at: string | null }> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -631,7 +632,9 @@ export async function updateOrderStatus(
   return response.json();
 }
 
-export async function deliverStop(clientId: number): Promise<{ client_id: number; delivered_ids: number[] }> {
+export async function deliverStop(
+  clientId: number
+): Promise<{ client_id: number; delivered_ids: number[]; delivered_at: string }> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
