@@ -10,6 +10,7 @@ import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
 import { orderStopsByRoute } from '../lib/stopOrder';
+import { getRouteProgress } from '../lib/routeProgress';
 
 export function DriverRouteView({
   date,
@@ -33,6 +34,8 @@ export function DriverRouteView({
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const deliveriesToday = route?.stops.filter((s) => s.orders.length > 0).length ?? 0;
   const sequencedStops = route ? orderStopsByRoute(route.stops, directions) : [];
+  const progress = route ? getRouteProgress(route.stops) : { done: 0, total: 0 };
+  const allDone = progress.total > 0 && progress.done === progress.total;
 
   useEffect(() => {
     setDirections(null);
@@ -62,9 +65,7 @@ export function DriverRouteView({
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-5 text-bakery-dark">
       {previewDriverName && onExitPreview && (
         <div className="bg-amber-50 border border-amber-300 rounded p-2.5 flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-amber-800">
-            Podgląd widoku kierowcy: {previewDriverName}
-          </span>
+          <span className="text-xs font-bold text-amber-800">Podgląd widoku kierowcy: {previewDriverName}</span>
           <button
             onClick={onExitPreview}
             className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
@@ -96,8 +97,7 @@ export function DriverRouteView({
                       : 'bg-bakery-rowBg text-bakery-dark border-bakery-btnBorder hover:bg-bakery-inactive'
                   }`}
                 >
-                  {r.route_name}{' '}
-                  <span className={isActive ? 'text-bakery-accent' : 'text-gray-500'}>({count})</span>
+                  {r.route_name} <span className={isActive ? 'text-bakery-accent' : 'text-gray-500'}>({count})</span>
                 </button>
               );
             })}
@@ -119,9 +119,34 @@ export function DriverRouteView({
         </div>
       ) : (
         <div className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-md flex flex-col overflow-hidden">
-          <div className="bg-bakery-dark text-white p-3.5 flex items-center gap-2 shrink-0">
-            <Truck className="w-4 h-4 text-bakery-accent" />
-            <span className="text-sm font-bold">{route.route_name}</span>
+          <div className="bg-bakery-dark text-white p-3.5 flex flex-col gap-2.5 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <Truck className="w-4 h-4 text-bakery-accent" /> {route.route_name}
+              </span>
+              {progress.total > 0 && (
+                <span className="text-xs font-bold text-gray-300 whitespace-nowrap">
+                  {allDone ? 'Wszystko dostarczone' : `Dostarczono ${progress.done} / ${progress.total}`}
+                </span>
+              )}
+            </div>
+            {progress.total > 0 && (
+              <div
+                role="progressbar"
+                aria-label="Postęp dostaw na trasie"
+                aria-valuemin={0}
+                aria-valuemax={progress.total}
+                aria-valuenow={progress.done}
+                className="h-1.5 w-full rounded-full bg-white/15 overflow-hidden"
+              >
+                <div
+                  className={`h-full rounded-full transition-[width] duration-500 ${
+                    allDone ? 'bg-emerald-600' : 'bg-bakery-accent'
+                  }`}
+                  style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                />
+              </div>
+            )}
           </div>
 
           <div className="p-3 flex flex-col gap-2">
