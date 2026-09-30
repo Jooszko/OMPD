@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -203,9 +203,19 @@ export function RouteMap({
   directions?: RouteDirections | null;
   className?: string;
 }) {
-  const geocodedStops = stops.filter(
-    (s): s is LogisticsStop & { latitude: string; longitude: string } => !!s.latitude && !!s.longitude
+  const geocodedStops = useMemo(
+    () =>
+      stops.filter(
+        (s): s is LogisticsStop & { latitude: string; longitude: string } => !!s.latitude && !!s.longitude
+      ),
+    [stops]
   );
+  const sequenceById = useMemo(() => getStopSequences(directions), [directions]);
+  const fitPoints = useMemo<[number, number][]>(() => {
+    const line = directions?.geometry?.coordinates ?? [];
+    if (line.length > 0) return line;
+    return geocodedStops.map((s) => [Number(s.latitude), Number(s.longitude)]);
+  }, [directions, geocodedStops]);
 
   if (geocodedStops.length === 0) {
     return (
@@ -217,14 +227,11 @@ export function RouteMap({
     );
   }
 
-  const points: [number, number][] = geocodedStops.map((s) => [Number(s.latitude), Number(s.longitude)]);
   const linePoints: [number, number][] = directions?.geometry?.coordinates ?? [];
-  const fitPoints = linePoints.length > 0 ? linePoints : points;
-  const sequenceById = getStopSequences(directions);
 
   return (
     <div className={`relative rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}>
-      <MapContainer center={points[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={fitPoints[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
