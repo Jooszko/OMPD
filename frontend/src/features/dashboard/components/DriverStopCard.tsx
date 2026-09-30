@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, CircleCheck, MapPin, Package } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package } from 'lucide-react';
 import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getDriverNextStep } from '../lib/logisticsStatus';
 import { isStopDelivered } from '../lib/routeProgress';
+import { buildGoogleMapsStopUrl } from '../lib/navigationLinks';
 
 function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
   return (
@@ -81,35 +82,50 @@ export function DriverStopCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2.5">
+        <div className="flex items-start gap-2.5 min-w-0">
           {sequence != null && <SequenceBadge sequence={sequence} delivered={delivered} />}
-          <div>
+          <div className="min-w-0">
             <p className="font-bold text-sm text-bakery-dark m-0">{stop.name}</p>
             <p className="text-xs text-gray-500 font-semibold flex items-center gap-1 mt-0.5">
               <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {stop.address}
             </p>
           </div>
         </div>
-        {!hasDeliveryToday && (
-          <span className="text-[10px] font-bold uppercase text-gray-400 italic whitespace-nowrap">
-            Brak dostawy dzisiaj
-          </span>
-        )}
-        {isNext && (
-          <span className="px-2 py-0.5 rounded bg-bakery-accent text-black text-[10px] font-bold uppercase whitespace-nowrap">
-            Następny
-          </span>
-        )}
-        {delivered && (
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            aria-expanded
-            className="flex items-center gap-1 text-[10px] font-bold uppercase text-gray-500 hover:text-bakery-dark whitespace-nowrap"
-          >
-            Zwiń <ChevronUp className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          {!hasDeliveryToday && (
+            <span className="text-[10px] font-bold uppercase text-gray-400 italic whitespace-nowrap">
+              Brak dostawy dzisiaj
+            </span>
+          )}
+          {isNext && (
+            <span className="px-2 py-0.5 rounded bg-bakery-accent text-black text-[10px] font-bold uppercase whitespace-nowrap">
+              Następny
+            </span>
+          )}
+          {delivered && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-expanded
+              className="flex items-center gap-1 text-[10px] font-bold uppercase text-gray-500 hover:text-bakery-dark whitespace-nowrap"
+            >
+              Zwiń <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {hasDeliveryToday && !delivered && (
+            <a
+              href={buildGoogleMapsStopUrl(stop)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Nawiguj do: ${stop.name}`}
+              title="Nawiguj do klienta"
+              className="inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+            >
+              <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
+              <span className="hidden sm:inline">Nawiguj</span>
+            </a>
+          )}
+        </div>
       </div>
 
       {hasDeliveryToday && (

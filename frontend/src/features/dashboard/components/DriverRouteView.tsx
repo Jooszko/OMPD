@@ -10,7 +10,7 @@ import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
 import { orderStopsByRoute } from '../lib/stopOrder';
-import { getRouteProgress, isStopDelivered } from '../lib/routeProgress';
+import { getRouteProgress } from '../lib/routeProgress';
 
 export function DriverRouteView({
   date,
