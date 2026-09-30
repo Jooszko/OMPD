@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package, Phone } from 'lucide-react';
 import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getDriverNextStep } from '../lib/logisticsStatus';
 import { getStopDeliveredAt, isStopDelivered } from '../lib/routeProgress';
@@ -122,17 +122,30 @@ export function DriverStopCard({
             </button>
           )}
           {hasDeliveryToday && !delivered && (
-            <a
-              href={buildGoogleMapsStopUrl(stop)}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Nawiguj do: ${stop.name}`}
-              title="Nawiguj do klienta"
-              className="inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
-            >
-              <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
-              <span className="hidden sm:inline">Nawiguj</span>
-            </a>
+            <div className="flex items-center gap-1.5">
+              {stop.phone && (
+                <a
+                  href={`tel:${stop.phone}`}
+                  aria-label={`Zadzwoń do: ${stop.name}`}
+                  title={`Zadzwoń: ${stop.phone}`}
+                  className="inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+                >
+                  <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
+                  <span className="hidden sm:inline">Zadzwoń</span>
+                </a>
+              )}
+              <a
+                href={buildGoogleMapsStopUrl(stop)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Nawiguj do: ${stop.name}`}
+                title="Nawiguj do klienta"
+                className="inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+              >
+                <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
+                <span className="hidden sm:inline">Nawiguj</span>
+              </a>
+            </div>
           )}
         </div>
       </div>

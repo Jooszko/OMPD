@@ -58,6 +58,7 @@ def create_clients(routes):
             name=name,
             defaults={
                 'address': address,
+                'phone': f'+48{600100200 + i * 1117}',
                 'route': routes[i % len(routes)],
                 'is_active': i not in INACTIVE_CLIENT_INDICES,
             },

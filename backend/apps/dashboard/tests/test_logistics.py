@@ -109,6 +109,15 @@ class LogisticsViewRoleTests(TestCase):
         self.assertIn('Klient A', stop_names)
         self.assertNotIn('Klient nieaktywny', stop_names)
 
+    def test_route_stops_include_client_phone(self):
+        self.client_a.phone = '+48600100200'
+        self.client_a.save(update_fields=['phone'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.get('/api/logistics/')
+
+        self.assertEqual(response.status_code, 200)
+        stop = next(s for s in response.data['routes'][0]['stops'] if s['name'] == 'Klient A')
+        self.assertEqual(stop['phone'], '+48600100200')
 
 class UpdateOrderStatusPermissionTests(TestCase):
     def setUp(self):

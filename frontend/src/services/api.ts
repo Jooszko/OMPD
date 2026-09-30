@@ -189,6 +189,7 @@ export interface AppClient {
   name: string;
   address: string;
   nip: string | null;
+  phone: string;
   route: number;
   route_details: RouteOption;
   is_active: boolean;
@@ -513,6 +514,7 @@ export interface LogisticsStop {
   client_id: number;
   name: string;
   address: string;
+  phone: string;
   latitude: string | null;
   longitude: string | null;
   orders: LogisticsOrder[];

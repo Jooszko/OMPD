@@ -15,6 +15,7 @@ class Client(TimeStampedModel):
     name = models.CharField(max_length=200)
     address = models.TextField()
     nip = models.CharField(max_length=13, blank=True, null=True)  # Nowe opcjonalne pole NIP
+    phone = models.CharField(max_length=20, blank=True, default='')
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='clients')
     is_active = models.BooleanField(default=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
