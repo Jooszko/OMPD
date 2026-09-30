@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 export interface TodayOrder {
   client_name: string;
@@ -85,7 +85,7 @@ export function logoutUser(): void {
 export async function fetchDashboard(): Promise<any> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -100,7 +100,6 @@ export async function fetchDashboard(): Promise<any> {
   }
   return response.json();
 }
-
 
 export interface AppUser {
   user_id: number;
@@ -177,7 +176,6 @@ export async function deleteUser(userId: number): Promise<void> {
   await handleJsonResponse(response);
 }
 
-
 export interface RouteOption {
   route_id: number;
   route_name: string;
@@ -218,7 +216,6 @@ export async function saveClient(payload: any, clientId: number | null = null): 
   });
   return handleJsonResponse(response);
 }
-
 
 export interface AppIngredient {
   ingredient_id: number;
@@ -304,7 +301,6 @@ export async function deleteRecipe(productId: number): Promise<void> {
   await handleJsonResponse(response);
 }
 
-
 export async function fetchDailyOrders(dateStr?: string): Promise<any[]> {
   const url = dateStr ? `${API_BASE}/orders/daily/?date=${dateStr}` : `${API_BASE}/orders/daily/`;
   const response = await fetch(url, { headers: authHeaders() });
@@ -320,7 +316,6 @@ export async function fetchOrderHistory(): Promise<any[]> {
   const response = await fetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
-
 
 export interface AppNotification {
   id: number;
@@ -378,7 +373,6 @@ export async function markAllNotificationsRead(): Promise<void> {
   });
   await handleJsonResponse(response);
 }
-
 
 export interface DailySummary {
   date: string;
@@ -461,22 +455,30 @@ export async function createExpense(payload: {
 }
 
 export async function fetchCategoryBreakdown(start?: string, end?: string): Promise<CategoryBreakdownRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchPeriodIncomes(start?: string, end?: string): Promise<PeriodIncomeRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchTopClients(start?: string, end?: string): Promise<TopClientRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchProfitTrend(start?: string, end?: string): Promise<ProfitTrendRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
@@ -500,7 +502,6 @@ export async function deleteFinancialReport(reportDate: string): Promise<void> {
   });
   await handleJsonResponse(response);
 }
-
 
 export interface LogisticsOrder {
   do_id: number;
@@ -660,11 +661,10 @@ export async function deliverStop(
   return response.json();
 }
 
-
 export async function fetchSuppliers(): Promise<any[]> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -680,25 +680,22 @@ export async function fetchSuppliers(): Promise<any[]> {
   return response.json();
 }
 
-
 export async function saveSupplier(payload: any, supplierId: number | null = null): Promise<any> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = supplierId 
-    ? `${API_BASE}/finance/suppliers/${supplierId}/` 
-    : `${API_BASE}/finance/suppliers/`;
-    
+  const url = supplierId ? `${API_BASE}/finance/suppliers/${supplierId}/` : `${API_BASE}/finance/suppliers/`;
+
   const method = supplierId ? 'PUT' : 'POST';
 
   const response = await fetch(url, {
     method,
     headers,
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {

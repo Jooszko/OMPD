@@ -5,9 +5,14 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    tsconfigPaths: true, 
+    tsconfigPaths: true,
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
     },
   },
 });
