@@ -10,7 +10,7 @@ import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
 import { orderStopsByRoute } from '../lib/stopOrder';
-import { getRouteProgress } from '../lib/routeProgress';
+import { getRouteProgress, isStopDelivered } from '../lib/routeProgress';
 
 export function DriverRouteView({
   date,
@@ -36,6 +36,8 @@ export function DriverRouteView({
   const sequencedStops = route ? orderStopsByRoute(route.stops, directions) : [];
   const progress = route ? getRouteProgress(route.stops) : { done: 0, total: 0 };
   const allDone = progress.total > 0 && progress.done === progress.total;
+  const nextStopId =
+    sequencedStops.find(({ stop }) => stop.orders.some((o) => o.status === 'in_delivery'))?.stop.client_id ?? null;
 
   useEffect(() => {
     setDirections(null);
@@ -161,6 +163,7 @@ export function DriverRouteView({
                   key={stop.client_id}
                   stop={stop}
                   sequence={sequence}
+                  isNext={stop.client_id === nextStopId}
                   onAdvance={onAdvance}
                   updatingId={updatingId}
                 />
