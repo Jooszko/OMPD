@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
   ApiError,
+  deliverStop,
   fetchLogistics,
   updateOrderStatus,
   type LogisticsData,
@@ -11,14 +12,20 @@ import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 
+const AUTO_REFRESH_MS = 60_000;
+
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [deliveringStopId, setDeliveringStopId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
   const [toast, setToast] = useState<ActionToastData | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const mutationVersion = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +35,7 @@ export default function Logistics() {
       .then((result) => {
         if (!cancelled) {
           setData(result);
+          setLastUpdatedAt(new Date());
           setLoading(false);
         }
       })
@@ -43,56 +51,138 @@ export default function Logistics() {
     };
   }, [previewDriverId]);
 
+  const applyOrderStatus = (orderIds: number[], status: LogisticsOrder['status']) => {
+    const ids = new Set(orderIds);
+    setData((prev) => {
+      if (!prev) return prev;
+      const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
+        ...stop,
+        orders: stop.orders.map((o) => (ids.has(o.do_id) ? { ...o, status } : o)),
+      });
+      return {
+        ...prev,
+        routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
+        unassigned: prev.unassigned.map(patchStop),
+      };
+    });
+  };
+
+  const showActionError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setToast({
+        text:
+          err.status === 404
+            ? 'Dane zostały w międzyczasie zmienione lub usunięte. Odśwież, aby zobaczyć aktualny stan.'
+            : err.message,
+        canRefresh: [400, 403, 404].includes(err.status),
+      });
+    } else {
+      setToast({
+        text: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
+        canRefresh: false,
+      });
+    }
+  };
+
+  const undoDelivery = async (orderIds: number[]) => {
+    setToast(null);
+    const results = await Promise.allSettled(orderIds.map((id) => updateOrderStatus(id, 'in_delivery')));
+
+    const revertedIds = orderIds.filter((_, i) => results[i].status === 'fulfilled');
+    if (revertedIds.length > 0) {
+      mutationVersion.current += 1;
+      applyOrderStatus(revertedIds, 'in_delivery');
+    }
+
+    const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failure) {
+      console.error('Błąd podczas cofania dostawy:', failure.reason);
+      showActionError(failure.reason);
+    }
+  };
+
   const handleAdvance = async (orderId: number, nextStatus: LogisticsOrder['status']) => {
     setUpdatingId(orderId);
     try {
       await updateOrderStatus(orderId, nextStatus);
-      setData((prev) => {
-        if (!prev) return prev;
-        const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
-          ...stop,
-          orders: stop.orders.map((o) => (o.do_id === orderId ? { ...o, status: nextStatus } : o)),
-        });
-        return {
-          ...prev,
-          routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
-          unassigned: prev.unassigned.map(patchStop),
-        };
-      });
-    } catch (err) {
-      console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
-      if (err instanceof ApiError) {
+      mutationVersion.current += 1;
+      applyOrderStatus([orderId], nextStatus);
+      if (nextStatus === 'delivered') {
         setToast({
-          text:
-            err.status === 404
-              ? 'To zamówienie zostało zmienione lub usunięte. Odśwież dane, aby zobaczyć aktualny stan.'
-              : err.message,
-          canRefresh: [400, 403, 404].includes(err.status),
-        });
-      } else {
-        setToast({
-          text: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
-          canRefresh: false,
+          variant: 'success',
+          text: 'Oznaczono jako dostarczone.',
+          onUndo: () => undoDelivery([orderId]),
         });
       }
+    } catch (err) {
+      console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
+      showActionError(err);
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const refreshData = async () => {
-    setToast(null);
+  const handleDeliverStop = async (clientId: number) => {
+    setDeliveringStopId(clientId);
     try {
-      const result = await fetchLogistics(previewDriverId ?? undefined);
-      setData(result);
-    } catch {
-      setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
+      const result = await deliverStop(clientId);
+      mutationVersion.current += 1;
+      applyOrderStatus(result.delivered_ids, 'delivered');
+      setToast({
+        variant: 'success',
+        text: `Przystanek oznaczony jako dostarczony (${result.delivered_ids.length} poz.).`,
+        onUndo: () => undoDelivery(result.delivered_ids),
+      });
+    } catch (err) {
+      console.error('Błąd podczas dostarczania przystanku:', err);
+      showActionError(err);
+    } finally {
+      setDeliveringStopId(null);
     }
   };
 
+
+  const refreshData = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      const versionAtStart = mutationVersion.current;
+      if (!silent) {
+        setToast(null);
+        setRefreshing(true);
+      }
+      try {
+        const result = await fetchLogistics(previewDriverId ?? undefined);
+        if (mutationVersion.current !== versionAtStart) return;
+        setData(result);
+        setError(null);
+        setLastUpdatedAt(new Date());
+      } catch {
+        if (!silent) {
+          setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
+        }
+      } finally {
+        if (!silent) setRefreshing(false);
+      }
+    },
+    [previewDriverId]
+  );
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') refreshData({ silent: true });
+    };
+
+    const intervalId = setInterval(refreshIfVisible, AUTO_REFRESH_MS);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
+  }, [refreshData]);
+
   if (loading) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6 text-bakery-dark">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
         <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
         <p>Ładowanie danych...</p>
       </div>
@@ -101,7 +191,7 @@ export default function Logistics() {
 
   if (error) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6 text-bakery-dark">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
         <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
         <p className="text-red-600">Błąd połączenia z serwerem: {error}</p>
       </div>
@@ -116,16 +206,21 @@ export default function Logistics() {
       : undefined;
 
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6">
         <DriverRouteView
           date={data.date}
           routes={data.routes}
           onAdvance={handleAdvance}
           updatingId={updatingId}
+          onDeliverStop={handleDeliverStop}
+          deliveringStopId={deliveringStopId}
+          onRefresh={() => refreshData()}
+          refreshing={refreshing}
+          lastUpdatedAt={lastUpdatedAt}
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
         />
-        <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
+        <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>
     );
   }
@@ -141,9 +236,8 @@ export default function Logistics() {
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>
           <p className="text-xs text-gray-500 font-medium">
-            Plan dostaw na dziś ({data.date}) — {deliveriesToday}{' '}
-            {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w {routes.length}{' '}
-            {routes.length === 1 ? 'trasie' : 'trasach'}.
+            Plan dostaw na dziś ({data.date}) — {deliveriesToday} {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w{' '}
+            {routes.length} {routes.length === 1 ? 'trasie' : 'trasach'}.
           </p>
         </div>
 
@@ -238,7 +332,7 @@ export default function Logistics() {
           </div>
         </div>
       )}
-      <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
+      <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
     </div>
   );
 }

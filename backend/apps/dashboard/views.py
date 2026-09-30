@@ -1,5 +1,6 @@
 from datetime import date
-
+from django.db import transaction
+from django.utils import timezone
 from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import status as http_status
@@ -246,7 +247,8 @@ class LogisticsView(APIView):
         })
 
 DRIVER_ALLOWED_TRANSITIONS = {
-    'in_delivery': 'delivered',
+    'in_delivery': {'delivered'},
+    'delivered': {'in_delivery'},
 }
 
 class UpdateOrderStatusView(APIView):
@@ -274,9 +276,9 @@ class UpdateOrderStatusView(APIView):
                     {'error': 'Kierowca może zmieniać statusy jedynie dla dzisiejszych zamówień.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
-            if DRIVER_ALLOWED_TRANSITIONS.get(order.status) != new_status:
+            if new_status not in DRIVER_ALLOWED_TRANSITIONS.get(order.status, set()):
                 return Response(
-                    {'error': 'Kierowca może jedynie oznaczyć zamówienie w dostawie jako "dostarczone".'},
+                    {'error': 'Kierowca może oznaczyć zamówienie w dostawie jako "dostarczone" albo cofnąć to oznaczenie.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
         elif user.role not in ('admin', 'driver'):
@@ -289,6 +291,44 @@ class UpdateOrderStatusView(APIView):
         order.save(update_fields=['status'])
         return Response({'do_id': order.do_id, 'status': order.status})
 
+class DeliverStopView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        client = get_object_or_404(Client, pk=pk)
+
+        if user.role == 'driver' and client.route.driver_id != user.user_id:
+            return Response(
+                {'error': 'Nie masz dostępu do tego przystanku.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        with transaction.atomic():
+            delivered_ids = list(
+                DailyOrder.objects
+                .select_for_update()
+                .filter(client=client, order_date=date.today(), status='in_delivery')
+                .values_list('do_id', flat=True)
+            )
+            if not delivered_ids:
+                return Response(
+                    {'error': 'U tego klienta nie ma dziś zamówień w dostawie.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+            DailyOrder.objects.filter(pk__in=delivered_ids).update(
+                status='delivered',
+                updated_at=timezone.now(),
+            )
+
+        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids})
 
 class RouteDirectionsView(APIView):
     permission_classes = [IsAuthenticated]

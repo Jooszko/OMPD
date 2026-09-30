@@ -631,6 +631,30 @@ export async function updateOrderStatus(
   return response.json();
 }
 
+export async function deliverStop(clientId: number): Promise<{ client_id: number; delivered_ids: number[] }> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
+    method: 'POST',
+    headers,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
 
 export async function fetchSuppliers(): Promise<any[]> {
   const token = getAuthToken();

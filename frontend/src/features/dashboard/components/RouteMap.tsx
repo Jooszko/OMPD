@@ -7,12 +7,14 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { type LogisticsStop, type RouteDirections } from '../../../services/api';
 import { getStopSequences } from '../lib/stopOrder';
+import { isStopDelivered } from '../lib/routeProgress';
 
 const DELIVERY_COLOR = '#f49f1c';
 const NO_DELIVERY_COLOR = '#9ca3af';
 const CLUSTER_COLOR = '#1f1f1f';
+const DELIVERED_COLOR = '#059669';
 
-type StopMarker = L.Marker & { __hasDelivery?: boolean; __sequence?: number | null };
+type StopMarker = L.Marker & { __hasDelivery?: boolean; __sequence?: number | null; __delivered?: boolean };
 
 function statusIcon(hasDeliveryToday: boolean) {
   return L.divIcon({
@@ -30,12 +32,12 @@ function statusIcon(hasDeliveryToday: boolean) {
   });
 }
 
-function sequenceIcon(sequence: number) {
+function sequenceIcon(sequence: number, delivered: boolean) {
   return L.divIcon({
     className: '',
     html: `<div style="
-      background:${DELIVERY_COLOR};
-      color:#1f1f1f;
+      background:${delivered ? DELIVERED_COLOR : DELIVERY_COLOR};
+      color:${delivered ? 'white' : '#1f1f1f'};
       width:24px;height:24px;
       border-radius:50%;
       border:2px solid white;
@@ -63,6 +65,15 @@ function MapLegend() {
       </span>
       <span className="flex items-center gap-1.5">
         <span
+          className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[8px] font-extrabold text-white border border-white shadow-xs"
+          style={{ background: DELIVERED_COLOR }}
+        >
+          1
+        </span>
+        Dostarczone
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
           className="w-3.5 h-3.5 rounded-[3px] inline-flex items-center justify-center text-[8px] font-extrabold text-white shadow-xs"
           style={{ background: CLUSTER_COLOR, border: `1px solid ${DELIVERY_COLOR}` }}
         >
@@ -71,11 +82,17 @@ function MapLegend() {
         Kilka przystanków (kliknij)
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" style={{ background: DELIVERY_COLOR }} />
+        <span
+          className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs"
+          style={{ background: DELIVERY_COLOR }}
+        />
         Dostawa dzisiaj
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" style={{ background: NO_DELIVERY_COLOR }} />
+        <span
+          className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs"
+          style={{ background: NO_DELIVERY_COLOR }}
+        />
         Brak dostawy dzisiaj
       </span>
     </div>
@@ -96,12 +113,14 @@ function clusterIcon(cluster: L.MarkerCluster) {
     .filter((s): s is number => s != null)
     .sort((a, b) => a - b);
   const count = cluster.getChildCount();
+  const hasPendingSequence = markers.some((m) => m.__sequence != null && !m.__delivered);
 
   const badge =
     sequences.length > 0
       ? `<div style="
           position:absolute;top:-9px;right:-11px;
-          background:${DELIVERY_COLOR};color:#1f1f1f;
+          background:${hasPendingSequence ? DELIVERY_COLOR : DELIVERED_COLOR};
+          color:${hasPendingSequence ? '#1f1f1f' : 'white'};
           min-width:18px;height:18px;padding:0 4px;
           border-radius:9px;border:2px solid white;
           box-shadow:0 1px 2px rgba(0,0,0,0.4);
@@ -147,12 +166,14 @@ function ClusteredMarkers({
     stops.forEach((stop) => {
       const hasDelivery = stop.orders.length > 0;
       const sequence = sequenceById.get(stop.client_id) ?? null;
+      const delivered = isStopDelivered(stop);
       const marker = L.marker([Number(stop.latitude), Number(stop.longitude)], {
-        icon: sequence != null ? sequenceIcon(sequence) : statusIcon(hasDelivery),
+        icon: sequence != null ? sequenceIcon(sequence, delivered) : statusIcon(hasDelivery),
         zIndexOffset: sequence != null ? 1000 : 0,
       }) as StopMarker;
       marker.__hasDelivery = hasDelivery;
       marker.__sequence = sequence;
+      marker.__delivered = delivered;
 
       const label = sequence != null ? `${sequence}. ${stop.name}` : stop.name;
       marker.bindTooltip(escapeHtml(label), {
@@ -230,7 +251,9 @@ export function RouteMap({
   const linePoints: [number, number][] = directions?.geometry?.coordinates ?? [];
 
   return (
-    <div className={`relative rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}>
+    <div
+      className={`relative isolate rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}
+    >
       <MapContainer center={fitPoints[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -1,10 +1,8 @@
-import { type OrderedStop } from '../../../services/api';
+import { type LogisticsStop, type OrderedStop } from '../../../services/api';
 
 const MAX_WAYPOINTS = 9;
 
-export function buildGoogleMapsDirectionsUrl(
-  stops: OrderedStop[]
-): { url: string; truncated: boolean } | null {
+export function buildGoogleMapsDirectionsUrl(stops: OrderedStop[]): { url: string; truncated: boolean } | null {
   if (stops.length < 2) return null;
 
   const origin = stops[0];
@@ -24,4 +22,16 @@ export function buildGoogleMapsDirectionsUrl(
   }
 
   return { url: `https://www.google.com/maps/dir/?${params.toString()}`, truncated };
+}
+
+export function buildGoogleMapsStopUrl(stop: LogisticsStop): string {
+  const destination = stop.latitude && stop.longitude ? `${stop.latitude},${stop.longitude}` : stop.address;
+
+  const params = new URLSearchParams({
+    api: '1',
+    destination,
+    travelmode: 'driving',
+  });
+
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
