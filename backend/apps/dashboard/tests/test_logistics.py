@@ -174,6 +174,34 @@ class UpdateOrderStatusPermissionTests(TestCase):
         response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
         self.assertEqual(response.status_code, 200)
 
+    def test_driver_can_revert_delivered_to_in_delivery(self):
+        self.order.status = 'delivered'
+        self.order.save(update_fields=['status'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'in_delivery')
+
+    def test_driver_cannot_revert_delivered_to_planned(self):
+        self.order.status = 'delivered'
+        self.order.save(update_fields=['status'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'planned'})
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'delivered')
+
+    def test_driver_cannot_revert_delivery_from_another_day(self):
+        self.order.status = 'delivered'
+        self.order.order_date = date.today() - timedelta(days=1)
+        self.order.save(update_fields=['status', 'order_date'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'delivered')
+
 class DeliverStopTests(TestCase):
     def setUp(self):
         self.api = APIClient()

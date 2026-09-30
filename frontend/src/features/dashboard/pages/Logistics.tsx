@@ -84,12 +84,36 @@ export default function Logistics() {
     }
   };
 
+  const undoDelivery = async (orderIds: number[]) => {
+    setToast(null);
+    const results = await Promise.allSettled(orderIds.map((id) => updateOrderStatus(id, 'in_delivery')));
+
+    const revertedIds = orderIds.filter((_, i) => results[i].status === 'fulfilled');
+    if (revertedIds.length > 0) {
+      mutationVersion.current += 1;
+      applyOrderStatus(revertedIds, 'in_delivery');
+    }
+
+    const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failure) {
+      console.error('Błąd podczas cofania dostawy:', failure.reason);
+      showActionError(failure.reason);
+    }
+  };
+
   const handleAdvance = async (orderId: number, nextStatus: LogisticsOrder['status']) => {
     setUpdatingId(orderId);
     try {
       await updateOrderStatus(orderId, nextStatus);
       mutationVersion.current += 1;
       applyOrderStatus([orderId], nextStatus);
+      if (nextStatus === 'delivered') {
+        setToast({
+          variant: 'success',
+          text: 'Oznaczono jako dostarczone.',
+          onUndo: () => undoDelivery([orderId]),
+        });
+      }
     } catch (err) {
       console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
       showActionError(err);
@@ -104,6 +128,11 @@ export default function Logistics() {
       const result = await deliverStop(clientId);
       mutationVersion.current += 1;
       applyOrderStatus(result.delivered_ids, 'delivered');
+      setToast({
+        variant: 'success',
+        text: `Przystanek oznaczony jako dostarczony (${result.delivered_ids.length} poz.).`,
+        onUndo: () => undoDelivery(result.delivered_ids),
+      });
     } catch (err) {
       console.error('Błąd podczas dostarczania przystanku:', err);
       showActionError(err);

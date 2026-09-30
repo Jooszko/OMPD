@@ -247,7 +247,8 @@ class LogisticsView(APIView):
         })
 
 DRIVER_ALLOWED_TRANSITIONS = {
-    'in_delivery': 'delivered',
+    'in_delivery': {'delivered'},
+    'delivered': {'in_delivery'},
 }
 
 class UpdateOrderStatusView(APIView):
@@ -275,9 +276,9 @@ class UpdateOrderStatusView(APIView):
                     {'error': 'Kierowca może zmieniać statusy jedynie dla dzisiejszych zamówień.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
-            if DRIVER_ALLOWED_TRANSITIONS.get(order.status) != new_status:
+            if new_status not in DRIVER_ALLOWED_TRANSITIONS.get(order.status, set()):
                 return Response(
-                    {'error': 'Kierowca może jedynie oznaczyć zamówienie w dostawie jako "dostarczone".'},
+                    {'error': 'Kierowca może oznaczyć zamówienie w dostawie jako "dostarczone" albo cofnąć to oznaczenie.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
         elif user.role not in ('admin', 'driver'):
