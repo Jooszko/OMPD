@@ -17,6 +17,8 @@ export function DriverRouteView({
   routes,
   onAdvance,
   updatingId,
+  onDeliverStop,
+  deliveringStopId,
   onRefresh,
   refreshing,
   lastUpdatedAt,
@@ -27,6 +29,8 @@ export function DriverRouteView({
   routes: LogisticsRoute[];
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
+  onDeliverStop: (clientId: number) => void;
+  deliveringStopId: number | null;
   onRefresh: () => void;
   refreshing: boolean;
   lastUpdatedAt: Date | null;
@@ -191,6 +195,8 @@ export function DriverRouteView({
                   isNext={stop.client_id === nextStopId}
                   onAdvance={onAdvance}
                   updatingId={updatingId}
+                  onDeliverStop={onDeliverStop}
+                  deliveringStopId={deliveringStopId}
                 />
               ))
             )}

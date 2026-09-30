@@ -174,3 +174,70 @@ class UpdateOrderStatusPermissionTests(TestCase):
         response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
         self.assertEqual(response.status_code, 200)
 
+class DeliverStopTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+        self.driver_a = User.objects.create_user(
+            username='driver_a3', password='x', role='driver', full_name='Driver A3'
+        )
+        self.driver_b = User.objects.create_user(
+            username='driver_b3', password='x', role='driver', full_name='Driver B3'
+        )
+        self.admin = User.objects.create_user(
+            username='admin_test3', password='x', role='admin', full_name='Admin Test 3'
+        )
+
+        route_a = Route.objects.create(route_name='Trasa A3', driver=self.driver_a)
+        self.client_a = Client.objects.create(name='Klient A3', address='Adres A3', route=route_a)
+        product = Product.objects.create(name='Rogal', category='bread', base_price=Decimal('3.00'))
+        today = date.today()
+
+        def make_order(status, order_date=today):
+            return DailyOrder.objects.create(
+                client=self.client_a, product=product, order_date=order_date,
+                quantity=1, price_at_sale=Decimal('3.00'), status=status,
+            )
+
+        self.in_delivery_1 = make_order('in_delivery')
+        self.in_delivery_2 = make_order('in_delivery')
+        self.planned = make_order('planned')
+        self.yesterday = make_order('in_delivery', order_date=today - timedelta(days=1))
+
+        self.url = f'/api/logistics/clients/{self.client_a.client_id}/deliver/'
+
+    def statuses(self):
+        for order in (self.in_delivery_1, self.in_delivery_2, self.planned, self.yesterday):
+            order.refresh_from_db()
+        return (self.in_delivery_1.status, self.in_delivery_2.status, self.planned.status, self.yesterday.status)
+
+    def test_owning_driver_delivers_only_todays_in_delivery_orders(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertCountEqual(
+            response.data['delivered_ids'], [self.in_delivery_1.do_id, self.in_delivery_2.do_id]
+        )
+        self.assertEqual(self.statuses(), ('delivered', 'delivered', 'planned', 'in_delivery'))
+
+    def test_other_driver_cannot_deliver_stop(self):
+        self.api.force_authenticate(self.driver_b)
+        response = self.api.post(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.statuses(), ('in_delivery', 'in_delivery', 'planned', 'in_delivery'))
+
+    def test_admin_can_deliver_any_stop(self):
+        self.api.force_authenticate(self.admin)
+        response = self.api.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.statuses(), ('delivered', 'delivered', 'planned', 'in_delivery'))
+
+    def test_returns_400_when_nothing_to_deliver(self):
+        DailyOrder.objects.filter(pk__in=[self.in_delivery_1.pk, self.in_delivery_2.pk]).update(status='delivered')
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url)
+
+        self.assertEqual(response.status_code, 400)

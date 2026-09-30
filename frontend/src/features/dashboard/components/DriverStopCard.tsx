@@ -38,13 +38,19 @@ export function DriverStopCard({
   isNext = false,
   onAdvance,
   updatingId,
+  onDeliverStop,
+  deliveringStopId,
 }: {
   stop: LogisticsStop;
   sequence?: number | null;
   isNext?: boolean;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
+  onDeliverStop: (clientId: number) => void;
+  deliveringStopId: number | null;
 }) {
+  const inDeliveryCount = stop.orders.filter((o) => o.status === 'in_delivery').length;
+  const isDeliveringStop = deliveringStopId === stop.client_id;
   const [expanded, setExpanded] = useState(false);
   const hasDeliveryToday = stop.orders.length > 0;
   const delivered = isStopDelivered(stop);
@@ -148,7 +154,7 @@ export function DriverStopCard({
                   {next && (
                     <button
                       onClick={() => onAdvance(order.do_id, next.status)}
-                      disabled={updatingId === order.do_id}
+                      disabled={updatingId === order.do_id || isDeliveringStop}
                       className="w-full sm:w-auto inline-flex items-center justify-center min-h-[44px] sm:min-h-0 px-4 sm:px-3.5 sm:py-1.5 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {updatingId === order.do_id ? '...' : next.label}
@@ -158,6 +164,17 @@ export function DriverStopCard({
               </div>
             );
           })}
+          {inDeliveryCount >= 2 && (
+            <button
+              type="button"
+              onClick={() => onDeliverStop(stop.client_id)}
+              disabled={isDeliveringStop}
+              className="w-full inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-2 px-4 mt-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CircleCheck className="w-4 h-4" />
+              {isDeliveringStop ? '...' : `Dostarcz wszystko (${inDeliveryCount})`}
+            </button>
+          )}
         </div>
       )}
     </div>

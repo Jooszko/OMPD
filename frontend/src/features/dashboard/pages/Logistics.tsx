@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
   ApiError,
+  deliverStop,
   fetchLogistics,
   updateOrderStatus,
   type LogisticsData,
@@ -18,6 +19,7 @@ export default function Logistics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [deliveringStopId, setDeliveringStopId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
   const [toast, setToast] = useState<ActionToastData | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
@@ -49,43 +51,67 @@ export default function Logistics() {
     };
   }, [previewDriverId]);
 
+  const applyOrderStatus = (orderIds: number[], status: LogisticsOrder['status']) => {
+    const ids = new Set(orderIds);
+    setData((prev) => {
+      if (!prev) return prev;
+      const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
+        ...stop,
+        orders: stop.orders.map((o) => (ids.has(o.do_id) ? { ...o, status } : o)),
+      });
+      return {
+        ...prev,
+        routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
+        unassigned: prev.unassigned.map(patchStop),
+      };
+    });
+  };
+
+  const showActionError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setToast({
+        text:
+          err.status === 404
+            ? 'Dane zostały w międzyczasie zmienione lub usunięte. Odśwież, aby zobaczyć aktualny stan.'
+            : err.message,
+        canRefresh: [400, 403, 404].includes(err.status),
+      });
+    } else {
+      setToast({
+        text: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
+        canRefresh: false,
+      });
+    }
+  };
+
   const handleAdvance = async (orderId: number, nextStatus: LogisticsOrder['status']) => {
     setUpdatingId(orderId);
     try {
       await updateOrderStatus(orderId, nextStatus);
       mutationVersion.current += 1;
-      setData((prev) => {
-        if (!prev) return prev;
-        const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
-          ...stop,
-          orders: stop.orders.map((o) => (o.do_id === orderId ? { ...o, status: nextStatus } : o)),
-        });
-        return {
-          ...prev,
-          routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
-          unassigned: prev.unassigned.map(patchStop),
-        };
-      });
+      applyOrderStatus([orderId], nextStatus);
     } catch (err) {
       console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
-      if (err instanceof ApiError) {
-        setToast({
-          text:
-            err.status === 404
-              ? 'To zamówienie zostało zmienione lub usunięte. Odśwież dane, aby zobaczyć aktualny stan.'
-              : err.message,
-          canRefresh: [400, 403, 404].includes(err.status),
-        });
-      } else {
-        setToast({
-          text: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
-          canRefresh: false,
-        });
-      }
+      showActionError(err);
     } finally {
       setUpdatingId(null);
     }
   };
+
+  const handleDeliverStop = async (clientId: number) => {
+    setDeliveringStopId(clientId);
+    try {
+      const result = await deliverStop(clientId);
+      mutationVersion.current += 1;
+      applyOrderStatus(result.delivered_ids, 'delivered');
+    } catch (err) {
+      console.error('Błąd podczas dostarczania przystanku:', err);
+      showActionError(err);
+    } finally {
+      setDeliveringStopId(null);
+    }
+  };
+
 
   const refreshData = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -157,6 +183,8 @@ export default function Logistics() {
           routes={data.routes}
           onAdvance={handleAdvance}
           updatingId={updatingId}
+          onDeliverStop={handleDeliverStop}
+          deliveringStopId={deliveringStopId}
           onRefresh={() => refreshData()}
           refreshing={refreshing}
           lastUpdatedAt={lastUpdatedAt}
