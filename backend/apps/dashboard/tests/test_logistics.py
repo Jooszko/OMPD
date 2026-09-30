@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -96,6 +96,18 @@ class LogisticsViewRoleTests(TestCase):
         self.api.force_authenticate(self.admin)
         response = self.api.get('/api/logistics/', {'driver': 999999})
         self.assertEqual(response.status_code, 404)
+        
+    def test_inactive_clients_are_hidden_from_route_stops(self):
+        Client.objects.create(
+            name='Klient nieaktywny', address='Adres X', route=self.route_a, is_active=False
+        )
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.get('/api/logistics/')
+
+        self.assertEqual(response.status_code, 200)
+        stop_names = [s['name'] for s in response.data['routes'][0]['stops']]
+        self.assertIn('Klient A', stop_names)
+        self.assertNotIn('Klient nieaktywny', stop_names)
 
 
 class UpdateOrderStatusPermissionTests(TestCase):
@@ -145,3 +157,20 @@ class UpdateOrderStatusPermissionTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'planned')
+
+    def test_driver_cannot_update_order_from_another_day(self):
+        self.order.order_date = date.today() - timedelta(days=1)
+        self.order.save(update_fields=['order_date'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'in_delivery')
+
+    def test_admin_can_update_order_from_another_day(self):
+        self.order.order_date = date.today() - timedelta(days=1)
+        self.order.save(update_fields=['order_date'])
+        self.api.force_authenticate(self.admin)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'delivered'})
+        self.assertEqual(response.status_code, 200)
+

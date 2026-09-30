@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -6,9 +6,13 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { type LogisticsStop, type RouteDirections } from '../../../services/api';
+import { getStopSequences } from '../lib/stopOrder';
 
 const DELIVERY_COLOR = '#f49f1c';
 const NO_DELIVERY_COLOR = '#9ca3af';
+const CLUSTER_COLOR = '#1f1f1f';
+
+type StopMarker = L.Marker & { __hasDelivery?: boolean; __sequence?: number | null };
 
 function statusIcon(hasDeliveryToday: boolean) {
   return L.divIcon({
@@ -26,9 +30,46 @@ function statusIcon(hasDeliveryToday: boolean) {
   });
 }
 
+function sequenceIcon(sequence: number) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      background:${DELIVERY_COLOR};
+      color:#1f1f1f;
+      width:24px;height:24px;
+      border-radius:50%;
+      border:2px solid white;
+      box-shadow:0 1px 3px rgba(0,0,0,0.4);
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;font-weight:800;font-family:sans-serif;
+    ">${sequence}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
+  });
+}
+
 function MapLegend() {
   return (
     <div className="absolute bottom-2 left-2 z-[1000] bg-white/90 backdrop-blur-xs rounded-lg px-2 py-1.5 text-[10px] font-semibold text-bakery-dark shadow-sm border border-bakery-btnBorder flex flex-col gap-1">
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[8px] font-extrabold text-[#1f1f1f] border border-white shadow-xs"
+          style={{ background: DELIVERY_COLOR }}
+        >
+          1
+        </span>
+        Kolejność na trasie
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-3.5 h-3.5 rounded-[3px] inline-flex items-center justify-center text-[8px] font-extrabold text-white shadow-xs"
+          style={{ background: CLUSTER_COLOR, border: `1px solid ${DELIVERY_COLOR}` }}
+        >
+          2
+        </span>
+        Kilka przystanków (kliknij)
+      </span>
       <span className="flex items-center gap-1.5">
         <span className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" style={{ background: DELIVERY_COLOR }} />
         Dostawa dzisiaj
@@ -48,28 +89,51 @@ function escapeHtml(text: string): string {
 }
 
 function clusterIcon(cluster: L.MarkerCluster) {
-  const hasDelivery = cluster
-    .getAllChildMarkers()
-    .some((m) => (m as L.Marker & { __hasDelivery?: boolean }).__hasDelivery);
+  const markers = cluster.getAllChildMarkers() as StopMarker[];
+  const hasDelivery = markers.some((m) => m.__hasDelivery);
+  const sequences = markers
+    .map((m) => m.__sequence)
+    .filter((s): s is number => s != null)
+    .sort((a, b) => a - b);
   const count = cluster.getChildCount();
+
+  const badge =
+    sequences.length > 0
+      ? `<div style="
+          position:absolute;top:-9px;right:-11px;
+          background:${DELIVERY_COLOR};color:#1f1f1f;
+          min-width:18px;height:18px;padding:0 4px;
+          border-radius:9px;border:2px solid white;
+          box-shadow:0 1px 2px rgba(0,0,0,0.4);
+          display:flex;align-items:center;justify-content:center;
+          font-size:10px;font-weight:800;font-family:sans-serif;white-space:nowrap;
+        ">${sequences.join(', ')}</div>`
+      : '';
 
   return L.divIcon({
     className: '',
     html: `<div style="
-      background:${hasDelivery ? DELIVERY_COLOR : NO_DELIVERY_COLOR};
-      color:#1f1f1f;
+      position:relative;
+      background:${CLUSTER_COLOR};
+      color:white;
       width:30px;height:30px;
-      border-radius:50%;
-      border:2px solid white;
+      border-radius:8px;
+      border:2px solid ${hasDelivery ? DELIVERY_COLOR : NO_DELIVERY_COLOR};
       box-shadow:0 1px 3px rgba(0,0,0,0.4);
       display:flex;align-items:center;justify-content:center;
       font-size:12px;font-weight:800;font-family:sans-serif;
-    ">${count}</div>`,
+    ">${count}${badge}</div>`,
     iconSize: [30, 30],
   });
 }
 
-function ClusteredMarkers({ stops }: { stops: (LogisticsStop & { latitude: string; longitude: string })[] }) {
+function ClusteredMarkers({
+  stops,
+  sequenceById,
+}: {
+  stops: (LogisticsStop & { latitude: string; longitude: string })[];
+  sequenceById: Map<number, number>;
+}) {
   const map = useMap();
 
   useEffect(() => {
@@ -82,19 +146,23 @@ function ClusteredMarkers({ stops }: { stops: (LogisticsStop & { latitude: strin
 
     stops.forEach((stop) => {
       const hasDelivery = stop.orders.length > 0;
+      const sequence = sequenceById.get(stop.client_id) ?? null;
       const marker = L.marker([Number(stop.latitude), Number(stop.longitude)], {
-        icon: statusIcon(hasDelivery),
-      }) as L.Marker & { __hasDelivery?: boolean };
+        icon: sequence != null ? sequenceIcon(sequence) : statusIcon(hasDelivery),
+        zIndexOffset: sequence != null ? 1000 : 0,
+      }) as StopMarker;
       marker.__hasDelivery = hasDelivery;
+      marker.__sequence = sequence;
 
-      marker.bindTooltip(escapeHtml(stop.name), {
+      const label = sequence != null ? `${sequence}. ${stop.name}` : stop.name;
+      marker.bindTooltip(escapeHtml(label), {
         direction: 'top',
         offset: [0, -6],
         opacity: 0.95,
         className: 'text-[10px] font-bold',
       });
       marker.bindPopup(
-        `<strong>${escapeHtml(stop.name)}</strong><br/>${escapeHtml(stop.address)}` +
+        `<strong>${escapeHtml(label)}</strong><br/>${escapeHtml(stop.address)}` +
           (hasDelivery ? '' : '<br/><em>Brak dostawy dzisiaj</em>')
       );
 
@@ -106,7 +174,7 @@ function ClusteredMarkers({ stops }: { stops: (LogisticsStop & { latitude: strin
     return () => {
       map.removeLayer(clusterGroup);
     };
-  }, [map, stops]);
+  }, [map, stops, sequenceById]);
 
   return null;
 }
@@ -135,9 +203,19 @@ export function RouteMap({
   directions?: RouteDirections | null;
   className?: string;
 }) {
-  const geocodedStops = stops.filter(
-    (s): s is LogisticsStop & { latitude: string; longitude: string } => !!s.latitude && !!s.longitude
+  const geocodedStops = useMemo(
+    () =>
+      stops.filter(
+        (s): s is LogisticsStop & { latitude: string; longitude: string } => !!s.latitude && !!s.longitude
+      ),
+    [stops]
   );
+  const sequenceById = useMemo(() => getStopSequences(directions), [directions]);
+  const fitPoints = useMemo<[number, number][]>(() => {
+    const line = directions?.geometry?.coordinates ?? [];
+    if (line.length > 0) return line;
+    return geocodedStops.map((s) => [Number(s.latitude), Number(s.longitude)]);
+  }, [directions, geocodedStops]);
 
   if (geocodedStops.length === 0) {
     return (
@@ -149,13 +227,11 @@ export function RouteMap({
     );
   }
 
-  const points: [number, number][] = geocodedStops.map((s) => [Number(s.latitude), Number(s.longitude)]);
   const linePoints: [number, number][] = directions?.geometry?.coordinates ?? [];
-  const fitPoints = linePoints.length > 0 ? linePoints : points;
 
   return (
     <div className={`relative rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}>
-      <MapContainer center={points[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={fitPoints[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -164,7 +240,7 @@ export function RouteMap({
         {linePoints.length > 0 && (
           <Polyline positions={linePoints} pathOptions={{ color: DELIVERY_COLOR, weight: 4, opacity: 0.85 }} />
         )}
-        <ClusteredMarkers stops={geocodedStops} />
+        <ClusteredMarkers stops={geocodedStops} sequenceById={sequenceById} />
       </MapContainer>
       <MapLegend />
     </div>
