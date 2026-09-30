@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
+  ApiError,
   fetchLogistics,
   updateOrderStatus,
   type LogisticsData,
@@ -8,6 +9,7 @@ import {
 } from '../../../services/api';
 import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
+import { ActionToast, type ActionToastData } from '../components/ActionToast';
 
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
@@ -15,6 +17,8 @@ export default function Logistics() {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
+  const [toast, setToast] = useState<ActionToastData | null>(null);
+  const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +61,32 @@ export default function Logistics() {
       });
     } catch (err) {
       console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
-      alert('Nie udało się zaktualizować statusu zamówienia.');
+      if (err instanceof ApiError) {
+        setToast({
+          text:
+            err.status === 404
+              ? 'To zamówienie zostało zmienione lub usunięte. Odśwież dane, aby zobaczyć aktualny stan.'
+              : err.message,
+          canRefresh: [400, 403, 404].includes(err.status),
+        });
+      } else {
+        setToast({
+          text: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
+          canRefresh: false,
+        });
+      }
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const refreshData = async () => {
+    setToast(null);
+    try {
+      const result = await fetchLogistics(previewDriverId ?? undefined);
+      setData(result);
+    } catch {
+      setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
     }
   };
 
@@ -98,6 +125,7 @@ export default function Logistics() {
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
         />
+        <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
       </div>
     );
   }
@@ -210,6 +238,7 @@ export default function Logistics() {
           </div>
         </div>
       )}
+      <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
     </div>
   );
 }

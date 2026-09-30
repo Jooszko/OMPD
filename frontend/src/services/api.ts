@@ -118,6 +118,15 @@ function authHeaders(): HeadersInit {
   }
   return headers;
 }
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 async function handleJsonResponse(response: Response): Promise<any> {
   if (!response.ok) {
@@ -616,7 +625,8 @@ export async function updateOrderStatus(
       logoutUser();
       window.location.reload();
     }
-    throw new Error(`Błąd serwera: ${response.status}`);
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
   }
   return response.json();
 }
