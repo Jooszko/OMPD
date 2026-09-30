@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
   ApiError,
@@ -11,6 +11,8 @@ import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 
+const AUTO_REFRESH_MS = 60_000;
+
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,9 @@ export default function Logistics() {
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
   const [toast, setToast] = useState<ActionToastData | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const mutationVersion = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +33,7 @@ export default function Logistics() {
       .then((result) => {
         if (!cancelled) {
           setData(result);
+          setLastUpdatedAt(new Date());
           setLoading(false);
         }
       })
@@ -47,6 +53,7 @@ export default function Logistics() {
     setUpdatingId(orderId);
     try {
       await updateOrderStatus(orderId, nextStatus);
+      mutationVersion.current += 1;
       setData((prev) => {
         if (!prev) return prev;
         const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
@@ -80,15 +87,43 @@ export default function Logistics() {
     }
   };
 
-  const refreshData = async () => {
-    setToast(null);
-    try {
-      const result = await fetchLogistics(previewDriverId ?? undefined);
-      setData(result);
-    } catch {
-      setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
-    }
-  };
+  const refreshData = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      const versionAtStart = mutationVersion.current;
+      if (!silent) {
+        setToast(null);
+        setRefreshing(true);
+      }
+      try {
+        const result = await fetchLogistics(previewDriverId ?? undefined);
+        if (mutationVersion.current !== versionAtStart) return;
+        setData(result);
+        setError(null);
+        setLastUpdatedAt(new Date());
+      } catch {
+        if (!silent) {
+          setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
+        }
+      } finally {
+        if (!silent) setRefreshing(false);
+      }
+    },
+    [previewDriverId]
+  );
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') refreshData({ silent: true });
+    };
+
+    const intervalId = setInterval(refreshIfVisible, AUTO_REFRESH_MS);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
+  }, [refreshData]);
 
   if (loading) {
     return (
@@ -122,10 +157,13 @@ export default function Logistics() {
           routes={data.routes}
           onAdvance={handleAdvance}
           updatingId={updatingId}
+          onRefresh={() => refreshData()}
+          refreshing={refreshing}
+          lastUpdatedAt={lastUpdatedAt}
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
         />
-        <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
+        <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>
     );
   }
@@ -141,9 +179,8 @@ export default function Logistics() {
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>
           <p className="text-xs text-gray-500 font-medium">
-            Plan dostaw na dziś ({data.date}) — {deliveriesToday}{' '}
-            {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w {routes.length}{' '}
-            {routes.length === 1 ? 'trasie' : 'trasach'}.
+            Plan dostaw na dziś ({data.date}) — {deliveriesToday} {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w{' '}
+            {routes.length} {routes.length === 1 ? 'trasie' : 'trasach'}.
           </p>
         </div>
 
@@ -238,7 +275,7 @@ export default function Logistics() {
           </div>
         </div>
       )}
-      <ActionToast toast={toast} onClose={closeToast} onRefresh={refreshData} />
+      <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
     </div>
   );
 }

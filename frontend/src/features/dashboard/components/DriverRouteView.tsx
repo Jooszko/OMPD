@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Inbox, Truck } from 'lucide-react';
+import { ArrowLeft, Inbox, RefreshCw, Truck } from 'lucide-react';
 import {
   fetchRouteDirections,
   type LogisticsOrder,
@@ -17,6 +17,9 @@ export function DriverRouteView({
   routes,
   onAdvance,
   updatingId,
+  onRefresh,
+  refreshing,
+  lastUpdatedAt,
   previewDriverName,
   onExitPreview,
 }: {
@@ -24,6 +27,9 @@ export function DriverRouteView({
   routes: LogisticsRoute[];
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
+  onRefresh: () => void;
+  refreshing: boolean;
+  lastUpdatedAt: Date | null;
   previewDriverName?: string;
   onExitPreview?: () => void;
 }) {
@@ -105,11 +111,30 @@ export function DriverRouteView({
             })}
           </div>
         )}
-        <p className="text-xs text-gray-500 font-medium">
-          {route
-            ? `Plan dostaw na dziś (${date}) — ${deliveriesToday} ${deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'}.`
-            : 'Brak przypisanej trasy na dziś.'}
-        </p>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-gray-500 font-medium">
+            {route
+              ? `Plan dostaw na dziś (${date}) — ${deliveriesToday} ${deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'}.`
+              : 'Brak przypisanej trasy na dziś.'}
+          </p>
+          <div className="flex items-center gap-2">
+            {lastUpdatedAt && (
+              <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
+                Aktualizacja: {lastUpdatedAt.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              aria-label="Odśwież dane"
+              className="inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:py-1 text-[11px] font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Odśwież</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <hr className="border-0 border-t border-bakery-border my-1" />
