@@ -182,7 +182,7 @@ export default function Logistics() {
 
   if (loading) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6 text-bakery-dark">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
         <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
         <p>Ładowanie danych...</p>
       </div>
@@ -191,7 +191,7 @@ export default function Logistics() {
 
   if (error) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6 text-bakery-dark">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
         <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
         <p className="text-red-600">Błąd połączenia z serwerem: {error}</p>
       </div>
@@ -206,7 +206,7 @@ export default function Logistics() {
       : undefined;
 
     return (
-      <div className="w-full max-w-7xl mx-auto px-8 py-6">
+      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6">
         <DriverRouteView
           date={data.date}
           routes={data.routes}
