@@ -251,7 +251,9 @@ export function RouteMap({
   const linePoints: [number, number][] = directions?.geometry?.coordinates ?? [];
 
   return (
-    <div className={`relative rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}>
+    <div
+      className={`relative isolate rounded-lg overflow-hidden border border-bakery-btnBorder shadow-sm ${className ?? 'h-72'}`}
+    >
       <MapContainer center={fitPoints[0]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
