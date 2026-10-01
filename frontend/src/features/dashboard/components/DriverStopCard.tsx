@@ -1,9 +1,23 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package } from 'lucide-react';
-import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
-import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getDriverNextStep } from '../lib/logisticsStatus';
-import { isStopDelivered } from '../lib/routeProgress';
+import { AlertTriangle, ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package, Phone } from 'lucide-react';
+import { type FailureReason, type LogisticsOrder, type LogisticsStop } from '../../../services/api';
+import {
+  FAILURE_REASON_LABELS,
+  ORDER_STATUS_COLORS,
+  ORDER_STATUS_LABELS,
+  getDriverNextStep,
+} from '../lib/logisticsStatus';
+import { getStopDeliveredAt, getStopState, type StopState } from '../lib/routeProgress';
+import { formatTime } from '../lib/dateFormat';
 import { buildGoogleMapsStopUrl } from '../lib/navigationLinks';
+import { ReportProblemDialog, type ProblemTarget } from './ReportProblemDialog';
+
+const SEQUENCE_BADGE_CLASSES: Record<StopState, string> = {
+  none: 'bg-bakery-accent text-black',
+  pending: 'bg-bakery-accent text-black',
+  delivered: 'bg-emerald-600 text-white',
+  failed: 'bg-rose-600 text-white',
+};
 
 function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
   return (
@@ -20,58 +34,119 @@ function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
   );
 }
 
-function SequenceBadge({ sequence, delivered }: { sequence: number; delivered: boolean }) {
+function SequenceBadge({ sequence, state }: { sequence: number; state: StopState }) {
   return (
     <span
-      className={`shrink-0 w-6 h-6 rounded-full text-xs font-extrabold flex items-center justify-center ${
-        delivered ? 'bg-emerald-600 text-white' : 'bg-bakery-accent text-black'
-      }`}
+      className={`shrink-0 w-6 h-6 rounded-full text-xs font-extrabold flex items-center justify-center ${SEQUENCE_BADGE_CLASSES[state]}`}
     >
       {sequence}
     </span>
   );
 }
 
+interface ProblemDialogState {
+  target: ProblemTarget;
+  title: string;
+  subtitle: string;
+}
+
+const SECONDARY_ICON_BUTTON =
+  'inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]';
+
+const PROBLEM_BUTTON =
+  'inline-flex items-center justify-center gap-1.5 shrink-0 text-xs font-bold bg-white border border-rose-200 text-rose-700 rounded-lg shadow-xs transition hover:bg-rose-50 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed';
+
 export function DriverStopCard({
   stop,
   sequence,
   isNext = false,
+  readOnly = false,
   onAdvance,
   updatingId,
   onDeliverStop,
   deliveringStopId,
+  onReportProblem,
 }: {
   stop: LogisticsStop;
   sequence?: number | null;
   isNext?: boolean;
+  readOnly?: boolean;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
   onDeliverStop: (clientId: number) => void;
   deliveringStopId: number | null;
+  onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [problemDialog, setProblemDialog] = useState<ProblemDialogState | null>(null);
+
+  const hasDeliveryToday = stop.orders.length > 0;
   const inDeliveryCount = stop.orders.filter((o) => o.status === 'in_delivery').length;
   const isDeliveringStop = deliveringStopId === stop.client_id;
-  const [expanded, setExpanded] = useState(false);
-  const hasDeliveryToday = stop.orders.length > 0;
-  const delivered = isStopDelivered(stop);
+  const stopState = getStopState(stop);
+  const handled = stopState === 'delivered' || stopState === 'failed';
+  const deliveredAt = stopState === 'delivered' ? getStopDeliveredAt(stop) : null;
+  const failureReason = stop.orders.find((o) => o.status === 'failed')?.failure_reason || null;
+  const showCall = !readOnly && hasDeliveryToday && stopState !== 'delivered' && !!stop.phone;
+  const showNavigate = !readOnly && stopState === 'pending';
 
-  if (delivered && !expanded) {
+  const openStopProblem = () =>
+    setProblemDialog({
+      target: { kind: 'stop', clientId: stop.client_id },
+      title: 'Problem z dostawą',
+      subtitle: `${stop.name} · ${inDeliveryCount} poz. w dostawie`,
+    });
+
+  const openOrderProblem = (order: LogisticsOrder) =>
+    setProblemDialog({
+      target: { kind: 'order', orderId: order.do_id },
+      title: 'Problem z pozycją',
+      subtitle: `${stop.name} · ${order.product_name} x${order.quantity}`,
+    });
+
+  const submitProblem = async (reason: FailureReason, note: string) => {
+    if (!problemDialog) return false;
+    const ok = await onReportProblem(problemDialog.target, reason, note);
+    if (ok) setProblemDialog(null);
+    return ok;
+  };
+
+  if (handled && !expanded) {
+    const failed = stopState === 'failed';
     return (
       <button
         type="button"
         onClick={() => setExpanded(true)}
         aria-expanded={false}
-        className="w-full text-left border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 rounded-lg px-3 py-2 flex items-center gap-2.5 transition"
+        className={`w-full text-left border rounded-lg px-3 py-2 flex items-center gap-2.5 transition ${
+          failed
+            ? 'border-rose-200 bg-rose-50/60 hover:bg-rose-50'
+            : 'border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50'
+        }`}
       >
         {sequence != null ? (
-          <SequenceBadge sequence={sequence} delivered />
+          <SequenceBadge sequence={sequence} state={stopState} />
+        ) : failed ? (
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
         ) : (
           <CircleCheck className="w-5 h-5 text-emerald-600 shrink-0" />
         )}
         <span className="flex-1 min-w-0 text-sm font-semibold text-gray-500 truncate">{stop.name}</span>
-        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 whitespace-nowrap">
-          <CircleCheck className="w-3.5 h-3.5" /> Dostarczone
-        </span>
+        {failed ? (
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-rose-700 whitespace-nowrap">
+            <AlertTriangle className="w-3.5 h-3.5" /> Nieudana
+            {failureReason && (
+              <span className="hidden sm:inline font-semibold normal-case">
+                · {FAILURE_REASON_LABELS[failureReason]}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 whitespace-nowrap">
+            <CircleCheck className="w-3.5 h-3.5" /> Dostarczone
+            {deliveredAt && <span className="font-semibold normal-case">{formatTime(deliveredAt)}</span>}
+          </span>
+        )}
         <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
       </button>
     );
@@ -89,7 +164,7 @@ export function DriverStopCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
-          {sequence != null && <SequenceBadge sequence={sequence} delivered={delivered} />}
+          {sequence != null && <SequenceBadge sequence={sequence} state={stopState} />}
           <div className="min-w-0">
             <p className="font-bold text-sm text-bakery-dark m-0">{stop.name}</p>
             <p className="text-xs text-gray-500 font-semibold flex items-center gap-1 mt-0.5">
@@ -108,7 +183,7 @@ export function DriverStopCard({
               Następny
             </span>
           )}
-          {delivered && (
+          {handled && (
             <button
               type="button"
               onClick={() => setExpanded(false)}
@@ -118,18 +193,33 @@ export function DriverStopCard({
               Zwiń <ChevronUp className="w-3.5 h-3.5" />
             </button>
           )}
-          {hasDeliveryToday && !delivered && (
-            <a
-              href={buildGoogleMapsStopUrl(stop)}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Nawiguj do: ${stop.name}`}
-              title="Nawiguj do klienta"
-              className="inline-flex items-center justify-center gap-1.5 w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
-            >
-              <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
-              <span className="hidden sm:inline">Nawiguj</span>
-            </a>
+          {(showCall || showNavigate) && (
+            <div className="flex items-center gap-1.5">
+              {showCall && (
+                <a
+                  href={`tel:${stop.phone}`}
+                  aria-label={`Zadzwoń do: ${stop.name}`}
+                  title={`Zadzwoń: ${stop.phone}`}
+                  className={SECONDARY_ICON_BUTTON}
+                >
+                  <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
+                  <span className="hidden sm:inline">Zadzwoń</span>
+                </a>
+              )}
+              {showNavigate && (
+                <a
+                  href={buildGoogleMapsStopUrl(stop)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Nawiguj do: ${stop.name}`}
+                  title="Nawiguj do klienta"
+                  className={SECONDARY_ICON_BUTTON}
+                >
+                  <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-bakery-dark sm:text-bakery-accent" />
+                  <span className="hidden sm:inline">Nawiguj</span>
+                </a>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -137,7 +227,9 @@ export function DriverStopCard({
       {hasDeliveryToday && (
         <div className="flex flex-col gap-1.5 mt-1">
           {stop.orders.map((order) => {
-            const next = getDriverNextStep(order.status);
+            const next = readOnly ? null : getDriverNextStep(order.status);
+            const canReport = !readOnly && order.status === 'in_delivery';
+            const busy = updatingId === order.do_id || isDeliveringStop;
             return (
               <div
                 key={order.do_id}
@@ -150,32 +242,84 @@ export function DriverStopCard({
                   </span>
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <StatusBadge status={order.status} />
-                  {next && (
-                    <button
-                      onClick={() => onAdvance(order.do_id, next.status)}
-                      disabled={updatingId === order.do_id || isDeliveringStop}
-                      className="w-full sm:w-auto inline-flex items-center justify-center min-h-[44px] sm:min-h-0 px-4 sm:px-3.5 sm:py-1.5 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                      {updatingId === order.do_id ? '...' : next.label}
-                    </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={order.status} />
+                    {order.status === 'delivered' && order.delivered_at && (
+                      <span className="text-[11px] text-gray-500 font-medium">o {formatTime(order.delivered_at)}</span>
+                    )}
+                    {order.status === 'failed' && order.failure_reason && (
+                      <span className="text-[11px] text-rose-700 font-semibold">
+                        {FAILURE_REASON_LABELS[order.failure_reason]}
+                        {order.failed_at && ` · ${formatTime(order.failed_at)}`}
+                      </span>
+                    )}
+                  </div>
+                  {(next || canReport) && (
+                    <div className="flex w-full sm:w-auto gap-2">
+                      {canReport && (
+                        <button
+                          type="button"
+                          onClick={() => openOrderProblem(order)}
+                          disabled={busy}
+                          aria-label={`Zgłoś problem: ${order.product_name}`}
+                          title="Zgłoś problem z tą pozycją"
+                          className={`${PROBLEM_BUTTON} w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5`}
+                        >
+                          <AlertTriangle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                          <span className="hidden sm:inline">Problem</span>
+                        </button>
+                      )}
+                      {next && (
+                        <button
+                          onClick={() => onAdvance(order.do_id, next.status)}
+                          disabled={busy}
+                          className="flex-1 sm:flex-none inline-flex items-center justify-center min-h-[44px] sm:min-h-0 px-4 sm:px-3.5 sm:py-1.5 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          {updatingId === order.do_id ? '...' : next.label}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
+                {order.status === 'failed' && order.failure_note && (
+                  <p className="m-0 text-xs text-gray-600 italic">„{order.failure_note}”</p>
+                )}
               </div>
             );
           })}
-          {inDeliveryCount >= 2 && (
-            <button
-              type="button"
-              onClick={() => onDeliverStop(stop.client_id)}
-              disabled={isDeliveringStop}
-              className="w-full inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-2 px-4 mt-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <CircleCheck className="w-4 h-4" />
-              {isDeliveringStop ? '...' : `Dostarcz wszystko (${inDeliveryCount})`}
-            </button>
+          {!readOnly && inDeliveryCount >= 2 && (
+            <div className="flex gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => onDeliverStop(stop.client_id)}
+                disabled={isDeliveringStop}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-2 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <CircleCheck className="w-4 h-4" />
+                {isDeliveringStop ? '...' : `Dostarcz wszystko (${inDeliveryCount})`}
+              </button>
+              <button
+                type="button"
+                onClick={openStopProblem}
+                disabled={isDeliveringStop}
+                className={`${PROBLEM_BUTTON} min-h-[44px] sm:min-h-0 sm:py-2 px-3`}
+              >
+                <AlertTriangle className="w-4 h-4" />
+                <span className="hidden sm:inline">Problem z przystankiem</span>
+                <span className="sm:hidden">Problem</span>
+              </button>
+            </div>
           )}
         </div>
+      )}
+
+      {problemDialog && (
+        <ReportProblemDialog
+          title={problemDialog.title}
+          subtitle={problemDialog.subtitle}
+          onSubmit={submitProblem}
+          onClose={() => setProblemDialog(null)}
+        />
       )}
     </div>
   );

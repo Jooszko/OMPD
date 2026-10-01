@@ -77,7 +77,7 @@ def _revenue_for_date(target_date):
     result = (
         DailyOrder.objects
         .filter(order_date=target_date)
-        .exclude(status='cancelled')
+        .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
         .aggregate(total=Sum(
             ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
         ))
@@ -102,7 +102,7 @@ def _cogs_for_date(target_date):
         Recipe.objects
         .filter(
             product__daily_orders__order_date=target_date,
-            product__daily_orders__status__in=['planned', 'in_production', 'in_delivery', 'delivered'],
+            product__daily_orders__status__in=['planned', 'in_production', 'in_delivery', 'delivered', 'failed'],
         )
         .values('ingredient_id')
         .annotate(
@@ -224,7 +224,7 @@ class PeriodIncomesView(APIView):
         rows = (
             DailyOrder.objects
             .filter(order_date__gte=start, order_date__lte=end)
-            .exclude(status='cancelled')
+            .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
             .values('client__name', 'order_date')
             .annotate(amount=Sum(
                 ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
@@ -243,7 +243,7 @@ class TopClientsView(APIView):
         rows = (
             DailyOrder.objects
             .filter(order_date__gte=start, order_date__lte=end)
-            .exclude(status='cancelled')
+            .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
             .values('client__name')
             .annotate(total=Sum(
                 ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))

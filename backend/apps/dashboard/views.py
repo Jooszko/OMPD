@@ -12,7 +12,7 @@ from clients.models import Client, Route
 from orders.models import DailyOrder
 from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
-from users.models import User
+from users.models import Notification, User
 from .services.optimize import optimize_stop_order
 from .services.directions_cache import get_cached_route_directions
 from .services.routing import RoutingError
@@ -151,11 +151,21 @@ class LogisticsView(APIView):
         else:
             scoped_driver_id = None
 
-        today = date.today()
+        date_param = request.query_params.get('date')
+        if date_param:
+            try:
+                target_date = date.fromisoformat(date_param)
+            except ValueError:
+                return Response(
+                    {'error': 'Nieprawidłowy format daty (YYYY-MM-DD).'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            target_date = date.today()
 
-        orders_today = (
+        orders_for_day = (
             DailyOrder.objects
-            .filter(order_date=today)
+            .filter(order_date=target_date)
             .exclude(status='cancelled')
             .select_related('client', 'product')
             .order_by('client__name')
@@ -163,12 +173,16 @@ class LogisticsView(APIView):
 
         orders_by_client = {}
         client_by_id = {}
-        for o in orders_today:
+        for o in orders_for_day:
             orders_by_client.setdefault(o.client_id, []).append({
                 'do_id': o.do_id,
                 'product_name': o.product.name,
                 'quantity': o.quantity,
                 'status': o.status,
+                'delivered_at': o.delivered_at,
+                'failure_reason': o.failure_reason,
+                'failure_note': o.failure_note,
+                'failed_at': o.failed_at,
             })
             client_by_id[o.client_id] = o.client
 
@@ -194,6 +208,7 @@ class LogisticsView(APIView):
                     'client_id': client.client_id,
                     'name': client.name,
                     'address': client.address,
+                    'phone': client.phone,
                     'latitude': client.latitude,
                     'longitude': client.longitude,
                     'orders': orders_by_client.get(client.client_id, []),
@@ -217,6 +232,7 @@ class LogisticsView(APIView):
                     'client_id': client_id,
                     'name': client_by_id[client_id].name,
                     'address': client_by_id[client_id].address,
+                    'phone': client_by_id[client_id].phone,
                     'latitude': client_by_id[client_id].latitude,
                     'longitude': client_by_id[client_id].longitude,
                     'orders': orders,
@@ -235,7 +251,8 @@ class LogisticsView(APIView):
             ]
 
         return Response({
-            'date': str(today),
+            'date': str(target_date),
+            'today': str(date.today()),
             'routes': routes_data,
             'unassigned': unassigned,
             'viewer': {
@@ -251,6 +268,83 @@ DRIVER_ALLOWED_TRANSITIONS = {
     'delivered': {'in_delivery'},
 }
 
+MAX_FAILURE_NOTE_LENGTH = 500
+
+
+def _notify_admins(sender, title, message):
+    admins = User.objects.filter(role='admin', is_active=True).exclude(pk=sender.pk)
+    Notification.objects.bulk_create([
+        Notification(user=admin, sender=sender, title=title, message=message)
+        for admin in admins
+    ])
+
+def _format_order_items(orders):
+    return ', '.join(f'{o.product.name} x{o.quantity}' for o in orders)
+
+
+def _notify_admins_about_failure(sender, client, orders, reason, note):
+    reason_label = dict(DailyOrder.FAILURE_REASON_CHOICES)[reason]
+    message = (
+        f'{sender.full_name} zgłosił problem z dostawą do klienta {client.name} ({client.address}).\n'
+        f'Powód: {reason_label}\n'
+        f'Pozycje: {_format_order_items(orders)}'
+    )
+    if note:
+        message += f'\nNotatka: {note}'
+    _notify_admins(sender, f'Problem z dostawą: {client.name}', message)
+
+def _report_failure(request, client, orders_qs):
+    reason = request.data.get('reason')
+    note = str(request.data.get('note') or '').strip()
+
+    if not isinstance(reason, str) or reason not in dict(DailyOrder.FAILURE_REASON_CHOICES):
+        return Response(
+            {'error': 'Wybierz powód problemu z dostawą.'},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+    if reason == 'other' and not note:
+        return Response(
+            {'error': 'Przy powodzie „Inny powód” opisz problem w notatce.'},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+    if len(note) > MAX_FAILURE_NOTE_LENGTH:
+        return Response(
+            {'error': f'Notatka może mieć najwyżej {MAX_FAILURE_NOTE_LENGTH} znaków.'},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+
+    with transaction.atomic():
+        orders = list(
+            orders_qs
+            .select_for_update(of=('self',))
+            .select_related('product')
+            .filter(order_date=date.today(), status='in_delivery')
+        )
+        if not orders:
+            return Response(
+                {'error': 'Brak zamówień w dostawie, dla których można zgłosić problem.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        failed_ids = [o.do_id for o in orders]
+        now = timezone.now()
+        DailyOrder.objects.filter(pk__in=failed_ids).update(
+            status='failed',
+            failure_reason=reason,
+            failure_note=note,
+            failed_at=now,
+            updated_at=now,
+        )
+        _notify_admins_about_failure(request.user, client, orders, reason, note)
+
+    return Response({
+        'client_id': client.client_id,
+        'failed_ids': failed_ids,
+        'failure_reason': reason,
+        'failure_note': note,
+        'failed_at': now,
+    })
+
 class UpdateOrderStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -262,6 +356,12 @@ class UpdateOrderStatusView(APIView):
         if new_status not in dict(DailyOrder.STATUS_CHOICES):
             return Response(
                 {'error': 'Nieprawidłowy status.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_status == 'failed':
+            return Response(
+                {'error': 'Aby oznaczyć nieudaną dostawę, użyj opcji „Zgłoś problem” i podaj powód.'},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
@@ -287,9 +387,19 @@ class UpdateOrderStatusView(APIView):
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
+        if new_status == 'delivered' and order.status != 'delivered':
+            order.delivered_at = timezone.now()
+        elif new_status != 'delivered':
+            order.delivered_at = None
+
+        order.failure_reason = ''
+        order.failure_note = ''
+        order.failed_at = None
         order.status = new_status
-        order.save(update_fields=['status'])
-        return Response({'do_id': order.do_id, 'status': order.status})
+        order.save(update_fields=[
+            'status', 'delivered_at', 'failure_reason', 'failure_note', 'failed_at', 'updated_at',
+        ])
+        return Response({'do_id': order.do_id, 'status': order.status, 'delivered_at': order.delivered_at})
 
 class DeliverStopView(APIView):
     permission_classes = [IsAuthenticated]
@@ -323,12 +433,125 @@ class DeliverStopView(APIView):
                     {'error': 'U tego klienta nie ma dziś zamówień w dostawie.'},
                     status=http_status.HTTP_400_BAD_REQUEST,
                 )
+            now = timezone.now()
             DailyOrder.objects.filter(pk__in=delivered_ids).update(
                 status='delivered',
+                delivered_at=now,
+                updated_at=now,
+            )
+
+        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': now})
+
+class ReportStopProblemView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        client = get_object_or_404(Client, pk=pk)
+
+        if user.role == 'driver' and client.route.driver_id != user.user_id:
+            return Response(
+                {'error': 'Nie masz dostępu do tego przystanku.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        return _report_failure(request, client, DailyOrder.objects.filter(client=client))
+
+
+class ReportOrderProblemView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        order = get_object_or_404(DailyOrder.objects.select_related('client__route'), pk=pk)
+
+        if user.role == 'driver' and order.client.route.driver_id != user.user_id:
+            return Response(
+                {'error': 'Nie masz dostępu do tego zamówienia.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        return _report_failure(request, order.client, DailyOrder.objects.filter(pk=order.pk))
+
+class WithdrawProblemView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        order_ids = request.data.get('order_ids')
+        if (
+            not isinstance(order_ids, list)
+            or not order_ids
+            or not all(isinstance(i, int) for i in order_ids)
+        ):
+            return Response(
+                {'error': 'Podaj listę zamówień, dla których chcesz wycofać zgłoszenie.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        requested_ids = set(order_ids)
+
+        with transaction.atomic():
+            orders = list(
+                DailyOrder.objects
+                .select_for_update(of=('self',))
+                .select_related('client__route', 'product')
+                .filter(pk__in=requested_ids, order_date=date.today(), status='failed')
+            )
+
+            if user.role == 'driver' and any(o.client.route.driver_id != user.user_id for o in orders):
+                return Response(
+                    {'error': 'Nie masz dostępu do tych zamówień.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
+            if {o.do_id for o in orders} != requested_ids:
+                return Response(
+                    {'error': 'Części zgłoszeń nie można już wycofać. Odśwież dane.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+
+            DailyOrder.objects.filter(pk__in=requested_ids).update(
+                status='in_delivery',
+                failure_reason='',
+                failure_note='',
+                failed_at=None,
                 updated_at=timezone.now(),
             )
 
-        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids})
+            orders_by_client = {}
+            for order in orders:
+                orders_by_client.setdefault(order.client, []).append(order)
+            for client, client_orders in orders_by_client.items():
+                _notify_admins(
+                    user,
+                    f'Zgłoszenie wycofane: {client.name}',
+                    f'{user.full_name} wycofał zgłoszenie problemu z dostawą do klienta '
+                    f'{client.name} ({client.address}).\n'
+                    f'Pozycje: {_format_order_items(client_orders)}\n'
+                    f'Zamówienia wróciły do statusu „W dostawie”.',
+                )
+
+        return Response({'reverted_ids': sorted(requested_ids)})
 
 class RouteDirectionsView(APIView):
     permission_classes = [IsAuthenticated]

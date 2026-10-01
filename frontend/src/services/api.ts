@@ -1,11 +1,11 @@
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 export interface TodayOrder {
   client_name: string;
   product_name: string;
   quantity: number;
   price_at_sale: string;
-  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
 }
 
 export interface IngredientUsed {
@@ -85,7 +85,7 @@ export function logoutUser(): void {
 export async function fetchDashboard(): Promise<any> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -100,7 +100,6 @@ export async function fetchDashboard(): Promise<any> {
   }
   return response.json();
 }
-
 
 export interface AppUser {
   user_id: number;
@@ -177,7 +176,6 @@ export async function deleteUser(userId: number): Promise<void> {
   await handleJsonResponse(response);
 }
 
-
 export interface RouteOption {
   route_id: number;
   route_name: string;
@@ -189,6 +187,7 @@ export interface AppClient {
   name: string;
   address: string;
   nip: string | null;
+  phone: string;
   route: number;
   route_details: RouteOption;
   is_active: boolean;
@@ -217,7 +216,6 @@ export async function saveClient(payload: any, clientId: number | null = null): 
   });
   return handleJsonResponse(response);
 }
-
 
 export interface AppIngredient {
   ingredient_id: number;
@@ -303,7 +301,6 @@ export async function deleteRecipe(productId: number): Promise<void> {
   await handleJsonResponse(response);
 }
 
-
 export async function fetchDailyOrders(dateStr?: string): Promise<any[]> {
   const url = dateStr ? `${API_BASE}/orders/daily/?date=${dateStr}` : `${API_BASE}/orders/daily/`;
   const response = await fetch(url, { headers: authHeaders() });
@@ -319,7 +316,6 @@ export async function fetchOrderHistory(): Promise<any[]> {
   const response = await fetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
-
 
 export interface AppNotification {
   id: number;
@@ -377,7 +373,6 @@ export async function markAllNotificationsRead(): Promise<void> {
   });
   await handleJsonResponse(response);
 }
-
 
 export interface DailySummary {
   date: string;
@@ -460,22 +455,30 @@ export async function createExpense(payload: {
 }
 
 export async function fetchCategoryBreakdown(start?: string, end?: string): Promise<CategoryBreakdownRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchPeriodIncomes(start?: string, end?: string): Promise<PeriodIncomeRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchTopClients(start?: string, end?: string): Promise<TopClientRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
 export async function fetchProfitTrend(start?: string, end?: string): Promise<ProfitTrendRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), { headers: authHeaders() });
+  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
@@ -500,18 +503,24 @@ export async function deleteFinancialReport(reportDate: string): Promise<void> {
   await handleJsonResponse(response);
 }
 
+export type FailureReason = 'closed' | 'refused' | 'no_access' | 'other';
 
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
   quantity: number;
-  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
+  delivered_at: string | null;
+  failure_reason: FailureReason | '';
+  failure_note: string;
+  failed_at: string | null;
 }
 
 export interface LogisticsStop {
   client_id: number;
   name: string;
   address: string;
+  phone: string;
   latitude: string | null;
   longitude: string | null;
   orders: LogisticsOrder[];
@@ -537,13 +546,14 @@ export interface LogisticsDriverOption {
 
 export interface LogisticsData {
   date: string;
+  today: string;
   routes: LogisticsRoute[];
   unassigned: LogisticsStop[];
   viewer: LogisticsViewer;
   drivers: LogisticsDriverOption[];
 }
 
-export async function fetchLogistics(driverId?: number): Promise<LogisticsData> {
+export async function fetchLogistics(driverId?: number, date?: string): Promise<LogisticsData> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -551,7 +561,11 @@ export async function fetchLogistics(driverId?: number): Promise<LogisticsData> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = driverId ? `${API_BASE}/logistics/?driver=${driverId}` : `${API_BASE}/logistics/`;
+  const params = new URLSearchParams();
+  if (driverId) params.set('driver', String(driverId));
+  if (date) params.set('date', date);
+  const query = params.toString();
+  const url = query ? `${API_BASE}/logistics/?${query}` : `${API_BASE}/logistics/`;
   const response = await fetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {
@@ -606,7 +620,7 @@ export async function fetchRouteDirections(routeId: number, date?: string): Prom
 export async function updateOrderStatus(
   orderId: number,
   newStatus: LogisticsOrder['status']
-): Promise<{ do_id: number; status: string }> {
+): Promise<{ do_id: number; status: string; delivered_at: string | null }> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -631,7 +645,9 @@ export async function updateOrderStatus(
   return response.json();
 }
 
-export async function deliverStop(clientId: number): Promise<{ client_id: number; delivered_ids: number[] }> {
+export async function deliverStop(
+  clientId: number
+): Promise<{ client_id: number; delivered_ids: number[]; delivered_at: string }> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -655,11 +671,76 @@ export async function deliverStop(clientId: number): Promise<{ client_id: number
   return response.json();
 }
 
+export interface ReportProblemResult {
+  client_id: number;
+  failed_ids: number[];
+  failure_reason: FailureReason;
+  failure_note: string;
+  failed_at: string;
+}
+
+async function postProblemReport(path: string, reason: FailureReason, note: string): Promise<ReportProblemResult> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ reason, note }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export function reportStopProblem(clientId: number, reason: FailureReason, note: string) {
+  return postProblemReport(`/logistics/clients/${clientId}/report-problem/`, reason, note);
+}
+
+export function reportOrderProblem(orderId: number, reason: FailureReason, note: string) {
+  return postProblemReport(`/logistics/orders/${orderId}/report-problem/`, reason, note);
+}
+
+export async function withdrawProblemReport(orderIds: number[]): Promise<{ reverted_ids: number[] }> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/logistics/problems/withdraw/`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ order_ids: orderIds }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
 
 export async function fetchSuppliers(): Promise<any[]> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -675,25 +756,22 @@ export async function fetchSuppliers(): Promise<any[]> {
   return response.json();
 }
 
-
 export async function saveSupplier(payload: any, supplierId: number | null = null): Promise<any> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = supplierId 
-    ? `${API_BASE}/finance/suppliers/${supplierId}/` 
-    : `${API_BASE}/finance/suppliers/`;
-    
+  const url = supplierId ? `${API_BASE}/finance/suppliers/${supplierId}/` : `${API_BASE}/finance/suppliers/`;
+
   const method = supplierId ? 'PUT' : 'POST';
 
   const response = await fetch(url, {
     method,
     headers,
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {

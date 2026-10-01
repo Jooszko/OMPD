@@ -6,6 +6,7 @@ from django.db import transaction
 from clients.models import Route
 from orders.models import DailyOrder
 from products.models import Product
+from dashboard.seed.orders import seed_delivery_fields
 
 STATUS_CYCLE = ['planned', 'in_production', 'in_delivery', 'delivered']
 
@@ -64,6 +65,7 @@ class Command(BaseCommand):
                         'quantity': 5 + (i * 3),
                         'price_at_sale': product.base_price,
                         'status': status,
+                        **seed_delivery_fields(status, today, client.client_id),
                     },
                 )
                 if created:

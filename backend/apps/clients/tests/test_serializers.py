@@ -68,3 +68,34 @@ class ClientSerializerCoordinatesTests(TestCase):
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertNotIn('geocoded_at', serializer.validated_data)
+
+class ClientSerializerPhoneTests(TestCase):
+    def setUp(self):
+        self.route = Route.objects.create(route_name='Trasa Tel')
+        self.client_obj = Client.objects.create(name='Klient Tel', address='Rynek 2, Skoczów', route=self.route)
+
+    def save_phone(self, phone):
+        serializer = ClientSerializer(self.client_obj, data={'phone': phone}, partial=True)
+        return serializer, serializer.is_valid()
+
+    def test_phone_is_normalized(self):
+        serializer, valid = self.save_phone('+48 600-100 (200)')
+        self.assertTrue(valid, serializer.errors)
+        self.assertEqual(serializer.save().phone, '+48600100200')
+
+    def test_local_nine_digit_phone_is_accepted(self):
+        serializer, valid = self.save_phone('600 100 200')
+        self.assertTrue(valid, serializer.errors)
+        self.assertEqual(serializer.save().phone, '600100200')
+
+    def test_blank_phone_is_allowed(self):
+        serializer, valid = self.save_phone('')
+        self.assertTrue(valid, serializer.errors)
+        self.assertEqual(serializer.save().phone, '')
+
+    def test_invalid_phone_is_rejected(self):
+        for phone in ('abc', '12345', '600 100 20a', '+48 600 100 200 300 400'):
+            with self.subTest(phone=phone):
+                serializer, valid = self.save_phone(phone)
+                self.assertFalse(valid)
+                self.assertIn('phone', serializer.errors)

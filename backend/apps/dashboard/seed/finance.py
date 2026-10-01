@@ -93,7 +93,7 @@ def create_financial_reports(date_range):
     today = date_range[-1]
 
     for report_date in date_range:
-        orders_qs = DailyOrder.objects.filter(order_date=report_date).exclude(status='cancelled')
+        orders_qs = DailyOrder.objects.filter(order_date=report_date).exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
         revenue = orders_qs.aggregate(
             total=Sum(
                 ExpressionWrapper(

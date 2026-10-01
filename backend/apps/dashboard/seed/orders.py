@@ -1,9 +1,36 @@
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from orders.models import DailyOrder, StandingOrder
 
 STANDING_ORDER_EXTRA_CLIENT_COUNT = 10
-DAILY_ORDER_STATUSES_PAST = ['delivered', 'delivered', 'delivered', 'delivered', 'cancelled']
+DAILY_ORDER_STATUSES_PAST = ['delivered'] * 8 + ['failed', 'cancelled']
 DAILY_ORDER_STATUSES_TODAY = ['planned', 'in_production', 'in_delivery', 'delivered']
 AD_HOC_ORDERS_PER_TRIGGER_DAY = 3
+
+SEED_TIMEZONE = ZoneInfo('Europe/Warsaw')
+SEED_ROUTE_START = time(6, 30)
+SEED_ROUTE_SPAN_MINUTES = 300
+SEED_FAILURE_REASONS = ['closed', 'no_access', 'refused']
+
+
+def seed_event_time(order_date, client_id):
+    minutes = (client_id * 37 + order_date.toordinal()) % SEED_ROUTE_SPAN_MINUTES
+    moment = datetime.combine(order_date, SEED_ROUTE_START, tzinfo=SEED_TIMEZONE) + timedelta(minutes=minutes)
+    return min(moment, timezone.now())
+
+
+def seed_delivery_fields(status, order_date, client_id):
+    if status == 'delivered':
+        return {'delivered_at': seed_event_time(order_date, client_id)}
+    if status == 'failed':
+        return {
+            'failure_reason': SEED_FAILURE_REASONS[client_id % len(SEED_FAILURE_REASONS)],
+            'failed_at': seed_event_time(order_date, client_id),
+        }
+    return {}
 
 
 def create_standing_orders(clients, products):
@@ -69,6 +96,7 @@ def create_daily_orders(clients, products, standing_orders, date_range):
                     'quantity': quantity,
                     'price_at_sale': standing_order.price_at_sale,
                     'status': status,
+                    **seed_delivery_fields(status, order_date, standing_order.client_id),
                 },
             )
             if created:
@@ -88,6 +116,7 @@ def create_daily_orders(clients, products, standing_orders, date_range):
                         'quantity': quantity,
                         'price_at_sale': product.base_price,
                         'status': status,
+                        **seed_delivery_fields(status, order_date, client.client_id),
                     },
                 )
                 if created:
