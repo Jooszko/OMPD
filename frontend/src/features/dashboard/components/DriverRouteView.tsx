@@ -5,12 +5,14 @@ import {
   type LogisticsOrder,
   type LogisticsRoute,
   type RouteDirections,
+  type FailureReason,
 } from '../../../services/api';
 import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
 import { RouteSummary } from './RouteSummary';
 import { orderStopsByRoute } from '../lib/stopOrder';
 import { getRouteProgress } from '../lib/routeProgress';
+import { type ProblemTarget } from './ReportProblemDialog';
 
 export function DriverRouteView({
   date,
@@ -19,6 +21,7 @@ export function DriverRouteView({
   updatingId,
   onDeliverStop,
   deliveringStopId,
+  onReportProblem,
   onRefresh,
   refreshing,
   lastUpdatedAt,
@@ -31,6 +34,7 @@ export function DriverRouteView({
   updatingId: number | null;
   onDeliverStop: (clientId: number) => void;
   deliveringStopId: number | null;
+  onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
   onRefresh: () => void;
   refreshing: boolean;
   lastUpdatedAt: Date | null;
@@ -44,8 +48,9 @@ export function DriverRouteView({
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const deliveriesToday = route?.stops.filter((s) => s.orders.length > 0).length ?? 0;
   const sequencedStops = route ? orderStopsByRoute(route.stops, directions) : [];
-  const progress = route ? getRouteProgress(route.stops) : { done: 0, total: 0 };
+  const progress = route ? getRouteProgress(route.stops) : { done: 0, failed: 0, total: 0 };
   const allDone = progress.total > 0 && progress.done === progress.total;
+  const allDelivered = allDone && progress.failed === 0;
   const dateLabel = date
     ? new Date(`${date}T00:00:00`).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })
     : '';
@@ -160,7 +165,12 @@ export function DriverRouteView({
               </span>
               {progress.total > 0 && (
                 <span className="text-xs font-bold text-gray-300 whitespace-nowrap">
-                  {allDone ? 'Wszystko dostarczone' : `Dostarczono ${progress.done} / ${progress.total}`}
+                  {allDelivered
+                    ? 'Wszystko dostarczone'
+                    : allDone
+                      ? 'Trasa zakończona'
+                      : `Obsłużono ${progress.done} / ${progress.total}`}
+                  {progress.failed > 0 && <span className="text-rose-300"> · problemy: {progress.failed}</span>}
                 </span>
               )}
             </div>
@@ -175,7 +185,7 @@ export function DriverRouteView({
               >
                 <div
                   className={`h-full rounded-full transition-[width] duration-500 ${
-                    allDone ? 'bg-emerald-600' : 'bg-bakery-accent'
+                    allDelivered ? 'bg-emerald-600' : 'bg-bakery-accent'
                   }`}
                   style={{ width: `${(progress.done / progress.total) * 100}%` }}
                 />
@@ -200,6 +210,7 @@ export function DriverRouteView({
                   updatingId={updatingId}
                   onDeliverStop={onDeliverStop}
                   deliveringStopId={deliveringStopId}
+                  onReportProblem={onReportProblem}
                 />
               ))
             )}

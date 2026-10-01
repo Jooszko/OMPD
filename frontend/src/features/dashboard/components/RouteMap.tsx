@@ -7,14 +7,23 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { type LogisticsStop, type RouteDirections } from '../../../services/api';
 import { getStopSequences } from '../lib/stopOrder';
-import { isStopDelivered } from '../lib/routeProgress';
+import { getStopState, type StopState } from '../lib/routeProgress';
 
 const DELIVERY_COLOR = '#f49f1c';
 const NO_DELIVERY_COLOR = '#9ca3af';
 const CLUSTER_COLOR = '#1f1f1f';
 const DELIVERED_COLOR = '#059669';
 
-type StopMarker = L.Marker & { __hasDelivery?: boolean; __sequence?: number | null; __delivered?: boolean };
+const FAILED_COLOR = '#e11d48';
+
+const SEQUENCE_STYLE: Record<StopState, { background: string; color: string }> = {
+  none: { background: DELIVERY_COLOR, color: '#1f1f1f' },
+  pending: { background: DELIVERY_COLOR, color: '#1f1f1f' },
+  delivered: { background: DELIVERED_COLOR, color: 'white' },
+  failed: { background: FAILED_COLOR, color: 'white' },
+};
+
+type StopMarker = L.Marker & { __hasDelivery?: boolean; __sequence?: number | null; __state?: StopState };
 
 function statusIcon(hasDeliveryToday: boolean) {
   return L.divIcon({
@@ -32,12 +41,13 @@ function statusIcon(hasDeliveryToday: boolean) {
   });
 }
 
-function sequenceIcon(sequence: number, delivered: boolean) {
+function sequenceIcon(sequence: number, state: StopState) {
+  const { background, color } = SEQUENCE_STYLE[state];
   return L.divIcon({
     className: '',
     html: `<div style="
-      background:${delivered ? DELIVERED_COLOR : DELIVERY_COLOR};
-      color:${delivered ? 'white' : '#1f1f1f'};
+      background:${background};
+      color:${color};
       width:24px;height:24px;
       border-radius:50%;
       border:2px solid white;
@@ -71,6 +81,15 @@ function MapLegend() {
           1
         </span>
         Dostarczone
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[8px] font-extrabold text-white border border-white shadow-xs"
+          style={{ background: FAILED_COLOR }}
+        >
+          1
+        </span>
+        Nieudana dostawa
       </span>
       <span className="flex items-center gap-1.5">
         <span
@@ -113,14 +132,20 @@ function clusterIcon(cluster: L.MarkerCluster) {
     .filter((s): s is number => s != null)
     .sort((a, b) => a - b);
   const count = cluster.getChildCount();
-  const hasPendingSequence = markers.some((m) => m.__sequence != null && !m.__delivered);
+  const sequenced = markers.filter((m) => m.__sequence != null);
+  const badgeState: StopState = sequenced.some((m) => m.__state === 'pending')
+    ? 'pending'
+    : sequenced.some((m) => m.__state === 'failed')
+      ? 'failed'
+      : 'delivered';
+  const badgeStyle = SEQUENCE_STYLE[badgeState];
 
   const badge =
     sequences.length > 0
       ? `<div style="
           position:absolute;top:-9px;right:-11px;
-          background:${hasPendingSequence ? DELIVERY_COLOR : DELIVERED_COLOR};
-          color:${hasPendingSequence ? '#1f1f1f' : 'white'};
+          background:${badgeStyle.background};
+          color:${badgeStyle.color};
           min-width:18px;height:18px;padding:0 4px;
           border-radius:9px;border:2px solid white;
           box-shadow:0 1px 2px rgba(0,0,0,0.4);
@@ -166,14 +191,14 @@ function ClusteredMarkers({
     stops.forEach((stop) => {
       const hasDelivery = stop.orders.length > 0;
       const sequence = sequenceById.get(stop.client_id) ?? null;
-      const delivered = isStopDelivered(stop);
+      const state = getStopState(stop);
       const marker = L.marker([Number(stop.latitude), Number(stop.longitude)], {
-        icon: sequence != null ? sequenceIcon(sequence, delivered) : statusIcon(hasDelivery),
+        icon: sequence != null ? sequenceIcon(sequence, state) : statusIcon(hasDelivery),
         zIndexOffset: sequence != null ? 1000 : 0,
       }) as StopMarker;
       marker.__hasDelivery = hasDelivery;
       marker.__sequence = sequence;
-      marker.__delivered = delivered;
+      marker.__state = state;
 
       const label = sequence != null ? `${sequence}. ${stop.name}` : stop.name;
       marker.bindTooltip(escapeHtml(label), {
@@ -184,7 +209,8 @@ function ClusteredMarkers({
       });
       marker.bindPopup(
         `<strong>${escapeHtml(label)}</strong><br/>${escapeHtml(stop.address)}` +
-          (hasDelivery ? '' : '<br/><em>Brak dostawy dzisiaj</em>')
+          (hasDelivery ? '' : '<br/><em>Brak dostawy dzisiaj</em>') +
+          (state === 'failed' ? '<br/><em>Nieudana dostawa</em>' : '')
       );
 
       clusterGroup.addLayer(marker);

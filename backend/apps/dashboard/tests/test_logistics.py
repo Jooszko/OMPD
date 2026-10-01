@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 from clients.models import Client, Route
 from orders.models import DailyOrder
 from products.models import Product
-from users.models import User
+from users.models import Notification, User
 
 
 class LogisticsViewRoleTests(TestCase):
@@ -230,6 +230,43 @@ class UpdateOrderStatusPermissionTests(TestCase):
         self.order.refresh_from_db()
         self.assertIsNone(self.order.delivered_at)
 
+    def test_nobody_can_set_failed_through_status_patch(self):
+        for user in (self.driver_a, self.admin):
+            with self.subTest(role=user.role):
+                self.api.force_authenticate(user)
+                response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'failed'})
+                self.assertEqual(response.status_code, 400)
+                self.order.refresh_from_db()
+                self.assertEqual(self.order.status, 'in_delivery')
+
+    def _mark_failed(self):
+        self.order.status = 'failed'
+        self.order.failure_reason = 'closed'
+        self.order.failure_note = 'Zamknięte do 10:00'
+        self.order.failed_at = timezone.now()
+        self.order.save(update_fields=['status', 'failure_reason', 'failure_note', 'failed_at'])
+
+    def test_driver_cannot_revert_failed_through_status_patch(self):
+        self._mark_failed()
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'failed')
+
+    def test_admin_reissue_clears_failure_data(self):
+        self._mark_failed()
+        self.api.force_authenticate(self.admin)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'in_delivery')
+        self.assertEqual(self.order.failure_reason, '')
+        self.assertEqual(self.order.failure_note, '')
+        self.assertIsNone(self.order.failed_at)
+
 class DeliverStopTests(TestCase):
     def setUp(self):
         self.api = APIClient()
@@ -307,3 +344,163 @@ class DeliverStopTests(TestCase):
         self.assertIsNotNone(self.in_delivery_1.delivered_at)
         self.assertEqual(self.in_delivery_1.delivered_at, self.in_delivery_2.delivered_at)
         self.assertIsNone(self.planned.delivered_at)
+
+class ReportProblemTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+        self.driver_a = User.objects.create_user(
+            username='driver_a4', password='x', role='driver', full_name='Driver A4'
+        )
+        self.driver_b = User.objects.create_user(
+            username='driver_b4', password='x', role='driver', full_name='Driver B4'
+        )
+        self.admin_1 = User.objects.create_user(
+            username='admin_4a', password='x', role='admin', full_name='Admin 4A'
+        )
+        self.admin_2 = User.objects.create_user(
+            username='admin_4b', password='x', role='admin', full_name='Admin 4B'
+        )
+
+        route_a = Route.objects.create(route_name='Trasa A4', driver=self.driver_a)
+        self.client_a = Client.objects.create(name='Klient A4', address='Adres A4', route=route_a)
+        product = Product.objects.create(name='Kajzerka', category='bread', base_price=Decimal('1.00'))
+
+        def make_order(status):
+            return DailyOrder.objects.create(
+                client=self.client_a, product=product, order_date=date.today(),
+                quantity=4, price_at_sale=Decimal('1.00'), status=status,
+            )
+
+        self.in_delivery_1 = make_order('in_delivery')
+        self.in_delivery_2 = make_order('in_delivery')
+        self.delivered = make_order('delivered')
+
+        self.stop_url = f'/api/logistics/clients/{self.client_a.client_id}/report-problem/'
+
+    def order_url(self, order):
+        return f'/api/logistics/orders/{order.do_id}/report-problem/'
+
+    def refresh_all(self):
+        for order in (self.in_delivery_1, self.in_delivery_2, self.delivered):
+            order.refresh_from_db()
+
+    def test_driver_reports_stop_problem(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.stop_url, {'reason': 'closed', 'note': 'Zamknięte do 10:00'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertCountEqual(response.data['failed_ids'], [self.in_delivery_1.do_id, self.in_delivery_2.do_id])
+        self.refresh_all()
+        for order in (self.in_delivery_1, self.in_delivery_2):
+            self.assertEqual(order.status, 'failed')
+            self.assertEqual(order.failure_reason, 'closed')
+            self.assertEqual(order.failure_note, 'Zamknięte do 10:00')
+            self.assertIsNotNone(order.failed_at)
+        self.assertEqual(self.delivered.status, 'delivered')
+
+    def test_stop_problem_notifies_every_active_admin(self):
+        self.api.force_authenticate(self.driver_a)
+        self.api.post(self.stop_url, {'reason': 'closed'})
+
+        notifications = Notification.objects.all()
+        self.assertCountEqual([n.user for n in notifications], [self.admin_1, self.admin_2])
+        for notification in notifications:
+            self.assertEqual(notification.sender, self.driver_a)
+            self.assertIn('Klient A4', notification.title)
+            self.assertIn('Klient zamknięty', notification.message)
+            self.assertIn('Kajzerka x4', notification.message)
+
+    def test_driver_reports_single_order_problem(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.order_url(self.in_delivery_1), {'reason': 'refused'})
+
+        self.assertEqual(response.status_code, 200)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'failed')
+        self.assertEqual(self.in_delivery_2.status, 'in_delivery')
+
+    def test_invalid_reason_is_rejected_without_side_effects(self):
+        self.api.force_authenticate(self.driver_a)
+        for payload in ({}, {'reason': 'lost'}, {'reason': 'other'}, {'reason': 'closed', 'note': 'x' * 501}):
+            with self.subTest(payload=payload):
+                response = self.api.post(self.stop_url, payload, format='json')
+                self.assertEqual(response.status_code, 400)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'in_delivery')
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_other_driver_cannot_report_problem(self):
+        self.api.force_authenticate(self.driver_b)
+        for url in (self.stop_url, self.order_url(self.in_delivery_1)):
+            with self.subTest(url=url):
+                response = self.api.post(url, {'reason': 'closed'})
+                self.assertEqual(response.status_code, 403)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'in_delivery')
+
+    def test_cannot_report_problem_for_delivered_order(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.order_url(self.delivered), {'reason': 'closed'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_admin_reporting_does_not_notify_themselves(self):
+        self.api.force_authenticate(self.admin_1)
+        self.api.post(self.stop_url, {'reason': 'no_access'})
+
+        self.assertEqual(list(Notification.objects.values_list('user', flat=True)), [self.admin_2.pk])
+
+    withdraw_url = '/api/logistics/problems/withdraw/'
+
+    def test_driver_withdraws_stop_report_and_admins_are_notified(self):
+        self.api.force_authenticate(self.driver_a)
+        self.api.post(self.stop_url, {'reason': 'closed'})
+        Notification.objects.all().delete()
+
+        ids = [self.in_delivery_1.do_id, self.in_delivery_2.do_id]
+        response = self.api.post(self.withdraw_url, {'order_ids': ids}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.refresh_all()
+        for order in (self.in_delivery_1, self.in_delivery_2):
+            self.assertEqual(order.status, 'in_delivery')
+            self.assertEqual(order.failure_reason, '')
+            self.assertIsNone(order.failed_at)
+
+        notifications = Notification.objects.all()
+        self.assertCountEqual([n.user for n in notifications], [self.admin_1, self.admin_2])
+        for notification in notifications:
+            self.assertEqual(notification.title, 'Zgłoszenie wycofane: Klient A4')
+            self.assertIn('Kajzerka x4, Kajzerka x4', notification.message)
+
+    def test_withdraw_is_all_or_nothing(self):
+        self.api.force_authenticate(self.driver_a)
+        self.api.post(self.order_url(self.in_delivery_1), {'reason': 'closed'})
+        Notification.objects.all().delete()
+
+        response = self.api.post(
+            self.withdraw_url, {'order_ids': [self.in_delivery_1.do_id, self.delivered.do_id]}, format='json'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'failed')
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_other_driver_cannot_withdraw(self):
+        self.api.force_authenticate(self.driver_a)
+        self.api.post(self.stop_url, {'reason': 'closed'})
+
+        self.api.force_authenticate(self.driver_b)
+        response = self.api.post(self.withdraw_url, {'order_ids': [self.in_delivery_1.do_id]}, format='json')
+
+        self.assertEqual(response.status_code, 403)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'failed')
+
+    def test_withdraw_rejects_invalid_payload(self):
+        self.api.force_authenticate(self.driver_a)
+        for payload in ({}, {'order_ids': []}, {'order_ids': 'abc'}, {'order_ids': ['1']}):
+            with self.subTest(payload=payload):
+                response = self.api.post(self.withdraw_url, payload, format='json')
+                self.assertEqual(response.status_code, 400)

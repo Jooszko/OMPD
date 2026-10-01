@@ -5,7 +5,7 @@ export interface TodayOrder {
   product_name: string;
   quantity: number;
   price_at_sale: string;
-  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
 }
 
 export interface IngredientUsed {
@@ -503,12 +503,17 @@ export async function deleteFinancialReport(reportDate: string): Promise<void> {
   await handleJsonResponse(response);
 }
 
+export type FailureReason = 'closed' | 'refused' | 'no_access' | 'other';
+
 export interface LogisticsOrder {
   do_id: number;
   product_name: string;
   quantity: number;
-  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'cancelled';
+  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
   delivered_at: string | null;
+  failure_reason: FailureReason | '';
+  failure_note: string;
+  failed_at: string | null;
 }
 
 export interface LogisticsStop {
@@ -648,6 +653,72 @@ export async function deliverStop(
   const response = await fetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
     method: 'POST',
     headers,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export interface ReportProblemResult {
+  client_id: number;
+  failed_ids: number[];
+  failure_reason: FailureReason;
+  failure_note: string;
+  failed_at: string;
+}
+
+async function postProblemReport(path: string, reason: FailureReason, note: string): Promise<ReportProblemResult> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ reason, note }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      logoutUser();
+      window.location.reload();
+    }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export function reportStopProblem(clientId: number, reason: FailureReason, note: string) {
+  return postProblemReport(`/logistics/clients/${clientId}/report-problem/`, reason, note);
+}
+
+export function reportOrderProblem(orderId: number, reason: FailureReason, note: string) {
+  return postProblemReport(`/logistics/orders/${orderId}/report-problem/`, reason, note);
+}
+
+export async function withdrawProblemReport(orderIds: number[]): Promise<{ reverted_ids: number[] }> {
+  const token = getAuthToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/logistics/problems/withdraw/`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ order_ids: orderIds }),
   });
 
   if (!response.ok) {

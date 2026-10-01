@@ -4,13 +4,19 @@ import {
   ApiError,
   deliverStop,
   fetchLogistics,
+  reportOrderProblem,
+  reportStopProblem,
   updateOrderStatus,
+  withdrawProblemReport,
+  type FailureReason,
   type LogisticsData,
   type LogisticsOrder,
 } from '../../../services/api';
 import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
+import { type ProblemTarget } from '../components/ReportProblemDialog';
+import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
 
 const AUTO_REFRESH_MS = 60_000;
 
@@ -51,19 +57,13 @@ export default function Logistics() {
     };
   }, [previewDriverId]);
 
-  const applyOrderStatus = (
-    orderIds: number[],
-    status: LogisticsOrder['status'],
-    deliveredAt: string | null = null
-  ) => {
+  const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
     setData((prev) => {
       if (!prev) return prev;
       const patchStop = (stop: (typeof prev.unassigned)[number]) => ({
         ...stop,
-        orders: stop.orders.map((o) =>
-          ids.has(o.do_id) ? { ...o, status, delivered_at: status === 'delivered' ? deliveredAt : null } : o
-        ),
+        orders: stop.orders.map((o) => (ids.has(o.do_id) ? { ...o, ...patch } : o)),
       });
       return {
         ...prev,
@@ -72,6 +72,15 @@ export default function Logistics() {
       };
     });
   };
+
+  const applyOrderStatus = (orderIds: number[], status: LogisticsOrder['status'], deliveredAt: string | null = null) =>
+    patchOrders(orderIds, {
+      status,
+      delivered_at: status === 'delivered' ? deliveredAt : null,
+      failure_reason: '',
+      failure_note: '',
+      failed_at: null,
+    });
 
   const showActionError = (err: unknown) => {
     if (err instanceof ApiError) {
@@ -90,7 +99,7 @@ export default function Logistics() {
     }
   };
 
-  const undoDelivery = async (orderIds: number[]) => {
+  const revertToInDelivery = async (orderIds: number[]) => {
     setToast(null);
     const results = await Promise.allSettled(orderIds.map((id) => updateOrderStatus(id, 'in_delivery')));
 
@@ -102,8 +111,21 @@ export default function Logistics() {
 
     const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (failure) {
-      console.error('Błąd podczas cofania dostawy:', failure.reason);
+      console.error('Błąd podczas cofania zmiany statusu:', failure.reason);
       showActionError(failure.reason);
+    }
+  };
+
+  const withdrawProblem = async (orderIds: number[]) => {
+    setToast(null);
+    try {
+      const result = await withdrawProblemReport(orderIds);
+      mutationVersion.current += 1;
+      applyOrderStatus(result.reverted_ids, 'in_delivery');
+      setToast({ variant: 'success', text: 'Zgłoszenie wycofane. Biuro zostało powiadomione.' });
+    } catch (err) {
+      console.error('Błąd podczas wycofywania zgłoszenia:', err);
+      showActionError(err);
     }
   };
 
@@ -117,7 +139,7 @@ export default function Logistics() {
         setToast({
           variant: 'success',
           text: 'Oznaczono jako dostarczone.',
-          onUndo: () => undoDelivery([orderId]),
+          onUndo: () => revertToInDelivery([orderId]),
         });
       }
     } catch (err) {
@@ -137,7 +159,7 @@ export default function Logistics() {
       setToast({
         variant: 'success',
         text: `Przystanek oznaczony jako dostarczony (${result.delivered_ids.length} poz.).`,
-        onUndo: () => undoDelivery(result.delivered_ids),
+        onUndo: () => revertToInDelivery(result.delivered_ids),
       });
     } catch (err) {
       console.error('Błąd podczas dostarczania przystanku:', err);
@@ -147,6 +169,32 @@ export default function Logistics() {
     }
   };
 
+  const handleReportProblem = async (target: ProblemTarget, reason: FailureReason, note: string): Promise<boolean> => {
+    try {
+      const result =
+        target.kind === 'stop'
+          ? await reportStopProblem(target.clientId, reason, note)
+          : await reportOrderProblem(target.orderId, reason, note);
+      mutationVersion.current += 1;
+      patchOrders(result.failed_ids, {
+        status: 'failed',
+        delivered_at: null,
+        failure_reason: result.failure_reason,
+        failure_note: result.failure_note,
+        failed_at: result.failed_at,
+      });
+      setToast({
+        variant: 'success',
+        text: `Zgłoszono problem: ${FAILURE_REASON_LABELS[result.failure_reason]}. Biuro zostało powiadomione.`,
+        onUndo: () => withdrawProblem(result.failed_ids),
+      });
+      return true;
+    } catch (err) {
+      console.error('Błąd podczas zgłaszania problemu:', err);
+      showActionError(err);
+      return false;
+    }
+  };
 
   const refreshData = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -225,6 +273,7 @@ export default function Logistics() {
           lastUpdatedAt={lastUpdatedAt}
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
+          onReportProblem={handleReportProblem}
         />
         <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>
@@ -235,6 +284,10 @@ export default function Logistics() {
   const unassigned = data.unassigned;
   const deliveriesToday =
     routes.reduce((sum, r) => sum + r.stops.filter((s) => s.orders.length > 0).length, 0) + unassigned.length;
+  const problemStops = [
+    ...routes.flatMap((route) => route.stops.map((stop) => ({ stop, routeName: route.route_name }))),
+    ...unassigned.map((stop) => ({ stop, routeName: 'Bez trasy' })),
+  ].filter(({ stop }) => stop.orders.some((o) => o.status === 'failed'));
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
@@ -273,6 +326,25 @@ export default function Logistics() {
       </div>
 
       <hr className="border-0 border-t border-bakery-border my-1" />
+
+      {problemStops.length > 0 && (
+        <div className="bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex flex-col gap-2">
+          <p className="m-0 flex items-center gap-2 text-sm font-bold text-rose-800">
+            <AlertTriangle className="w-4 h-4 text-rose-600" /> Problemy z dostawą ({problemStops.length})
+          </p>
+          <ul className="m-0 p-0 list-none flex flex-col gap-1">
+            {problemStops.map(({ stop, routeName }) => {
+              const failedOrder = stop.orders.find((o) => o.status === 'failed');
+              return (
+                <li key={stop.client_id} className="text-xs text-rose-900">
+                  <span className="font-bold">{stop.name}</span> · {routeName}
+                  {failedOrder?.failure_reason && ` · ${FAILURE_REASON_LABELS[failedOrder.failure_reason]}`}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {routes.length === 0 && unassigned.length === 0 ? (
         <div className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-sm p-8 flex flex-col items-center gap-2 text-center text-gray-500 text-sm font-semibold italic">
