@@ -119,6 +119,26 @@ class LogisticsViewRoleTests(TestCase):
         stop = next(s for s in response.data['routes'][0]['stops'] if s['name'] == 'Klient A')
         self.assertEqual(stop['phone'], '+48600100200')
 
+    def test_date_param_returns_orders_for_that_day(self):
+        yesterday = date.today() - timedelta(days=1)
+        past_order = DailyOrder.objects.create(
+            client=self.client_a, product=self.product, order_date=yesterday,
+            quantity=7, price_at_sale=Decimal('10.00'), status='delivered',
+        )
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.get(f'/api/logistics/?date={yesterday.isoformat()}')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['date'], str(yesterday))
+        self.assertEqual(response.data['today'], str(date.today()))
+        stop = next(s for s in response.data['routes'][0]['stops'] if s['name'] == 'Klient A')
+        self.assertEqual([o['do_id'] for o in stop['orders']], [past_order.do_id])
+
+    def test_invalid_date_param_returns_400(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.get('/api/logistics/?date=30-09-2026')
+        self.assertEqual(response.status_code, 400)
+
 class UpdateOrderStatusPermissionTests(TestCase):
     def setUp(self):
         self.api = APIClient()

@@ -546,13 +546,14 @@ export interface LogisticsDriverOption {
 
 export interface LogisticsData {
   date: string;
+  today: string;
   routes: LogisticsRoute[];
   unassigned: LogisticsStop[];
   viewer: LogisticsViewer;
   drivers: LogisticsDriverOption[];
 }
 
-export async function fetchLogistics(driverId?: number): Promise<LogisticsData> {
+export async function fetchLogistics(driverId?: number, date?: string): Promise<LogisticsData> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -560,7 +561,11 @@ export async function fetchLogistics(driverId?: number): Promise<LogisticsData> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = driverId ? `${API_BASE}/logistics/?driver=${driverId}` : `${API_BASE}/logistics/`;
+  const params = new URLSearchParams();
+  if (driverId) params.set('driver', String(driverId));
+  if (date) params.set('date', date);
+  const query = params.toString();
+  const url = query ? `${API_BASE}/logistics/?${query}` : `${API_BASE}/logistics/`;
   const response = await fetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {

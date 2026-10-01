@@ -48,7 +48,7 @@ class SeedOrdersTests(TestCase):
         self.assertEqual(DailyOrder.objects.count(), created_count)
         dates_with_orders = set(DailyOrder.objects.values_list('order_date', flat=True))
         self.assertGreater(len(dates_with_orders), 20)
-        valid_statuses = {'planned', 'in_production', 'in_delivery', 'delivered', 'cancelled'}
+        valid_statuses = {'planned', 'in_production', 'in_delivery', 'delivered', 'failed', 'cancelled'}
         used_statuses = set(DailyOrder.objects.values_list('status', flat=True))
         self.assertTrue(used_statuses.issubset(valid_statuses))
 
@@ -60,3 +60,15 @@ class SeedOrdersTests(TestCase):
         create_daily_orders(self.clients, self.products, standing_orders, self.date_range)
 
         self.assertEqual(DailyOrder.objects.count(), first_count)
+
+    def test_seeded_delivered_and_failed_orders_have_event_details(self):
+        standing_orders = create_standing_orders(self.clients, self.products)
+        create_daily_orders(self.clients, self.products, standing_orders, self.date_range)
+
+        delivered = DailyOrder.objects.filter(status='delivered')
+        failed = DailyOrder.objects.filter(status='failed')
+        self.assertTrue(delivered.exists())
+        self.assertTrue(failed.exists())
+        self.assertFalse(delivered.filter(delivered_at__isnull=True).exists())
+        self.assertFalse(failed.filter(failed_at__isnull=True).exists())
+        self.assertFalse(failed.filter(failure_reason='').exists())

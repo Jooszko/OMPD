@@ -151,11 +151,21 @@ class LogisticsView(APIView):
         else:
             scoped_driver_id = None
 
-        today = date.today()
+        date_param = request.query_params.get('date')
+        if date_param:
+            try:
+                target_date = date.fromisoformat(date_param)
+            except ValueError:
+                return Response(
+                    {'error': 'Nieprawidłowy format daty (YYYY-MM-DD).'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            target_date = date.today()
 
-        orders_today = (
+        orders_for_day = (
             DailyOrder.objects
-            .filter(order_date=today)
+            .filter(order_date=target_date)
             .exclude(status='cancelled')
             .select_related('client', 'product')
             .order_by('client__name')
@@ -163,7 +173,7 @@ class LogisticsView(APIView):
 
         orders_by_client = {}
         client_by_id = {}
-        for o in orders_today:
+        for o in orders_for_day:
             orders_by_client.setdefault(o.client_id, []).append({
                 'do_id': o.do_id,
                 'product_name': o.product.name,
@@ -241,7 +251,8 @@ class LogisticsView(APIView):
             ]
 
         return Response({
-            'date': str(today),
+            'date': str(target_date),
+            'today': str(date.today()),
             'routes': routes_data,
             'unassigned': unassigned,
             'viewer': {

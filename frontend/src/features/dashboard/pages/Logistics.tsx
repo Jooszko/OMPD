@@ -27,6 +27,7 @@ export default function Logistics() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [deliveringStopId, setDeliveringStopId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [toast, setToast] = useState<ActionToastData | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +38,7 @@ export default function Logistics() {
     let cancelled = false;
     setLoading(true);
 
-    fetchLogistics(previewDriverId ?? undefined)
+    fetchLogistics(previewDriverId ?? undefined, selectedDate ?? undefined)
       .then((result) => {
         if (!cancelled) {
           setData(result);
@@ -55,7 +56,7 @@ export default function Logistics() {
     return () => {
       cancelled = true;
     };
-  }, [previewDriverId]);
+  }, [previewDriverId, selectedDate]);
 
   const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
@@ -204,7 +205,7 @@ export default function Logistics() {
         setRefreshing(true);
       }
       try {
-        const result = await fetchLogistics(previewDriverId ?? undefined);
+        const result = await fetchLogistics(previewDriverId ?? undefined, selectedDate ?? undefined);
         if (mutationVersion.current !== versionAtStart) return;
         setData(result);
         setError(null);
@@ -217,7 +218,7 @@ export default function Logistics() {
         if (!silent) setRefreshing(false);
       }
     },
-    [previewDriverId]
+    [previewDriverId, selectedDate]
   );
 
   useEffect(() => {
@@ -263,6 +264,8 @@ export default function Logistics() {
       <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6">
         <DriverRouteView
           date={data.date}
+          today={data.today}
+          onChangeDate={setSelectedDate}
           routes={data.routes}
           onAdvance={handleAdvance}
           updatingId={updatingId}

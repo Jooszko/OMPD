@@ -60,6 +60,7 @@ export function DriverStopCard({
   stop,
   sequence,
   isNext = false,
+  readOnly = false,
   onAdvance,
   updatingId,
   onDeliverStop,
@@ -69,6 +70,7 @@ export function DriverStopCard({
   stop: LogisticsStop;
   sequence?: number | null;
   isNext?: boolean;
+  readOnly?: boolean;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
   onDeliverStop: (clientId: number) => void;
@@ -85,8 +87,8 @@ export function DriverStopCard({
   const handled = stopState === 'delivered' || stopState === 'failed';
   const deliveredAt = stopState === 'delivered' ? getStopDeliveredAt(stop) : null;
   const failureReason = stop.orders.find((o) => o.status === 'failed')?.failure_reason || null;
-  const showCall = hasDeliveryToday && stopState !== 'delivered' && !!stop.phone;
-  const showNavigate = stopState === 'pending';
+  const showCall = !readOnly && hasDeliveryToday && stopState !== 'delivered' && !!stop.phone;
+  const showNavigate = !readOnly && stopState === 'pending';
 
   const openStopProblem = () =>
     setProblemDialog({
@@ -225,8 +227,8 @@ export function DriverStopCard({
       {hasDeliveryToday && (
         <div className="flex flex-col gap-1.5 mt-1">
           {stop.orders.map((order) => {
-            const next = getDriverNextStep(order.status);
-            const canReport = order.status === 'in_delivery';
+            const next = readOnly ? null : getDriverNextStep(order.status);
+            const canReport = !readOnly && order.status === 'in_delivery';
             const busy = updatingId === order.do_id || isDeliveringStop;
             return (
               <div
@@ -285,7 +287,7 @@ export function DriverStopCard({
               </div>
             );
           })}
-          {inDeliveryCount >= 2 && (
+          {!readOnly && inDeliveryCount >= 2 && (
             <div className="flex gap-2 mt-1">
               <button
                 type="button"
