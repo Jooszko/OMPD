@@ -1,4 +1,4 @@
-import { AlertTriangle, MapPin, Package } from 'lucide-react';
+import { AlertTriangle, MapPin, Package, StickyNote } from 'lucide-react';
 import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
 import { FAILURE_REASON_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getNextStep } from '../lib/logisticsStatus';
 import { formatTime } from '../lib/dateFormat';
@@ -29,6 +29,7 @@ export function StopCard({
 }) {
   const hasDeliveryToday = stop.orders.length > 0;
   const hasProblem = stop.orders.some((o) => o.status === 'failed');
+  const deliveryNote = stop.orders.find((o) => o.status === 'delivered' && o.delivery_note)?.delivery_note ?? '';
 
   const handleCancel = (order: LogisticsOrder) => {
     const confirmed = window.confirm(
@@ -118,6 +119,12 @@ export function StopCard({
             );
           })}
         </div>
+      )}
+      {deliveryNote && (
+        <p className="m-0 flex items-start gap-1.5 text-[11px] text-bakery-dark bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          <StickyNote className="w-3.5 h-3.5 text-bakery-accent shrink-0 mt-px" />
+          <span className="italic break-words">„{deliveryNote}”</span>
+        </p>
       )}
     </div>
   );

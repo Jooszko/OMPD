@@ -180,6 +180,7 @@ class LogisticsView(APIView):
                 'quantity': o.quantity,
                 'status': o.status,
                 'delivered_at': o.delivered_at,
+                'delivery_note': o.delivery_note,
                 'failure_reason': o.failure_reason,
                 'failure_note': o.failure_note,
                 'failed_at': o.failed_at,
@@ -273,7 +274,7 @@ DRIVER_UNDO_WINDOW = timedelta(minutes=10)
 def _within_driver_undo_window(moment):
     return moment is not None and timezone.now() - moment <= DRIVER_UNDO_WINDOW
 
-MAX_FAILURE_NOTE_LENGTH = 500
+MAX_NOTE_LENGTH = 500
 
 
 def _notify_admins(sender, title, message):
@@ -312,9 +313,9 @@ def _report_failure(request, client, orders_qs):
             {'error': 'Przy powodzie „Inny powód” opisz problem w notatce.'},
             status=http_status.HTTP_400_BAD_REQUEST,
         )
-    if len(note) > MAX_FAILURE_NOTE_LENGTH:
+    if len(note) > MAX_NOTE_LENGTH:
         return Response(
-            {'error': f'Notatka może mieć najwyżej {MAX_FAILURE_NOTE_LENGTH} znaków.'},
+            {'error': f'Notatka może mieć najwyżej {MAX_NOTE_LENGTH} znaków.'},
             status=http_status.HTTP_400_BAD_REQUEST,
         )
 
@@ -401,13 +402,14 @@ class UpdateOrderStatusView(APIView):
             order.delivered_at = timezone.now()
         elif new_status != 'delivered':
             order.delivered_at = None
+            order.delivery_note = ''
 
         order.failure_reason = ''
         order.failure_note = ''
         order.failed_at = None
         order.status = new_status
         order.save(update_fields=[
-            'status', 'delivered_at', 'failure_reason', 'failure_note', 'failed_at', 'updated_at',
+            'status', 'delivered_at', 'failure_reason', 'failure_note', 'failed_at', 'updated_at', 'delivery_note'
         ])
         return Response({'do_id': order.do_id, 'status': order.status, 'delivered_at': order.delivered_at})
 
@@ -451,6 +453,58 @@ class DeliverStopView(APIView):
             )
 
         return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': now})
+
+class StopDeliveryNoteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        client = get_object_or_404(Client, pk=pk)
+
+        if user.role == 'driver' and client.route.driver_id != user.user_id:
+            return Response(
+                {'error': 'Nie masz dostępu do tego przystanku.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        note = request.data.get('note', '')
+        if not isinstance(note, str):
+            return Response(
+                {'error': 'Notatka musi być tekstem.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        note = note.strip()
+        if len(note) > MAX_NOTE_LENGTH:
+            return Response(
+                {'error': f'Notatka może mieć najwyżej {MAX_NOTE_LENGTH} znaków.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            updated_ids = list(
+                DailyOrder.objects
+                .select_for_update()
+                .filter(client=client, order_date=date.today(), status='delivered')
+                .values_list('do_id', flat=True)
+            )
+            if not updated_ids:
+                return Response(
+                    {'error': 'U tego klienta nie ma dziś dostarczonych zamówień.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+            DailyOrder.objects.filter(pk__in=updated_ids).update(
+                delivery_note=note,
+                updated_at=timezone.now(),
+            )
+
+        return Response({'client_id': client.client_id, 'updated_ids': updated_ids, 'delivery_note': note})
 
 class ReportStopProblemView(APIView):
     permission_classes = [IsAuthenticated]

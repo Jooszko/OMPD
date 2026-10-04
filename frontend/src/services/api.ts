@@ -552,6 +552,7 @@ export interface LogisticsOrder {
   quantity: number;
   status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
   delivered_at: string | null;
+  delivery_note: string;
   failure_reason: FailureReason | '';
   failure_note: string;
   failed_at: string | null;
@@ -772,6 +773,23 @@ export async function withdrawProblemReport(orderIds: number[]): Promise<{ rever
       logoutUser();
       window.location.reload();
     }
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function saveStopDeliveryNote(
+  clientId: number,
+  note: string
+): Promise<{ client_id: number; updated_ids: number[]; delivery_note: string }> {
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/delivery-note/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+
+  if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
   }

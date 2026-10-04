@@ -50,3 +50,5 @@ export const FAILURE_REASON_LABELS: Record<FailureReason, string> = {
   no_access: 'Brak dojazdu / dostępu',
   other: 'Inny powód',
 };
+
+export const MAX_NOTE_LENGTH = 500;

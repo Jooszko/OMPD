@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, CircleCheck, MapPin, Navigation, Package, Phone } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
+  MapPin,
+  Navigation,
+  Package,
+  Phone,
+  StickyNote,
+} from 'lucide-react';
 import { type FailureReason, type LogisticsOrder, type LogisticsStop } from '../../../services/api';
 import {
   FAILURE_REASON_LABELS,
@@ -11,6 +21,7 @@ import { getStopDeliveredAt, getStopState, type StopState } from '../lib/routePr
 import { formatTime } from '../lib/dateFormat';
 import { buildGoogleMapsStopUrl } from '../lib/navigationLinks';
 import { ReportProblemDialog, type ProblemTarget } from './ReportProblemDialog';
+import { DeliveryNoteDialog } from './DeliveryNoteDialog';
 
 const SEQUENCE_BADGE_CLASSES: Record<StopState, string> = {
   none: 'bg-bakery-accent text-black',
@@ -66,6 +77,7 @@ export function DriverStopCard({
   onDeliverStop,
   deliveringStopId,
   onReportProblem,
+  onSaveDeliveryNote,
 }: {
   stop: LogisticsStop;
   sequence?: number | null;
@@ -76,10 +88,11 @@ export function DriverStopCard({
   onDeliverStop: (clientId: number) => void;
   deliveringStopId: number | null;
   onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
+  onSaveDeliveryNote: (clientId: number, note: string) => Promise<boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [problemDialog, setProblemDialog] = useState<ProblemDialogState | null>(null);
-
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const hasDeliveryToday = stop.orders.length > 0;
   const inDeliveryCount = stop.orders.filter((o) => o.status === 'in_delivery').length;
   const isDeliveringStop = deliveringStopId === stop.client_id;
@@ -89,6 +102,8 @@ export function DriverStopCard({
   const failureReason = stop.orders.find((o) => o.status === 'failed')?.failure_reason || null;
   const showCall = !readOnly && hasDeliveryToday && stopState !== 'delivered' && !!stop.phone;
   const showNavigate = !readOnly && stopState === 'pending';
+  const hasDeliveredOrders = stop.orders.some((o) => o.status === 'delivered');
+  const deliveryNote = stop.orders.find((o) => o.status === 'delivered' && o.delivery_note)?.delivery_note ?? '';
 
   const openStopProblem = () =>
     setProblemDialog({
@@ -108,6 +123,12 @@ export function DriverStopCard({
     if (!problemDialog) return false;
     const ok = await onReportProblem(problemDialog.target, reason, note);
     if (ok) setProblemDialog(null);
+    return ok;
+  };
+
+  const submitDeliveryNote = async (note: string) => {
+    const ok = await onSaveDeliveryNote(stop.client_id, note);
+    if (ok) setNoteDialogOpen(false);
     return ok;
   };
 
@@ -132,6 +153,9 @@ export function DriverStopCard({
           <CircleCheck className="w-5 h-5 text-emerald-600 shrink-0" />
         )}
         <span className="flex-1 min-w-0 text-sm font-semibold text-gray-500 truncate">{stop.name}</span>
+        {deliveryNote && (
+          <StickyNote className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma notatkę" />
+        )}
         {failed ? (
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-rose-700 whitespace-nowrap">
             <AlertTriangle className="w-3.5 h-3.5" /> Nieudana
@@ -287,6 +311,32 @@ export function DriverStopCard({
               </div>
             );
           })}
+          {deliveryNote && (
+            <div className="flex items-start justify-between gap-2 mt-1 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="m-0 flex items-start gap-1.5 text-xs text-bakery-dark min-w-0">
+                <StickyNote className="w-3.5 h-3.5 text-bakery-accent shrink-0 mt-0.5" />
+                <span className="italic break-words">„{deliveryNote}”</span>
+              </p>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setNoteDialogOpen(true)}
+                  className="shrink-0 min-h-[44px] sm:min-h-0 px-2 text-[11px] font-bold text-bakery-dark hover:underline"
+                >
+                  Edytuj
+                </button>
+              )}
+            </div>
+          )}
+          {!deliveryNote && !readOnly && hasDeliveredOrders && (
+            <button
+              type="button"
+              onClick={() => setNoteDialogOpen(true)}
+              className="mt-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 px-3 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+            >
+              <StickyNote className="w-3.5 h-3.5 text-bakery-accent" /> Dodaj notatkę do dostawy
+            </button>
+          )}
           {!readOnly && inDeliveryCount >= 2 && (
             <div className="flex gap-2 mt-1">
               <button
@@ -319,6 +369,14 @@ export function DriverStopCard({
           subtitle={problemDialog.subtitle}
           onSubmit={submitProblem}
           onClose={() => setProblemDialog(null)}
+        />
+      )}
+      {noteDialogOpen && (
+        <DeliveryNoteDialog
+          subtitle={stop.name}
+          initialNote={deliveryNote}
+          onSubmit={submitDeliveryNote}
+          onClose={() => setNoteDialogOpen(false)}
         />
       )}
     </div>

@@ -35,6 +35,7 @@ export function DriverRouteView({
   onDeliverStop,
   deliveringStopId,
   onReportProblem,
+  onSaveDeliveryNote,
   onRefresh,
   refreshing,
   lastUpdatedAt,
@@ -50,6 +51,7 @@ export function DriverRouteView({
   onDeliverStop: (clientId: number) => void;
   deliveringStopId: number | null;
   onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
+  onSaveDeliveryNote: (clientId: number, note: string) => Promise<boolean>;
   onRefresh: () => void;
   refreshing: boolean;
   lastUpdatedAt: Date | null;
@@ -275,6 +277,7 @@ export function DriverRouteView({
                   onDeliverStop={onDeliverStop}
                   deliveringStopId={deliveringStopId}
                   onReportProblem={onReportProblem}
+                  onSaveDeliveryNote={onSaveDeliveryNote}
                   readOnly={isHistory}
                 />
               ))

@@ -7,6 +7,7 @@ import {
   reportOrderProblem,
   reportStopProblem,
   updateOrderStatus,
+  saveStopDeliveryNote,
   withdrawProblemReport,
   type FailureReason,
   type LogisticsData,
@@ -75,6 +76,7 @@ export default function Logistics() {
     patchOrders(orderIds, {
       status,
       delivered_at: status === 'delivered' ? deliveredAt : null,
+      delivery_note: '',
       failure_reason: '',
       failure_note: '',
       failed_at: null,
@@ -194,6 +196,20 @@ export default function Logistics() {
     }
   };
 
+  const handleSaveDeliveryNote = async (clientId: number, note: string): Promise<boolean> => {
+    try {
+      const result = await saveStopDeliveryNote(clientId, note);
+      mutationVersion.current += 1;
+      patchOrders(result.updated_ids, { delivery_note: result.delivery_note });
+      setToast({ variant: 'success', text: result.delivery_note ? 'Notatka zapisana.' : 'Notatka usunięta.' });
+      return true;
+    } catch (err) {
+      console.error('Błąd podczas zapisu notatki:', err);
+      showActionError(err);
+      return false;
+    }
+  };
+
   const refreshData = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       const versionAtStart = mutationVersion.current;
@@ -274,6 +290,7 @@ export default function Logistics() {
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
           onReportProblem={handleReportProblem}
+          onSaveDeliveryNote={handleSaveDeliveryNote}
         />
         <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>

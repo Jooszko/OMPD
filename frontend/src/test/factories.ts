@@ -9,6 +9,7 @@ export function makeOrder(overrides: Partial<LogisticsOrder> = {}): LogisticsOrd
     quantity: 1,
     status: 'in_delivery',
     delivered_at: null,
+    delivery_note: '',
     failure_reason: '',
     failure_note: '',
     failed_at: null,
