@@ -24,6 +24,9 @@ import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
 import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
 import { formatDayLabel } from '../lib/dateFormat';
 import { compressImage, ImageProcessingError } from '../lib/imageCompression';
+import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 const AUTO_REFRESH_MS = 60_000;
 
@@ -38,8 +41,11 @@ export default function Logistics() {
   const closeToast = useCallback(() => setToast(null), []);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const isOnline = useOnlineStatus();
   const mutationVersion = useRef(0);
   const requestKey = `${previewDriverId ?? 'self'}|${selectedDate ?? 'today'}`;
+  const cacheKey = `logistics:${requestKey}`;
   const loading = loadState?.key !== requestKey;
   const error = loadState?.key === requestKey ? loadState.error : null;
 
@@ -51,16 +57,27 @@ export default function Logistics() {
         if (cancelled) return;
         setData(result);
         setLastUpdatedAt(new Date());
+        setIsStale(false);
         setLoadState({ key: requestKey, error: null });
+        void saveCached(cacheKey, result);
       })
-      .catch((err: Error) => {
-        if (!cancelled) setLoadState({ key: requestKey, error: err.message });
+      .catch(async (err: Error) => {
+        const cached = isNetworkError(err) ? await loadCached<LogisticsData>(cacheKey) : null;
+        if (cancelled) return;
+        if (cached) {
+          setData(cached.value);
+          setLastUpdatedAt(new Date(cached.savedAt));
+          setIsStale(true);
+          setLoadState({ key: requestKey, error: null });
+        } else {
+          setLoadState({ key: requestKey, error: err.message });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [previewDriverId, selectedDate, requestKey]);
+  }, [previewDriverId, selectedDate, requestKey, cacheKey]);
 
   const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
@@ -282,7 +299,10 @@ export default function Logistics() {
         setData(result);
         setLoadState({ key: requestKey, error: null });
         setLastUpdatedAt(new Date());
-      } catch {
+        setIsStale(false);
+        void saveCached(cacheKey, result);
+      } catch (err) {
+        if (isNetworkError(err)) setIsStale(true);
         if (!silent) {
           setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
         }
@@ -290,7 +310,7 @@ export default function Logistics() {
         if (!silent) setRefreshing(false);
       }
     },
-    [previewDriverId, selectedDate, requestKey]
+    [previewDriverId, selectedDate, requestKey, cacheKey]
   );
 
   useEffect(() => {
@@ -300,10 +320,12 @@ export default function Logistics() {
 
     const intervalId = setInterval(refreshIfVisible, AUTO_REFRESH_MS);
     document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('online', refreshIfVisible);
 
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('online', refreshIfVisible);
     };
   }, [refreshData]);
 
@@ -334,6 +356,11 @@ export default function Logistics() {
 
     return (
       <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6">
+        {(!isOnline || isStale) && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <OfflineBanner isOnline={isOnline} savedAt={isStale ? lastUpdatedAt : null} />
+          </div>
+        )}
         <DriverRouteView
           date={data.date}
           today={data.today}
@@ -370,6 +397,7 @@ export default function Logistics() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
+      {(!isOnline || isStale) && <OfflineBanner isOnline={isOnline} savedAt={isStale ? lastUpdatedAt : null} />}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>

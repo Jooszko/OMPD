@@ -16,6 +16,7 @@ import { getRouteProgress } from '../lib/routeProgress';
 import { type ProblemTarget } from './ReportProblemDialog';
 import { formatDayLabel } from '../lib/dateFormat';
 import { DayNavigator, HistoryNotice } from './DayNavigator';
+import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
 
 interface DirectionsState {
   routeKey: string;
@@ -88,14 +89,21 @@ export function DriverRouteView({
 
   useEffect(() => {
     if (routeId === null || routeKey === null || requestKey === null) return;
-
+    const cacheKey = `directions:${requestKey}`;
     let cancelled = false;
     fetchRouteDirections(routeId, date)
       .then((data) => {
         if (!cancelled) setDirectionsState({ routeKey, requestKey, data, error: null });
+        void saveCached(cacheKey, data);
       })
-      .catch((err: Error) => {
-        if (!cancelled) setDirectionsState({ routeKey, requestKey, data: null, error: err.message });
+      .catch(async (err: Error) => {
+        const cached = isNetworkError(err) ? await loadCached<RouteDirections>(cacheKey) : null;
+        if (cancelled) return;
+        setDirectionsState(
+          cached
+            ? { routeKey, requestKey, data: cached.value, error: null }
+            : { routeKey, requestKey, data: null, error: err.message }
+        );
       });
 
     return () => {

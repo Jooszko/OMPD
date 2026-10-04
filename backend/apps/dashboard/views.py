@@ -439,6 +439,10 @@ def _notify_admins_about_failure(sender, client, orders, reason, note):
     _notify_admins(sender, f'Problem z dostawą: {client.name}', message)
 
 def _report_failure(request, client, orders_qs):
+    occurred_at, time_error = _occurred_at(request)
+    if time_error:
+        return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
+
     reason = request.data.get('reason')
     note = str(request.data.get('note') or '').strip()
 
@@ -472,13 +476,12 @@ def _report_failure(request, client, orders_qs):
             )
 
         failed_ids = [o.do_id for o in orders]
-        now = timezone.now()
         DailyOrder.objects.filter(pk__in=failed_ids).update(
             status='failed',
             failure_reason=reason,
             failure_note=note,
-            failed_at=now,
-            updated_at=now,
+            failed_at=occurred_at,
+            updated_at=timezone.now(),
         )
         _notify_admins_about_failure(request.user, client, orders, reason, note)
 
@@ -487,7 +490,7 @@ def _report_failure(request, client, orders_qs):
         'failed_ids': failed_ids,
         'failure_reason': reason,
         'failure_note': note,
-        'failed_at': now,
+        'failed_at': occurred_at,
     })
 
 class UpdateOrderStatusView(APIView):

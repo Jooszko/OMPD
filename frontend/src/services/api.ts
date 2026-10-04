@@ -1,3 +1,5 @@
+import { clearCache } from './offlineCache';
+
 const API_BASE = '/api';
 
 export interface TodayOrder {
@@ -72,6 +74,7 @@ export async function loginUser(username: string, password: string): Promise<Log
 export function logoutUser(): void {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  void clearCache();
 }
 
 let refreshPromise: Promise<boolean> | null = null;
