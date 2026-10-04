@@ -22,10 +22,12 @@ export function StopCard({
   stop,
   onAdvance,
   updatingId,
+  readOnly = false,
 }: {
   stop: LogisticsStop;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
+  readOnly?: boolean;
 }) {
   const hasDeliveryToday = stop.orders.length > 0;
   const hasProblem = stop.orders.some((o) => o.status === 'failed');
@@ -70,7 +72,7 @@ export function StopCard({
       {hasDeliveryToday && (
         <div className="flex flex-col gap-1.5 mt-1">
           {stop.orders.map((order) => {
-            const next = getNextStep(order.status);
+            const next = readOnly ? null : getNextStep(order.status);
             const busy = updatingId === order.do_id;
             return (
               <div
@@ -86,7 +88,7 @@ export function StopCard({
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <StatusBadge status={order.status} />
-                    {order.status === 'failed' && (
+                    {!readOnly && order.status === 'failed' && (
                       <button
                         onClick={() => handleCancel(order)}
                         disabled={busy}
