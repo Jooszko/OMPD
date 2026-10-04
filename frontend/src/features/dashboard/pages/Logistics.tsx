@@ -22,8 +22,7 @@ const AUTO_REFRESH_MS = 60_000;
 
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<{ key: string; error: string | null } | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [deliveringStopId, setDeliveringStopId] = useState<number | null>(null);
   const [previewDriverId, setPreviewDriverId] = useState<number | null>(null);
@@ -33,30 +32,28 @@ export default function Logistics() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const mutationVersion = useRef(0);
+  const requestKey = `${previewDriverId ?? 'self'}|${selectedDate ?? 'today'}`;
+  const loading = loadState?.key !== requestKey;
+  const error = loadState?.key === requestKey ? loadState.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     fetchLogistics(previewDriverId ?? undefined, selectedDate ?? undefined)
       .then((result) => {
-        if (!cancelled) {
-          setData(result);
-          setLastUpdatedAt(new Date());
-          setLoading(false);
-        }
+        if (cancelled) return;
+        setData(result);
+        setLastUpdatedAt(new Date());
+        setLoadState({ key: requestKey, error: null });
       })
       .catch((err: Error) => {
-        if (!cancelled) {
-          setError(err.message);
-          setLoading(false);
-        }
+        if (!cancelled) setLoadState({ key: requestKey, error: err.message });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [previewDriverId, selectedDate]);
+  }, [previewDriverId, selectedDate, requestKey]);
 
   const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
@@ -208,7 +205,7 @@ export default function Logistics() {
         const result = await fetchLogistics(previewDriverId ?? undefined, selectedDate ?? undefined);
         if (mutationVersion.current !== versionAtStart) return;
         setData(result);
-        setError(null);
+        setLoadState({ key: requestKey, error: null });
         setLastUpdatedAt(new Date());
       } catch {
         if (!silent) {
@@ -218,7 +215,7 @@ export default function Logistics() {
         if (!silent) setRefreshing(false);
       }
     },
-    [previewDriverId, selectedDate]
+    [previewDriverId, selectedDate, requestKey]
   );
 
   useEffect(() => {
