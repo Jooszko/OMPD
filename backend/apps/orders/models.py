@@ -1,6 +1,8 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from common.models import TimeStampedModel
+from pathlib import Path
+from uuid import uuid4
 
 class StandingOrder(TimeStampedModel):
     DAYS_CHOICES = [
@@ -61,3 +63,34 @@ class DailyOrder(TimeStampedModel):
     )
     def __str__(self):
         return f"{self.order_date} - {self.client.name} ({self.status})"
+
+def delivery_proof_upload_to(instance, filename):
+    extension = Path(filename).suffix.lower() or '.jpg'
+    return (
+        f'delivery_proofs/{instance.order_date:%Y/%m/%d}/'
+        f'{instance.client_id}_{instance.kind}_{uuid4().hex}{extension}'
+    )
+
+class DeliveryProof(TimeStampedModel):
+    KIND_CHOICES = [
+        ('photo', 'Zdjęcie'),
+        ('signature', 'Podpis'),
+    ]
+
+    proof_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey('clients.Client', on_delete=models.CASCADE, related_name='delivery_proofs')
+    order_date = models.DateField()
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    image = models.ImageField(upload_to=delivery_proof_upload_to)
+    signer_name = models.CharField(max_length=100, blank=True, default='')
+    uploaded_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_proofs'
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['client', 'order_date', 'kind'], name='unique_delivery_proof_per_kind'),
+        ]
+
+    def __str__(self):
+        return f'{self.order_date} - {self.client.name} ({self.kind})'

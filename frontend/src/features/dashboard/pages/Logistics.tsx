@@ -9,6 +9,9 @@ import {
   updateOrderStatus,
   saveStopDeliveryNote,
   withdrawProblemReport,
+  deleteDeliveryProof,
+  uploadDeliveryProof,
+  type DeliveryProof,
   type FailureReason,
   type LogisticsData,
   type LogisticsOrder,
@@ -20,6 +23,7 @@ import { type ProblemTarget } from '../components/ReportProblemDialog';
 import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
 import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
 import { formatDayLabel } from '../lib/dateFormat';
+import { compressImage, ImageProcessingError } from '../lib/imageCompression';
 
 const AUTO_REFRESH_MS = 60_000;
 
@@ -212,6 +216,59 @@ export default function Logistics() {
     }
   };
 
+  const patchStopProofs = (clientId: number, update: (proofs: DeliveryProof[]) => DeliveryProof[]) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const patchStop = (stop: (typeof prev.unassigned)[number]) =>
+        stop.client_id === clientId ? { ...stop, proofs: update(stop.proofs) } : stop;
+      return {
+        ...prev,
+        routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
+        unassigned: prev.unassigned.map(patchStop),
+      };
+    });
+  };
+
+  const handleUploadProof = async (
+    clientId: number,
+    kind: DeliveryProof['kind'],
+    image: Blob,
+    signerName = ''
+  ): Promise<boolean> => {
+    try {
+      const payload = kind === 'photo' ? await compressImage(image) : image;
+      const proof = await uploadDeliveryProof(clientId, kind, payload, signerName);
+      mutationVersion.current += 1;
+      patchStopProofs(clientId, (proofs) =>
+        [...proofs.filter((p) => p.kind !== proof.kind), proof].sort((a, b) => a.kind.localeCompare(b.kind))
+      );
+      setToast({ variant: 'success', text: kind === 'photo' ? 'Zdjęcie zapisane.' : 'Podpis zapisany.' });
+      return true;
+    } catch (err) {
+      console.error('Błąd podczas zapisu potwierdzenia:', err);
+      if (err instanceof ImageProcessingError) {
+        setToast({ text: err.message, canRefresh: false });
+      } else {
+        showActionError(err);
+      }
+      return false;
+    }
+  };
+
+  const handleDeleteProof = async (clientId: number, proofId: number): Promise<boolean> => {
+    try {
+      await deleteDeliveryProof(proofId);
+      mutationVersion.current += 1;
+      patchStopProofs(clientId, (proofs) => proofs.filter((p) => p.proof_id !== proofId));
+      setToast({ variant: 'success', text: 'Potwierdzenie usunięte.' });
+      return true;
+    } catch (err) {
+      console.error('Błąd podczas usuwania potwierdzenia:', err);
+      showActionError(err);
+      return false;
+    }
+  };
+
   const refreshData = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       const versionAtStart = mutationVersion.current;
@@ -293,6 +350,8 @@ export default function Logistics() {
           onExitPreview={() => setPreviewDriverId(null)}
           onReportProblem={handleReportProblem}
           onSaveDeliveryNote={handleSaveDeliveryNote}
+          onUploadProof={handleUploadProof}
+          onDeleteProof={handleDeleteProof}
         />
         <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>
@@ -417,6 +476,7 @@ export default function Logistics() {
                       onAdvance={handleAdvance}
                       updatingId={updatingId}
                       readOnly={isHistory}
+                      onDeleteProof={handleDeleteProof}
                     />
                   ))
                 )}
@@ -442,6 +502,7 @@ export default function Logistics() {
                 onAdvance={handleAdvance}
                 updatingId={updatingId}
                 readOnly={isHistory}
+                onDeleteProof={handleDeleteProof}
               />
             ))}
           </div>

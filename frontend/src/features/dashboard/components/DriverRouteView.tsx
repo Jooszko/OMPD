@@ -6,6 +6,7 @@ import {
   type LogisticsRoute,
   type RouteDirections,
   type FailureReason,
+  type DeliveryProof,
 } from '../../../services/api';
 import { DriverStopCard } from './DriverStopCard';
 import { RouteMap } from './RouteMap';
@@ -39,6 +40,8 @@ export function DriverRouteView({
   lastUpdatedAt,
   previewDriverName,
   onExitPreview,
+  onUploadProof,
+  onDeleteProof,
 }: {
   date: string;
   today: string;
@@ -55,6 +58,8 @@ export function DriverRouteView({
   lastUpdatedAt: Date | null;
   previewDriverName?: string;
   onExitPreview?: () => void;
+  onUploadProof: (clientId: number, kind: DeliveryProof['kind'], image: Blob, signerName?: string) => Promise<boolean>;
+  onDeleteProof: (clientId: number, proofId: number) => Promise<boolean>;
 }) {
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const route = routes.find((r) => r.route_id === selectedRouteId) ?? routes[0] ?? null;
@@ -240,6 +245,8 @@ export function DriverRouteView({
                   onReportProblem={onReportProblem}
                   onSaveDeliveryNote={onSaveDeliveryNote}
                   readOnly={isHistory}
+                  onUploadProof={onUploadProof}
+                  onDeleteProof={onDeleteProof}
                 />
               ))
             )}

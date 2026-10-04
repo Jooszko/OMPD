@@ -558,6 +558,13 @@ export interface LogisticsOrder {
   failed_at: string | null;
 }
 
+export interface DeliveryProof {
+  proof_id: number;
+  kind: 'photo' | 'signature';
+  signer_name: string;
+  created_at: string;
+}
+
 export interface LogisticsStop {
   client_id: number;
   name: string;
@@ -566,6 +573,7 @@ export interface LogisticsStop {
   latitude: string | null;
   longitude: string | null;
   orders: LogisticsOrder[];
+  proofs: DeliveryProof[];
 }
 
 export interface LogisticsRoute {
@@ -794,6 +802,42 @@ export async function saveStopDeliveryNote(
     throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
   }
   return response.json();
+}
+
+async function ensureOk(response: Response): Promise<Response> {
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+  }
+  return response;
+}
+
+export async function uploadDeliveryProof(
+  clientId: number,
+  kind: DeliveryProof['kind'],
+  image: Blob,
+  signerName = ''
+): Promise<DeliveryProof> {
+  const form = new FormData();
+  form.append('kind', kind);
+  form.append('image', image, kind === 'photo' ? 'photo.jpg' : 'signature.png');
+  if (signerName) form.append('signer_name', signerName);
+
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/proofs/`, {
+    method: 'POST',
+    body: form,
+  });
+  return (await ensureOk(response)).json();
+}
+
+export async function fetchDeliveryProofImage(proofId: number): Promise<Blob> {
+  const response = await apiFetch(`${API_BASE}/logistics/proofs/${proofId}/file/`);
+  return (await ensureOk(response)).blob();
+}
+
+export async function deleteDeliveryProof(proofId: number): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/logistics/proofs/${proofId}/`, { method: 'DELETE' });
+  await ensureOk(response);
 }
 
 export async function fetchSuppliers(): Promise<any[]> {

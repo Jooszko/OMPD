@@ -1,7 +1,9 @@
 import { AlertTriangle, MapPin, Package, StickyNote } from 'lucide-react';
-import { type LogisticsOrder, type LogisticsStop } from '../../../services/api';
+import { type LogisticsOrder, type LogisticsStop, type DeliveryProof } from '../../../services/api';
 import { FAILURE_REASON_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getNextStep } from '../lib/logisticsStatus';
 import { formatTime } from '../lib/dateFormat';
+import { ProofPreviewDialog, ProofThumbnail } from './ProofPreview';
+import { useState } from 'react';
 
 function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
   return (
@@ -23,15 +25,25 @@ export function StopCard({
   onAdvance,
   updatingId,
   readOnly = false,
+  onDeleteProof,
 }: {
   stop: LogisticsStop;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
   readOnly?: boolean;
+  onDeleteProof?: (clientId: number, proofId: number) => Promise<boolean>;
 }) {
   const hasDeliveryToday = stop.orders.length > 0;
   const hasProblem = stop.orders.some((o) => o.status === 'failed');
   const deliveryNote = stop.orders.find((o) => o.status === 'delivered' && o.delivery_note)?.delivery_note ?? '';
+  const [previewProof, setPreviewProof] = useState<DeliveryProof | null>(null);
+
+  const deleteProof = async (proof: DeliveryProof) => {
+    if (!onDeleteProof) return false;
+    const ok = await onDeleteProof(stop.client_id, proof.proof_id);
+    if (ok) setPreviewProof(null);
+    return ok;
+  };
 
   const handleCancel = (order: LogisticsOrder) => {
     const confirmed = window.confirm(
@@ -127,6 +139,22 @@ export function StopCard({
           <StickyNote className="w-3.5 h-3.5 text-bakery-accent shrink-0 mt-px" />
           <span className="italic break-words">„{deliveryNote}”</span>
         </p>
+      )}
+      {stop.proofs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {stop.proofs.map((proof) => (
+            <ProofThumbnail key={proof.proof_id} proof={proof} stopName={stop.name} onOpen={setPreviewProof} />
+          ))}
+        </div>
+      )}
+      {previewProof && (
+        <ProofPreviewDialog
+          proof={previewProof}
+          stopName={stop.name}
+          canDelete={!!onDeleteProof}
+          onDelete={deleteProof}
+          onClose={() => setPreviewProof(null)}
+        />
       )}
     </div>
   );
