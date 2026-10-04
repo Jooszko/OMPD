@@ -1,7 +1,8 @@
 from datetime import date, timedelta
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, IntegerField, Prefetch, Q, Sum, When
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
@@ -163,18 +164,20 @@ class LogisticsView(APIView):
         else:
             target_date = date.today()
 
-        orders_for_day = (
+        orders_for_day = _with_effective_assignment(
             DailyOrder.objects
             .filter(order_date=target_date)
             .exclude(status='cancelled')
             .select_related('client', 'product')
             .order_by('client__name')
         )
+        if scoped_driver_id is not None:
+            orders_for_day = orders_for_day.filter(effective_driver_id=scoped_driver_id)
 
-        orders_by_client = {}
+        orders_by_stop = {}
         client_by_id = {}
         for o in orders_for_day:
-            orders_by_client.setdefault(o.client_id, []).append({
+            orders_by_stop.setdefault((o.effective_route_id, o.client_id), []).append({
                 'do_id': o.do_id,
                 'product_name': o.product.name,
                 'quantity': o.quantity,
@@ -187,9 +190,11 @@ class LogisticsView(APIView):
             })
             client_by_id[o.client_id] = o.client
 
+        route_ids_with_orders = {route_id for route_id, _ in orders_by_stop}
+
         routes_qs = (
             Route.objects
-            .filter(is_active=True)
+            .filter(Q(is_active=True) | Q(route_id__in=route_ids_with_orders))
             .select_related('driver')
             .prefetch_related(
                 Prefetch('clients', queryset=Client.objects.filter(is_active=True))
@@ -197,24 +202,23 @@ class LogisticsView(APIView):
             .order_by('route_name')
         )
         if scoped_driver_id is not None:
-            routes_qs = routes_qs.filter(driver_id=scoped_driver_id)
+            routes_qs = routes_qs.filter(Q(driver_id=scoped_driver_id) | Q(route_id__in=route_ids_with_orders))
 
-        assigned_client_ids = set()
+        shown_stops = set()
         routes_data = []
         for route in routes_qs:
-            stops = []
-            for client in route.clients.all():
-                assigned_client_ids.add(client.client_id)
-                stops.append({
-                    'client_id': client.client_id,
-                    'name': client.name,
-                    'address': client.address,
-                    'phone': client.phone,
-                    'latitude': client.latitude,
-                    'longitude': client.longitude,
-                    'orders': orders_by_client.get(client.client_id, []),
-                })
+            stop_clients = {}
+            if scoped_driver_id is None or route.driver_id == scoped_driver_id:
+                for client in route.clients.all():
+                    stop_clients[client.client_id] = client
+            for route_id, client_id in orders_by_stop:
+                if route_id == route.route_id:
+                    stop_clients.setdefault(client_id, client_by_id[client_id])
 
+            stops = []
+            for client_id, client in stop_clients.items():
+                shown_stops.add((route.route_id, client_id))
+                stops.append(_stop_payload(client, orders_by_stop.get((route.route_id, client_id), [])))
             stops.sort(key=lambda s: (len(s['orders']) == 0, s['name']))
 
             routes_data.append({
@@ -229,20 +233,13 @@ class LogisticsView(APIView):
 
         if scoped_driver_id is None:
             unassigned = [
-                {
-                    'client_id': client_id,
-                    'name': client_by_id[client_id].name,
-                    'address': client_by_id[client_id].address,
-                    'phone': client_by_id[client_id].phone,
-                    'latitude': client_by_id[client_id].latitude,
-                    'longitude': client_by_id[client_id].longitude,
-                    'orders': orders,
-                }
-                for client_id, orders in orders_by_client.items()
-                if client_id not in assigned_client_ids
+                _stop_payload(client_by_id[client_id], orders)
+                for (route_id, client_id), orders in orders_by_stop.items()
+                if (route_id, client_id) not in shown_stops
             ]
         else:
             unassigned = []
+
 
         drivers = []
         if user.role == 'admin':
@@ -270,6 +267,57 @@ DRIVER_ALLOWED_TRANSITIONS = {
 }
 
 DRIVER_UNDO_WINDOW = timedelta(minutes=10)
+
+ISSUE_SOURCE_STATUSES = {'planned', 'in_production', 'failed'}
+
+def _snapshot_assignment(order):
+    route = order.client.route
+    order.assigned_route = route
+    order.assigned_driver = route.driver
+
+def _order_driver_id(order):
+    if order.assigned_route_id is not None:
+        return order.assigned_driver_id
+    return order.client.route.driver_id
+
+def _with_effective_assignment(queryset):
+    return queryset.annotate(
+        effective_route_id=Coalesce('assigned_route_id', 'client__route_id', output_field=IntegerField()),
+        effective_driver_id=Case(
+            When(assigned_route__isnull=False, then=F('assigned_driver_id')),
+            default=F('client__route__driver_id'),
+            output_field=IntegerField(),
+        ),
+    )
+
+def _orders_for_user(queryset, user):
+    if user.role == 'driver':
+        return _with_effective_assignment(queryset).filter(effective_driver_id=user.user_id)
+    return queryset
+
+
+def _driver_can_access_stop(driver_id, client):
+    if client.route.driver_id == driver_id:
+        return True
+    return _orders_for_driver_today(client, driver_id).exists()
+
+
+def _orders_for_driver_today(client, driver_id):
+    return _with_effective_assignment(
+        DailyOrder.objects.filter(client=client, order_date=date.today())
+    ).filter(effective_driver_id=driver_id)
+
+
+def _stop_payload(client, orders):
+    return {
+        'client_id': client.client_id,
+        'name': client.name,
+        'address': client.address,
+        'phone': client.phone,
+        'latitude': client.latitude,
+        'longitude': client.longitude,
+        'orders': orders,
+    }
 
 def _within_driver_undo_window(moment):
     return moment is not None and timezone.now() - moment <= DRIVER_UNDO_WINDOW
@@ -356,7 +404,7 @@ class UpdateOrderStatusView(APIView):
 
     def patch(self, request, pk):
         user = request.user
-        order = get_object_or_404(DailyOrder, pk=pk)
+        order = get_object_or_404(DailyOrder.objects.select_related('client__route'), pk=pk)
         new_status = request.data.get('status')
 
         if new_status not in dict(DailyOrder.STATUS_CHOICES):
@@ -372,7 +420,7 @@ class UpdateOrderStatusView(APIView):
             )
 
         if user.role == 'driver':
-            if order.client.route.driver_id != user.user_id:
+            if _order_driver_id(order) != user.user_id:
                 return Response(
                     {'error': 'Nie masz dostępu do tego zamówienia.'},
                     status=http_status.HTTP_403_FORBIDDEN,
@@ -403,13 +451,18 @@ class UpdateOrderStatusView(APIView):
         elif new_status != 'delivered':
             order.delivered_at = None
             order.delivery_note = ''
+        if new_status in ('in_delivery', 'delivered') and (
+            order.status in ISSUE_SOURCE_STATUSES or order.assigned_route_id is None
+        ):
+            _snapshot_assignment(order)
 
         order.failure_reason = ''
         order.failure_note = ''
         order.failed_at = None
         order.status = new_status
         order.save(update_fields=[
-            'status', 'delivered_at', 'failure_reason', 'failure_note', 'failed_at', 'updated_at', 'delivery_note'
+            'status', 'delivered_at', 'delivery_note', 'failure_reason', 'failure_note', 'failed_at',
+            'assigned_route', 'assigned_driver', 'updated_at',
         ])
         return Response({'do_id': order.do_id, 'status': order.status, 'delivered_at': order.delivered_at})
 
@@ -427,7 +480,7 @@ class DeliverStopView(APIView):
 
         client = get_object_or_404(Client, pk=pk)
 
-        if user.role == 'driver' and client.route.driver_id != user.user_id:
+        if user.role == 'driver' and not _driver_can_access_stop(user.user_id, client):
             return Response(
                 {'error': 'Nie masz dostępu do tego przystanku.'},
                 status=http_status.HTTP_403_FORBIDDEN,
@@ -435,9 +488,9 @@ class DeliverStopView(APIView):
 
         with transaction.atomic():
             delivered_ids = list(
-                DailyOrder.objects
-                .select_for_update()
-                .filter(client=client, order_date=date.today(), status='in_delivery')
+                _orders_for_user(DailyOrder.objects.filter(client=client), user)
+                .select_for_update(of=('self',))
+                .filter(order_date=date.today(), status='in_delivery')
                 .values_list('do_id', flat=True)
             )
             if not delivered_ids:
@@ -468,7 +521,7 @@ class StopDeliveryNoteView(APIView):
 
         client = get_object_or_404(Client, pk=pk)
 
-        if user.role == 'driver' and client.route.driver_id != user.user_id:
+        if user.role == 'driver' and not _driver_can_access_stop(user.user_id, client):
             return Response(
                 {'error': 'Nie masz dostępu do tego przystanku.'},
                 status=http_status.HTTP_403_FORBIDDEN,
@@ -489,9 +542,9 @@ class StopDeliveryNoteView(APIView):
 
         with transaction.atomic():
             updated_ids = list(
-                DailyOrder.objects
-                .select_for_update()
-                .filter(client=client, order_date=date.today(), status='delivered')
+                _orders_for_user(DailyOrder.objects.filter(client=client), user)
+                .select_for_update(of=('self',))
+                .filter(order_date=date.today(), status='delivered')
                 .values_list('do_id', flat=True)
             )
             if not updated_ids:
@@ -520,13 +573,13 @@ class ReportStopProblemView(APIView):
 
         client = get_object_or_404(Client, pk=pk)
 
-        if user.role == 'driver' and client.route.driver_id != user.user_id:
+        if user.role == 'driver' and not _driver_can_access_stop(user.user_id, client):
             return Response(
                 {'error': 'Nie masz dostępu do tego przystanku.'},
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
-        return _report_failure(request, client, DailyOrder.objects.filter(client=client))
+        return _report_failure(request, client, _orders_for_user(DailyOrder.objects.filter(client=client), user))
 
 
 class ReportOrderProblemView(APIView):
@@ -543,7 +596,7 @@ class ReportOrderProblemView(APIView):
 
         order = get_object_or_404(DailyOrder.objects.select_related('client__route'), pk=pk)
 
-        if user.role == 'driver' and order.client.route.driver_id != user.user_id:
+        if user.role == 'driver' and _order_driver_id(order) != user.user_id:
             return Response(
                 {'error': 'Nie masz dostępu do tego zamówienia.'},
                 status=http_status.HTTP_403_FORBIDDEN,
@@ -583,7 +636,7 @@ class WithdrawProblemView(APIView):
                 .filter(pk__in=requested_ids, order_date=date.today(), status='failed')
             )
 
-            if user.role == 'driver' and any(o.client.route.driver_id != user.user_id for o in orders):
+            if user.role == 'driver' and any(_order_driver_id(o) != user.user_id for o in orders):
                 return Response(
                     {'error': 'Nie masz dostępu do tych zamówień.'},
                     status=http_status.HTTP_403_FORBIDDEN,
@@ -634,13 +687,7 @@ class RouteDirectionsView(APIView):
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
-        route = get_object_or_404(Route, pk=pk, is_active=True)
-
-        if user.role == 'driver' and route.driver_id != user.user_id:
-            return Response(
-                {'error': 'Nie masz dostępu do tej trasy.'},
-                status=http_status.HTTP_403_FORBIDDEN,
-            )
+        route = get_object_or_404(Route, pk=pk)
 
         date_param = request.query_params.get('date')
         if date_param:
@@ -654,18 +701,21 @@ class RouteDirectionsView(APIView):
         else:
             target_date = date.today()
 
-        client_ids_with_orders = set(
-            DailyOrder.objects
-            .filter(order_date=target_date, client__route=route)
-            .exclude(status='cancelled')
-            .values_list('client_id', flat=True)
-        )
+        day_orders = _with_effective_assignment(
+            DailyOrder.objects.filter(order_date=target_date).exclude(status='cancelled')
+        ).filter(effective_route_id=route.route_id)
 
-        stops = list(
-            route.clients
-            .filter(is_active=True, client_id__in=client_ids_with_orders)
-            .order_by('name')
-        )
+        if user.role == 'driver':
+            day_orders = day_orders.filter(effective_driver_id=user.user_id)
+            if route.driver_id != user.user_id and not day_orders.exists():
+                return Response(
+                    {'error': 'Nie masz dostępu do tej trasy.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
+
+        client_ids_with_orders = set(day_orders.values_list('client_id', flat=True))
+        stops = list(Client.objects.filter(client_id__in=client_ids_with_orders).order_by('name'))
+
         routable = [c for c in stops if c.latitude is not None and c.longitude is not None]
         skipped_stops = [c.name for c in stops if c.latitude is None or c.longitude is None]
 

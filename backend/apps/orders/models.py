@@ -53,6 +53,11 @@ class DailyOrder(TimeStampedModel):
     failure_reason = models.CharField(max_length=20, choices=FAILURE_REASON_CHOICES, blank=True, default='')
     failure_note = models.TextField(blank=True, default='')
     failed_at = models.DateTimeField(null=True, blank=True)
-
+    assigned_route = models.ForeignKey(
+        'clients.Route', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders'
+    )
+    assigned_driver = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='driven_orders'
+    )
     def __str__(self):
         return f"{self.order_date} - {self.client.name} ({self.status})"
