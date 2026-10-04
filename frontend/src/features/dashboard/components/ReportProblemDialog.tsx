@@ -9,6 +9,9 @@ export type ProblemTarget = { kind: 'stop'; clientId: number } | { kind: 'order'
 const MAX_NOTE_LENGTH = 500;
 const REASONS = Object.keys(FAILURE_REASON_LABELS) as FailureReason[];
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
 export function ReportProblemDialog({
   title,
   subtitle,
@@ -29,12 +32,34 @@ export function ReportProblemDialog({
   const canSubmit = reason !== null && (!noteRequired || note.trim().length > 0) && !submitting;
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     dialogRef.current?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus();
+    return () => previouslyFocused?.focus();
   }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose();
+      if (e.key === 'Escape') {
+        if (!submitting) onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const focusInside = dialogRef.current.contains(active);
+
+      if (e.shiftKey && (active === first || !focusInside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !focusInside)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
