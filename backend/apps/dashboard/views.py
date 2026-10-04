@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum
@@ -268,6 +268,11 @@ DRIVER_ALLOWED_TRANSITIONS = {
     'delivered': {'in_delivery'},
 }
 
+DRIVER_UNDO_WINDOW = timedelta(minutes=10)
+
+def _within_driver_undo_window(moment):
+    return moment is not None and timezone.now() - moment <= DRIVER_UNDO_WINDOW
+
 MAX_FAILURE_NOTE_LENGTH = 500
 
 
@@ -379,6 +384,11 @@ class UpdateOrderStatusView(APIView):
             if new_status not in DRIVER_ALLOWED_TRANSITIONS.get(order.status, set()):
                 return Response(
                     {'error': 'Kierowca może oznaczyć zamówienie w dostawie jako "dostarczone" albo cofnąć to oznaczenie.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
+            if order.status == 'delivered' and not _within_driver_undo_window(order.delivered_at):
+                return Response(
+                    {'error': 'Czas na cofnięcie dostawy minął. Skontaktuj się z biurem.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
         elif user.role not in ('admin', 'driver'):
@@ -528,6 +538,11 @@ class WithdrawProblemView(APIView):
                 return Response(
                     {'error': 'Części zgłoszeń nie można już wycofać. Odśwież dane.'},
                     status=http_status.HTTP_400_BAD_REQUEST,
+                )
+            if user.role == 'driver' and not all(_within_driver_undo_window(o.failed_at) for o in orders):
+                return Response(
+                    {'error': 'Czas na wycofanie zgłoszenia minął. Skontaktuj się z biurem.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
                 )
 
             DailyOrder.objects.filter(pk__in=requested_ids).update(

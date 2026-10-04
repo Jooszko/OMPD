@@ -18,6 +18,13 @@ import { shiftIsoDate } from '../lib/dateFormat';
 const DAY_NAV_BUTTON =
   'inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed';
 
+interface DirectionsState {
+  routeKey: string;
+  requestKey: string;
+  data: RouteDirections | null;
+  error: string | null;
+}
+
 export function DriverRouteView({
   date,
   today,
@@ -53,10 +60,19 @@ export function DriverRouteView({
   const route = routes.find((r) => r.route_id === selectedRouteId) ?? routes[0] ?? null;
   const isHistory = date !== today;
   const goToDate = (target: string) => onChangeDate(target >= today ? null : target);
-  const [directions, setDirections] = useState<RouteDirections | null>(null);
-  const [loadingDirections, setLoadingDirections] = useState(false);
-  const [directionsError, setDirectionsError] = useState<string | null>(null);
-  const deliveriesToday = route?.stops.filter((s) => s.orders.length > 0).length ?? 0;
+  const [directionsState, setDirectionsState] = useState<DirectionsState | null>(null);
+  const deliveryStopIds = route?.stops.filter((s) => s.orders.length > 0).map((s) => s.client_id) ?? [];
+  const deliveriesToday = deliveryStopIds.length;
+  const routeId = route?.route_id ?? null;
+  const routeKey = routeId !== null ? `${routeId}|${date}` : null;
+  const requestKey =
+    routeKey !== null && deliveriesToday > 0
+      ? `${routeKey}|${[...deliveryStopIds].sort((a, b) => a - b).join(',')}`
+      : null;
+  const directionsForRoute = directionsState?.routeKey === routeKey ? directionsState : null;
+  const directions = directionsForRoute?.data ?? null;
+  const directionsError = directionsForRoute?.error ?? null;
+  const loadingDirections = requestKey !== null && directionsState?.requestKey !== requestKey;
   const sequencedStops = route ? orderStopsByRoute(route.stops, directions) : [];
   const progress = route ? getRouteProgress(route.stops) : { done: 0, failed: 0, total: 0 };
   const allDone = progress.total > 0 && progress.done === progress.total;
@@ -69,28 +85,21 @@ export function DriverRouteView({
     : (sequencedStops.find(({ stop }) => stop.orders.some((o) => o.status === 'in_delivery'))?.stop.client_id ?? null);
 
   useEffect(() => {
-    setDirections(null);
-    setDirectionsError(null);
-
-    if (!route || deliveriesToday === 0) return;
+    if (routeId === null || routeKey === null || requestKey === null) return;
 
     let cancelled = false;
-    setLoadingDirections(true);
-    fetchRouteDirections(route.route_id, date)
-      .then((result) => {
-        if (!cancelled) setDirections(result);
+    fetchRouteDirections(routeId, date)
+      .then((data) => {
+        if (!cancelled) setDirectionsState({ routeKey, requestKey, data, error: null });
       })
       .catch((err: Error) => {
-        if (!cancelled) setDirectionsError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingDirections(false);
+        if (!cancelled) setDirectionsState({ routeKey, requestKey, data: null, error: err.message });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [route?.route_id, date]);
+  }, [routeId, date, routeKey, requestKey]);
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 sm:gap-5 text-bakery-dark">

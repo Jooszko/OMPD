@@ -205,7 +205,8 @@ class UpdateOrderStatusPermissionTests(TestCase):
 
     def test_driver_can_revert_delivered_to_in_delivery(self):
         self.order.status = 'delivered'
-        self.order.save(update_fields=['status'])
+        self.order.delivered_at = timezone.now()
+        self.order.save(update_fields=['status', 'delivered_at'])
         self.api.force_authenticate(self.driver_a)
         response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
         self.assertEqual(response.status_code, 200)
@@ -286,6 +287,35 @@ class UpdateOrderStatusPermissionTests(TestCase):
         self.assertEqual(self.order.failure_reason, '')
         self.assertEqual(self.order.failure_note, '')
         self.assertIsNone(self.order.failed_at)
+
+    def _mark_delivered(self, minutes_ago):
+        self.order.status = 'delivered'
+        self.order.delivered_at = timezone.now() - timedelta(minutes=minutes_ago)
+        self.order.save(update_fields=['status', 'delivered_at'])
+
+    def test_driver_cannot_revert_delivery_after_undo_window(self):
+        self._mark_delivered(minutes_ago=11)
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'delivered')
+
+    def test_driver_cannot_revert_delivery_without_delivered_at(self):
+        self.order.status = 'delivered'
+        self.order.save(update_fields=['status'])
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_revert_old_delivery(self):
+        self._mark_delivered(minutes_ago=180)
+        self.api.force_authenticate(self.admin)
+        response = self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': 'in_delivery'})
+
+        self.assertEqual(response.status_code, 200)
 
 class DeliverStopTests(TestCase):
     def setUp(self):
@@ -524,3 +554,21 @@ class ReportProblemTests(TestCase):
             with self.subTest(payload=payload):
                 response = self.api.post(self.withdraw_url, payload, format='json')
                 self.assertEqual(response.status_code, 400)
+
+    def test_driver_cannot_withdraw_after_undo_window(self):
+        self.api.force_authenticate(self.driver_a)
+        self.api.post(self.stop_url, {'reason': 'closed'})
+        DailyOrder.objects.filter(pk=self.in_delivery_1.pk).update(
+            failed_at=timezone.now() - timedelta(minutes=11)
+        )
+
+        response = self.api.post(
+            self.withdraw_url,
+            {'order_ids': [self.in_delivery_1.do_id, self.in_delivery_2.do_id]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.refresh_all()
+        self.assertEqual(self.in_delivery_1.status, 'failed')
+        self.assertEqual(self.in_delivery_2.status, 'failed')
