@@ -66,6 +66,8 @@ class Command(BaseCommand):
                         'price_at_sale': product.base_price,
                         'status': status,
                         **seed_delivery_fields(status, today, client.client_id),
+                        'assigned_route': route,
+                        'assigned_driver': route.driver,
                     },
                 )
                 if created:

@@ -97,6 +97,8 @@ def create_daily_orders(clients, products, standing_orders, date_range):
                     'price_at_sale': standing_order.price_at_sale,
                     'status': status,
                     **seed_delivery_fields(status, order_date, standing_order.client_id),
+                    'assigned_route': standing_order.client.route,
+                    'assigned_driver': standing_order.client.route.driver,
                 },
             )
             if created:
@@ -117,6 +119,8 @@ def create_daily_orders(clients, products, standing_orders, date_range):
                         'price_at_sale': product.base_price,
                         'status': status,
                         **seed_delivery_fields(status, order_date, client.client_id),
+                        'assigned_route': client.route,
+                        'assigned_driver': client.route.driver,
                     },
                 )
                 if created:

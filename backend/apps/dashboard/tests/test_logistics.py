@@ -660,3 +660,130 @@ class DeliveryNoteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.delivered_1.refresh_from_db()
         self.assertEqual(self.delivered_1.delivery_note, '')
+
+class AssignmentSnapshotTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+        self.admin = User.objects.create_user(
+            username='admin_6', password='x', role='admin', full_name='Admin 6'
+        )
+        self.driver_a = User.objects.create_user(
+            username='driver_a6', password='x', role='driver', full_name='Driver A6'
+        )
+        self.driver_b = User.objects.create_user(
+            username='driver_b6', password='x', role='driver', full_name='Driver B6'
+        )
+        self.route_a = Route.objects.create(route_name='Trasa A6', driver=self.driver_a)
+        self.route_b = Route.objects.create(route_name='Trasa B6', driver=self.driver_b)
+        self.client_x = Client.objects.create(name='Klient X6', address='Adres X6', route=self.route_a)
+        product = Product.objects.create(name='Bagietka', category='bread', base_price=Decimal('4.00'))
+        self.order = DailyOrder.objects.create(
+            client=self.client_x, product=product, order_date=date.today(),
+            quantity=3, price_at_sale=Decimal('4.00'), status='planned',
+        )
+
+    def patch_status(self, user, status):
+        self.api.force_authenticate(user)
+        return self.api.patch(f'/api/logistics/orders/{self.order.do_id}/status/', {'status': status})
+
+    def move_client_to_route_b(self):
+        self.client_x.route = self.route_b
+        self.client_x.save(update_fields=['route'])
+
+    def test_issuing_order_snapshots_current_route_and_driver(self):
+        response = self.patch_status(self.admin, 'in_delivery')
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.assigned_route, self.route_a)
+        self.assertEqual(self.order.assigned_driver, self.driver_a)
+
+    def test_snapshot_survives_later_reassignment(self):
+        self.patch_status(self.admin, 'in_delivery')
+        self.patch_status(self.driver_a, 'delivered')
+        self.move_client_to_route_b()
+        self.route_a.driver = self.driver_b
+        self.route_a.save(update_fields=['driver'])
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.assigned_route, self.route_a)
+        self.assertEqual(self.order.assigned_driver, self.driver_a)
+
+    def test_driver_undo_keeps_snapshot(self):
+        self.patch_status(self.admin, 'in_delivery')
+        self.patch_status(self.driver_a, 'delivered')
+        self.move_client_to_route_b()
+
+        response = self.patch_status(self.driver_a, 'in_delivery')
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.assigned_route, self.route_a)
+        self.assertEqual(self.order.assigned_driver, self.driver_a)
+
+    def test_reissue_after_failure_takes_new_snapshot(self):
+        self.patch_status(self.admin, 'in_delivery')
+        DailyOrder.objects.filter(pk=self.order.pk).update(status='failed', failure_reason='closed')
+        self.move_client_to_route_b()
+
+        response = self.patch_status(self.admin, 'in_delivery')
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.assigned_route, self.route_b)
+        self.assertEqual(self.order.assigned_driver, self.driver_b)
+
+    def deliver_yesterday_then_reassign(self):
+        DailyOrder.objects.filter(pk=self.order.pk).update(
+            order_date=date.today() - timedelta(days=1),
+            status='delivered',
+            delivered_at=timezone.now() - timedelta(days=1),
+            assigned_route=self.route_a,
+            assigned_driver=self.driver_a,
+        )
+        self.move_client_to_route_b()
+
+    def stops_for(self, user, day):
+        self.api.force_authenticate(user)
+        response = self.api.get(f'/api/logistics/?date={day.isoformat()}')
+        self.assertEqual(response.status_code, 200)
+        return {
+            (route['route_name'], stop['name']): [o['do_id'] for o in stop['orders']]
+            for route in response.data['routes']
+            for stop in route['stops']
+        }
+
+    def test_history_shows_order_to_the_driver_who_delivered_it(self):
+        self.deliver_yesterday_then_reassign()
+        yesterday = date.today() - timedelta(days=1)
+
+        self.assertEqual(self.stops_for(self.driver_a, yesterday), {('Trasa A6', 'Klient X6'): [self.order.do_id]})
+        self.assertEqual(self.stops_for(self.driver_b, yesterday), {('Trasa B6', 'Klient X6'): []})
+        self.assertEqual(self.stops_for(self.admin, yesterday)[('Trasa A6', 'Klient X6')], [self.order.do_id])
+
+    def test_driver_keeps_access_to_directions_of_route_driven_in_the_past(self):
+        self.deliver_yesterday_then_reassign()
+        self.route_a.driver = self.driver_b
+        self.route_a.save(update_fields=['driver'])
+        yesterday = date.today() - timedelta(days=1)
+        url = f'/api/logistics/routes/{self.route_a.route_id}/directions/?date={yesterday.isoformat()}'
+
+        self.api.force_authenticate(self.driver_a)
+        self.assertEqual(self.api.get(url).status_code, 200)
+
+        outsider = User.objects.create_user(username='driver_c6', password='x', role='driver', full_name='Driver C6')
+        self.api.force_authenticate(outsider)
+        self.assertEqual(self.api.get(url).status_code, 403)
+
+    def test_new_route_driver_cannot_deliver_order_in_another_drivers_van(self):
+        self.patch_status(self.admin, 'in_delivery')
+        self.move_client_to_route_b()
+
+        self.api.force_authenticate(self.driver_b)
+        response = self.api.post(f'/api/logistics/clients/{self.client_x.client_id}/deliver/')
+        self.assertEqual(response.status_code, 400)
+
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(f'/api/logistics/clients/{self.client_x.client_id}/deliver/')
+        self.assertEqual(response.status_code, 200)
