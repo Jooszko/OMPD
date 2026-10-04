@@ -1,12 +1,15 @@
 from django.urls import path
 from .views import (
     DashboardView,
+    DeliveryProofDetailView,
+    DeliveryProofFileView,
     DeliverStopView,
     LogisticsView,
     ReportOrderProblemView,
     ReportStopProblemView,
     RouteDirectionsView,
     StopDeliveryNoteView,
+    StopDeliveryProofView,
     UpdateOrderStatusView,
     WithdrawProblemView,
 )
@@ -20,5 +23,8 @@ urlpatterns = [
     path('logistics/orders/<int:pk>/report-problem/', ReportOrderProblemView.as_view(), name='logistics-report-order-problem'),
     path('logistics/clients/<int:pk>/delivery-note/', StopDeliveryNoteView.as_view(), name='logistics-stop-delivery-note'),
     path('logistics/problems/withdraw/', WithdrawProblemView.as_view(), name='logistics-withdraw-problem'),
+    path('logistics/clients/<int:pk>/proofs/', StopDeliveryProofView.as_view(), name='logistics-stop-proofs'),
+    path('logistics/proofs/<int:pk>/', DeliveryProofDetailView.as_view(), name='logistics-proof-detail'),
+    path('logistics/proofs/<int:pk>/file/', DeliveryProofFileView.as_view(), name='logistics-proof-file'),
     path('logistics/routes/<int:pk>/directions/', RouteDirectionsView.as_view(), name='route-directions'),
 ]

@@ -1,16 +1,20 @@
+import mimetypes
 from datetime import date, timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, IntegerField, Prefetch, Q, Sum, When
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
+from django.http import FileResponse
 from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from PIL import Image, UnidentifiedImageError
+from rest_framework.parsers import MultiPartParser
 
 from clients.models import Client, Route
-from orders.models import DailyOrder
+from orders.models import DailyOrder, DeliveryProof
 from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
 from users.models import Notification, User
@@ -190,6 +194,10 @@ class LogisticsView(APIView):
             })
             client_by_id[o.client_id] = o.client
 
+        proofs_by_client = {}
+        for proof in DeliveryProof.objects.filter(order_date=target_date).order_by('kind'):
+            proofs_by_client.setdefault(proof.client_id, []).append(_proof_payload(proof))
+
         route_ids_with_orders = {route_id for route_id, _ in orders_by_stop}
 
         routes_qs = (
@@ -218,7 +226,7 @@ class LogisticsView(APIView):
             stops = []
             for client_id, client in stop_clients.items():
                 shown_stops.add((route.route_id, client_id))
-                stops.append(_stop_payload(client, orders_by_stop.get((route.route_id, client_id), [])))
+                stops.append(_stop_payload(client, orders_by_stop.get((route.route_id, client_id), []), proofs_by_client.get(client_id, [])))
             stops.sort(key=lambda s: (len(s['orders']) == 0, s['name']))
 
             routes_data.append({
@@ -233,7 +241,7 @@ class LogisticsView(APIView):
 
         if scoped_driver_id is None:
             unassigned = [
-                _stop_payload(client_by_id[client_id], orders)
+                _stop_payload(client_by_id[client_id], orders, proofs_by_client.get(client_id, []))
                 for (route_id, client_id), orders in orders_by_stop.items()
                 if (route_id, client_id) not in shown_stops
             ]
@@ -308,7 +316,7 @@ def _orders_for_driver_today(client, driver_id):
     ).filter(effective_driver_id=driver_id)
 
 
-def _stop_payload(client, orders):
+def _stop_payload(client, orders, proofs=()):
     return {
         'client_id': client.client_id,
         'name': client.name,
@@ -317,7 +325,42 @@ def _stop_payload(client, orders):
         'latitude': client.latitude,
         'longitude': client.longitude,
         'orders': orders,
+        'proofs': list(proofs) if orders else [],
     }
+
+MAX_PROOF_SIZE = 5 * 1024 * 1024
+ALLOWED_PROOF_FORMATS = {'JPEG', 'PNG', 'WEBP'}
+MAX_SIGNER_NAME_LENGTH = 100
+
+
+def _validate_proof_image(upload):
+    try:
+        with Image.open(upload) as image:
+            image.verify()
+            image_format = image.format
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        return 'Plik nie jest prawidłowym obrazem.'
+    finally:
+        upload.seek(0)
+    if image_format not in ALLOWED_PROOF_FORMATS:
+        return 'Dozwolone formaty obrazu: JPEG, PNG, WEBP.'
+    return None
+
+
+def _proof_payload(proof):
+    return {
+        'proof_id': proof.proof_id,
+        'kind': proof.kind,
+        'signer_name': proof.signer_name,
+        'created_at': proof.created_at,
+    }
+
+def _driver_can_access_proof(driver_id, proof):
+    if proof.uploaded_by_id == driver_id:
+        return True
+    return _with_effective_assignment(
+        DailyOrder.objects.filter(client_id=proof.client_id, order_date=proof.order_date)
+    ).filter(effective_driver_id=driver_id).exists()
 
 def _within_driver_undo_window(moment):
     return moment is not None and timezone.now() - moment <= DRIVER_UNDO_WINDOW
@@ -558,6 +601,148 @@ class StopDeliveryNoteView(APIView):
             )
 
         return Response({'client_id': client.client_id, 'updated_ids': updated_ids, 'delivery_note': note})
+
+class StopDeliveryProofView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        client = get_object_or_404(Client, pk=pk)
+
+        if user.role == 'driver' and not _driver_can_access_stop(user.user_id, client):
+            return Response(
+                {'error': 'Nie masz dostępu do tego przystanku.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        kind = request.data.get('kind')
+        if kind not in dict(DeliveryProof.KIND_CHOICES):
+            return Response(
+                {'error': 'Nieznany rodzaj potwierdzenia.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        upload = request.FILES.get('image')
+        if upload is None:
+            return Response(
+                {'error': 'Dołącz plik obrazu.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > MAX_PROOF_SIZE:
+            return Response(
+                {'error': 'Plik jest za duży (maksymalnie 5 MB).'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        image_error = _validate_proof_image(upload)
+        if image_error:
+            return Response({'error': image_error}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        signer_name = str(request.data.get('signer_name') or '').strip() if kind == 'signature' else ''
+        if len(signer_name) > MAX_SIGNER_NAME_LENGTH:
+            return Response(
+                {'error': f'Imię i nazwisko może mieć najwyżej {MAX_SIGNER_NAME_LENGTH} znaków.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = date.today()
+        delivered_orders = _orders_for_user(
+            DailyOrder.objects.filter(client=client, order_date=today, status='delivered'), user
+        )
+        if not delivered_orders.exists():
+            return Response(
+                {'error': 'Potwierdzenie można dodać tylko do dostarczonego przystanku.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            previous = (
+                DeliveryProof.objects
+                .select_for_update()
+                .filter(client=client, order_date=today, kind=kind)
+                .first()
+            )
+            if previous is not None:
+                old_storage, old_name = previous.image.storage, previous.image.name
+                previous.delete()
+                transaction.on_commit(lambda: old_storage.delete(old_name))
+
+            proof = DeliveryProof.objects.create(
+                client=client,
+                order_date=today,
+                kind=kind,
+                image=upload,
+                signer_name=signer_name,
+                uploaded_by=user,
+            )
+
+        return Response(_proof_payload(proof), status=http_status.HTTP_201_CREATED)
+
+class DeliveryProofFileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        proof = get_object_or_404(DeliveryProof, pk=pk)
+
+        if user.role == 'driver' and not _driver_can_access_proof(user.user_id, proof):
+            return Response(
+                {'error': 'Nie masz dostępu do tego potwierdzenia.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        if not proof.image.storage.exists(proof.image.name):
+            return Response(
+                {'error': 'Plik potwierdzenia nie istnieje.'},
+                status=http_status.HTTP_404_NOT_FOUND,
+            )
+
+        content_type = mimetypes.guess_type(proof.image.name)[0] or 'application/octet-stream'
+        response = FileResponse(proof.image.open('rb'), content_type=content_type)
+        response['Cache-Control'] = 'private, max-age=3600'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+class DeliveryProofDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        proof = get_object_or_404(DeliveryProof, pk=pk)
+
+        if user.role == 'driver' and (proof.uploaded_by_id != user.user_id or proof.order_date != date.today()):
+            return Response(
+                {'error': 'Możesz usuwać tylko własne dzisiejsze potwierdzenia.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        storage, name = proof.image.storage, proof.image.name
+        with transaction.atomic():
+            proof.delete()
+            transaction.on_commit(lambda: storage.delete(name))
+
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 class ReportStopProblemView(APIView):
     permission_classes = [IsAuthenticated]

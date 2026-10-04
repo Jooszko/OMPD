@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ChangeEvent, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ChevronDown,
@@ -9,8 +9,10 @@ import {
   Package,
   Phone,
   StickyNote,
+  Camera,
+  Signature,
 } from 'lucide-react';
-import { type FailureReason, type LogisticsOrder, type LogisticsStop } from '../../../services/api';
+import { type FailureReason, type LogisticsOrder, type LogisticsStop, type DeliveryProof } from '../../../services/api';
 import {
   FAILURE_REASON_LABELS,
   ORDER_STATUS_COLORS,
@@ -22,6 +24,8 @@ import { formatTime } from '../lib/dateFormat';
 import { buildGoogleMapsStopUrl } from '../lib/navigationLinks';
 import { ReportProblemDialog, type ProblemTarget } from './ReportProblemDialog';
 import { DeliveryNoteDialog } from './DeliveryNoteDialog';
+import { ProofPreviewDialog, ProofThumbnail } from './ProofPreview';
+import { SignatureDialog } from './SignatureDialog';
 
 const SEQUENCE_BADGE_CLASSES: Record<StopState, string> = {
   none: 'bg-bakery-accent text-black',
@@ -78,6 +82,8 @@ export function DriverStopCard({
   deliveringStopId,
   onReportProblem,
   onSaveDeliveryNote,
+  onUploadProof,
+  onDeleteProof,
 }: {
   stop: LogisticsStop;
   sequence?: number | null;
@@ -89,10 +95,16 @@ export function DriverStopCard({
   deliveringStopId: number | null;
   onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
   onSaveDeliveryNote: (clientId: number, note: string) => Promise<boolean>;
+  onUploadProof: (clientId: number, kind: DeliveryProof['kind'], image: Blob, signerName?: string) => Promise<boolean>;
+  onDeleteProof: (clientId: number, proofId: number) => Promise<boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [problemDialog, setProblemDialog] = useState<ProblemDialogState | null>(null);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewProof, setPreviewProof] = useState<DeliveryProof | null>(null);
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const hasDeliveryToday = stop.orders.length > 0;
   const inDeliveryCount = stop.orders.filter((o) => o.status === 'in_delivery').length;
   const isDeliveringStop = deliveringStopId === stop.client_id;
@@ -104,6 +116,9 @@ export function DriverStopCard({
   const showNavigate = !readOnly && stopState === 'pending';
   const hasDeliveredOrders = stop.orders.some((o) => o.status === 'delivered');
   const deliveryNote = stop.orders.find((o) => o.status === 'delivered' && o.delivery_note)?.delivery_note ?? '';
+  const photo = stop.proofs.find((p) => p.kind === 'photo') ?? null;
+  const signature = stop.proofs.find((p) => p.kind === 'signature') ?? null;
+  const canAddProof = !readOnly && hasDeliveredOrders;
 
   const openStopProblem = () =>
     setProblemDialog({
@@ -132,6 +147,27 @@ export function DriverStopCard({
     return ok;
   };
 
+  const handlePhotoSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingPhoto(true);
+    await onUploadProof(stop.client_id, 'photo', file);
+    setUploadingPhoto(false);
+  };
+
+  const deleteProof = async (proof: DeliveryProof) => {
+    const ok = await onDeleteProof(stop.client_id, proof.proof_id);
+    if (ok) setPreviewProof(null);
+    return ok;
+  };
+
+  const submitSignature = async (image: Blob, signerName: string) => {
+    const ok = await onUploadProof(stop.client_id, 'signature', image, signerName);
+    if (ok) setSignatureDialogOpen(false);
+    return ok;
+  };
+
   if (handled && !expanded) {
     const failed = stopState === 'failed';
     return (
@@ -155,6 +191,12 @@ export function DriverStopCard({
         <span className="flex-1 min-w-0 text-sm font-semibold text-gray-500 truncate">{stop.name}</span>
         {deliveryNote && (
           <StickyNote className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma notatkę" />
+        )}
+        {photo && (
+          <Camera className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma zdjęcie dostawy" />
+        )}
+        {signature && (
+          <Signature className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma podpis odbiorcy" />
         )}
         {failed ? (
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-rose-700 whitespace-nowrap">
@@ -337,6 +379,41 @@ export function DriverStopCard({
               <StickyNote className="w-3.5 h-3.5 text-bakery-accent" /> Dodaj notatkę do dostawy
             </button>
           )}
+          {(photo || signature || canAddProof) && (
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              {photo && <ProofThumbnail proof={photo} stopName={stop.name} onOpen={setPreviewProof} />}
+              {signature && <ProofThumbnail proof={signature} stopName={stop.name} onOpen={setPreviewProof} />}
+              {canAddProof && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 px-3 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-bakery-accent" />
+                    {uploadingPhoto ? 'Wysyłanie...' : photo ? 'Zmień zdjęcie' : 'Zrób zdjęcie'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignatureDialogOpen(true)}
+                    className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 px-3 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+                  >
+                    <Signature className="w-3.5 h-3.5 text-bakery-accent" />
+                    {signature ? 'Zmień podpis' : 'Podpis odbiorcy'}
+                  </button>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoSelected}
+                    className="hidden"
+                  />
+                </>
+              )}
+            </div>
+          )}
           {!readOnly && inDeliveryCount >= 2 && (
             <div className="flex gap-2 mt-1">
               <button
@@ -377,6 +454,22 @@ export function DriverStopCard({
           initialNote={deliveryNote}
           onSubmit={submitDeliveryNote}
           onClose={() => setNoteDialogOpen(false)}
+        />
+      )}
+      {previewProof && (
+        <ProofPreviewDialog
+          proof={previewProof}
+          stopName={stop.name}
+          canDelete={!readOnly}
+          onDelete={deleteProof}
+          onClose={() => setPreviewProof(null)}
+        />
+      )}
+      {signatureDialogOpen && (
+        <SignatureDialog
+          subtitle={stop.name}
+          onSubmit={submitSignature}
+          onClose={() => setSignatureDialogOpen(false)}
         />
       )}
     </div>
