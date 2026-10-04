@@ -43,14 +43,6 @@ export interface DashboardData {
   financial_summary: FinancialSummary | null;
 }
 
-// export async function fetchDashboard(): Promise<DashboardData> {
-//   const response = await fetch(`${API_BASE}/dashboard/`);
-//   if (!response.ok) {
-//     throw new Error(`Błąd serwera: ${response.status}`);
-//   }
-//   return response.json();
-// }
-
 export interface LoginResponse {
   refresh: string;
   access: string;
@@ -82,6 +74,53 @@ export function logoutUser(): void {
   localStorage.removeItem('refresh_token');
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refresh = localStorage.getItem('refresh_token');
+  if (!refresh) return false;
+
+  const response = await fetch(`${API_BASE}/auth/refresh/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
+  if (!response.ok) return false;
+
+  const data: { access: string } = await response.json();
+  localStorage.setItem('access_token', data.access);
+  return true;
+}
+
+function refreshAccessTokenOnce(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+function withAuth(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers);
+  const token = getAuthToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return { ...init, headers };
+}
+
+async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const response = await fetch(input, withAuth(init));
+  if (response.status !== 401) return response;
+
+  const refreshed = await refreshAccessTokenOnce();
+  if (!refreshed) {
+    logoutUser();
+    window.location.reload();
+    return response;
+  }
+  return fetch(input, withAuth(init));
+}
+
 export async function fetchDashboard(): Promise<any> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -90,7 +129,7 @@ export async function fetchDashboard(): Promise<any> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/dashboard/`, { headers });
+  const response = await apiFetch(`${API_BASE}/dashboard/`, { headers });
   if (!response.ok) {
     if (response.status === 401) {
       logoutUser();
@@ -141,17 +180,17 @@ async function handleJsonResponse(response: Response): Promise<any> {
 }
 
 export async function fetchCurrentUser(): Promise<AppUser> {
-  const response = await fetch(`${API_BASE}/users/me/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/users/me/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchUsers(): Promise<AppUser[]> {
-  const response = await fetch(`${API_BASE}/users/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/users/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function createUser(payload: any): Promise<AppUser> {
-  const response = await fetch(`${API_BASE}/users/`, {
+  const response = await apiFetch(`${API_BASE}/users/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -160,7 +199,7 @@ export async function createUser(payload: any): Promise<AppUser> {
 }
 
 export async function updateUser(userId: number, payload: any): Promise<AppUser> {
-  const response = await fetch(`${API_BASE}/users/${userId}/`, {
+  const response = await apiFetch(`${API_BASE}/users/${userId}/`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -169,7 +208,7 @@ export async function updateUser(userId: number, payload: any): Promise<AppUser>
 }
 
 export async function deleteUser(userId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/users/${userId}/`, {
+  const response = await apiFetch(`${API_BASE}/users/${userId}/`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -197,19 +236,19 @@ export interface AppClient {
 }
 
 export async function fetchRoutes(): Promise<RouteOption[]> {
-  const response = await fetch(`${API_BASE}/clients/routes/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/clients/routes/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchClients(): Promise<AppClient[]> {
-  const response = await fetch(`${API_BASE}/clients/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/clients/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function saveClient(payload: any, clientId: number | null = null): Promise<AppClient> {
   const url = clientId ? `${API_BASE}/clients/${clientId}/` : `${API_BASE}/clients/`;
   const method = clientId ? 'PUT' : 'POST';
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method,
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -245,17 +284,17 @@ export interface AppRecipe {
 }
 
 export async function fetchIngredients(): Promise<AppIngredient[]> {
-  const response = await fetch(`${API_BASE}/products/ingredients/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/products/ingredients/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchProducts(): Promise<AppProduct[]> {
-  const response = await fetch(`${API_BASE}/products/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/products/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function updateProductPrice(productId: number, basePrice: number): Promise<AppProduct> {
-  const response = await fetch(`${API_BASE}/products/${productId}/`, {
+  const response = await apiFetch(`${API_BASE}/products/${productId}/`, {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify({ base_price: basePrice }),
@@ -264,7 +303,7 @@ export async function updateProductPrice(productId: number, basePrice: number): 
 }
 
 export async function fetchRecipes(): Promise<AppRecipe[]> {
-  const response = await fetch(`${API_BASE}/products/recipes/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/products/recipes/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
@@ -273,7 +312,7 @@ export async function createRecipe(payload: {
   category: string;
   items: { ingredient_id: number; amount: number }[];
 }): Promise<AppRecipe> {
-  const response = await fetch(`${API_BASE}/products/recipes/`, {
+  const response = await apiFetch(`${API_BASE}/products/recipes/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -285,7 +324,7 @@ export async function updateRecipe(
   productId: number,
   items: { ingredient_id: number; amount: number }[]
 ): Promise<AppRecipe> {
-  const response = await fetch(`${API_BASE}/products/recipes/${productId}/`, {
+  const response = await apiFetch(`${API_BASE}/products/recipes/${productId}/`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify({ items }),
@@ -294,7 +333,7 @@ export async function updateRecipe(
 }
 
 export async function deleteRecipe(productId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/products/recipes/${productId}/`, {
+  const response = await apiFetch(`${API_BASE}/products/recipes/${productId}/`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -303,17 +342,17 @@ export async function deleteRecipe(productId: number): Promise<void> {
 
 export async function fetchDailyOrders(dateStr?: string): Promise<any[]> {
   const url = dateStr ? `${API_BASE}/orders/daily/?date=${dateStr}` : `${API_BASE}/orders/daily/`;
-  const response = await fetch(url, { headers: authHeaders() });
+  const response = await apiFetch(url, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchStandingOrders(): Promise<any[]> {
-  const response = await fetch(`${API_BASE}/orders/standing/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/orders/standing/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchOrderHistory(): Promise<any[]> {
-  const response = await fetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
@@ -340,7 +379,7 @@ export function getCurrentUserId(): number | null {
 }
 
 export async function sendMessage(recipientId: number, title: string, message: string): Promise<AppNotification> {
-  const response = await fetch(`${API_BASE}/users/notifications/send/`, {
+  const response = await apiFetch(`${API_BASE}/users/notifications/send/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ recipient_id: recipientId, title, message }),
@@ -354,12 +393,12 @@ export interface NotificationsResponse {
 }
 
 export async function fetchNotifications(): Promise<NotificationsResponse> {
-  const response = await fetch(`${API_BASE}/users/notifications/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/users/notifications/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function markNotificationRead(notificationId: number): Promise<AppNotification> {
-  const response = await fetch(`${API_BASE}/users/notifications/${notificationId}/read/`, {
+  const response = await apiFetch(`${API_BASE}/users/notifications/${notificationId}/read/`, {
     method: 'PATCH',
     headers: authHeaders(),
   });
@@ -367,7 +406,7 @@ export async function markNotificationRead(notificationId: number): Promise<AppN
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  const response = await fetch(`${API_BASE}/users/notifications/mark-all-read/`, {
+  const response = await apiFetch(`${API_BASE}/users/notifications/mark-all-read/`, {
     method: 'PATCH',
     headers: authHeaders(),
   });
@@ -431,12 +470,14 @@ function withDateRange(base: string, start?: string, end?: string): string {
 
 export async function fetchDailySummary(dateStr?: string): Promise<DailySummary> {
   const url = dateStr ? `${API_BASE}/finance/daily-summary/?date=${dateStr}` : `${API_BASE}/finance/daily-summary/`;
-  const response = await fetch(url, { headers: authHeaders() });
+  const response = await apiFetch(url, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function fetchExpenses(start?: string, end?: string): Promise<AppExpense[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/expenses/`, start, end), { headers: authHeaders() });
+  const response = await apiFetch(withDateRange(`${API_BASE}/finance/expenses/`, start, end), {
+    headers: authHeaders(),
+  });
   return handleJsonResponse(response);
 }
 
@@ -446,7 +487,7 @@ export async function createExpense(payload: {
   description: string;
   date: string;
 }): Promise<AppExpense> {
-  const response = await fetch(`${API_BASE}/finance/expenses/`, {
+  const response = await apiFetch(`${API_BASE}/finance/expenses/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -455,40 +496,40 @@ export async function createExpense(payload: {
 }
 
 export async function fetchCategoryBreakdown(start?: string, end?: string): Promise<CategoryBreakdownRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), {
+  const response = await apiFetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), {
     headers: authHeaders(),
   });
   return handleJsonResponse(response);
 }
 
 export async function fetchPeriodIncomes(start?: string, end?: string): Promise<PeriodIncomeRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), {
+  const response = await apiFetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), {
     headers: authHeaders(),
   });
   return handleJsonResponse(response);
 }
 
 export async function fetchTopClients(start?: string, end?: string): Promise<TopClientRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), {
+  const response = await apiFetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), {
     headers: authHeaders(),
   });
   return handleJsonResponse(response);
 }
 
 export async function fetchProfitTrend(start?: string, end?: string): Promise<ProfitTrendRow[]> {
-  const response = await fetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), {
+  const response = await apiFetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), {
     headers: authHeaders(),
   });
   return handleJsonResponse(response);
 }
 
 export async function fetchFinancialReports(): Promise<FinancialReport[]> {
-  const response = await fetch(`${API_BASE}/finance/reports/`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/finance/reports/`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
 export async function generateFinancialReport(): Promise<FinancialReport> {
-  const response = await fetch(`${API_BASE}/finance/reports/`, {
+  const response = await apiFetch(`${API_BASE}/finance/reports/`, {
     method: 'POST',
     headers: authHeaders(),
   });
@@ -496,7 +537,7 @@ export async function generateFinancialReport(): Promise<FinancialReport> {
 }
 
 export async function deleteFinancialReport(reportDate: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/finance/reports/${reportDate}/`, {
+  const response = await apiFetch(`${API_BASE}/finance/reports/${reportDate}/`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -566,7 +607,7 @@ export async function fetchLogistics(driverId?: number, date?: string): Promise<
   if (date) params.set('date', date);
   const query = params.toString();
   const url = query ? `${API_BASE}/logistics/?${query}` : `${API_BASE}/logistics/`;
-  const response = await fetch(url, { headers });
+  const response = await apiFetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {
       logoutUser();
@@ -606,7 +647,7 @@ export async function fetchRouteDirections(routeId: number, date?: string): Prom
   const url = date
     ? `${API_BASE}/logistics/routes/${routeId}/directions/?date=${encodeURIComponent(date)}`
     : `${API_BASE}/logistics/routes/${routeId}/directions/`;
-  const response = await fetch(url, { headers });
+  const response = await apiFetch(url, { headers });
   if (!response.ok) {
     if (response.status === 401) {
       logoutUser();
@@ -628,7 +669,7 @@ export async function updateOrderStatus(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/logistics/orders/${orderId}/status/`, {
+  const response = await apiFetch(`${API_BASE}/logistics/orders/${orderId}/status/`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ status: newStatus }),
@@ -655,7 +696,7 @@ export async function deliverStop(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
     method: 'POST',
     headers,
   });
@@ -687,7 +728,7 @@ async function postProblemReport(path: string, reason: FailureReason, note: stri
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await apiFetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ reason, note }),
@@ -720,7 +761,7 @@ export async function withdrawProblemReport(orderIds: number[]): Promise<{ rever
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/logistics/problems/withdraw/`, {
+  const response = await apiFetch(`${API_BASE}/logistics/problems/withdraw/`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ order_ids: orderIds }),
@@ -745,7 +786,7 @@ export async function fetchSuppliers(): Promise<any[]> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/finance/suppliers/`, { headers });
+  const response = await apiFetch(`${API_BASE}/finance/suppliers/`, { headers });
   if (!response.ok) {
     if (response.status === 401) {
       logoutUser();
@@ -768,7 +809,7 @@ export async function saveSupplier(payload: any, supplierId: number | null = nul
 
   const method = supplierId ? 'PUT' : 'POST';
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method,
     headers,
     body: JSON.stringify(payload),
@@ -792,7 +833,7 @@ export async function saveDailyOrder(payload: {
   status?: string;
   items: { product_id: number; qty: number }[];
 }): Promise<any> {
-  const response = await fetch(`${API_BASE}/orders/daily/`, {
+  const response = await apiFetch(`${API_BASE}/orders/daily/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -801,7 +842,7 @@ export async function saveDailyOrder(payload: {
 }
 
 export async function deleteDailyOrder(orderId: string | number): Promise<void> {
-  const response = await fetch(`${API_BASE}/orders/daily/?id=${encodeURIComponent(orderId)}`, {
+  const response = await apiFetch(`${API_BASE}/orders/daily/?id=${encodeURIComponent(orderId)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -809,7 +850,7 @@ export async function deleteDailyOrder(orderId: string | number): Promise<void> 
 }
 
 export async function deleteStandingOrder(clientId: string | number): Promise<void> {
-  const response = await fetch(`${API_BASE}/orders/standing/?client_id=${encodeURIComponent(clientId)}`, {
+  const response = await apiFetch(`${API_BASE}/orders/standing/?client_id=${encodeURIComponent(clientId)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -821,7 +862,7 @@ export async function saveStandingOrder(payload: {
   days: number[];
   items: { product_id: number; qty: number }[];
 }): Promise<any> {
-  const response = await fetch(`${API_BASE}/orders/standing/`, {
+  const response = await apiFetch(`${API_BASE}/orders/standing/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
