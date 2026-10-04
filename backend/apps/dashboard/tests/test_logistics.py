@@ -572,3 +572,91 @@ class ReportProblemTests(TestCase):
         self.refresh_all()
         self.assertEqual(self.in_delivery_1.status, 'failed')
         self.assertEqual(self.in_delivery_2.status, 'failed')
+
+class DeliveryNoteTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+        self.driver_a = User.objects.create_user(
+            username='driver_a5', password='x', role='driver', full_name='Driver A5'
+        )
+        self.driver_b = User.objects.create_user(
+            username='driver_b5', password='x', role='driver', full_name='Driver B5'
+        )
+
+        route_a = Route.objects.create(route_name='Trasa A5', driver=self.driver_a)
+        self.client_a = Client.objects.create(name='Klient A5', address='Adres A5', route=route_a)
+        product = Product.objects.create(name='Chałka', category='bread', base_price=Decimal('6.00'))
+        today = date.today()
+
+        def make_order(status, order_date=today):
+            return DailyOrder.objects.create(
+                client=self.client_a, product=product, order_date=order_date,
+                quantity=2, price_at_sale=Decimal('6.00'), status=status,
+                delivered_at=timezone.now() if status == 'delivered' else None,
+            )
+
+        self.delivered_1 = make_order('delivered')
+        self.delivered_2 = make_order('delivered')
+        self.in_delivery = make_order('in_delivery')
+        self.yesterday = make_order('delivered', order_date=today - timedelta(days=1))
+
+        self.url = f'/api/logistics/clients/{self.client_a.client_id}/delivery-note/'
+
+    def refresh_all(self):
+        for order in (self.delivered_1, self.delivered_2, self.in_delivery, self.yesterday):
+            order.refresh_from_db()
+
+    def test_driver_adds_note_to_todays_delivered_orders(self):
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url, {'note': '  Zostawione na zapleczu  '})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertCountEqual(response.data['updated_ids'], [self.delivered_1.do_id, self.delivered_2.do_id])
+        self.refresh_all()
+        self.assertEqual(self.delivered_1.delivery_note, 'Zostawione na zapleczu')
+        self.assertEqual(self.delivered_2.delivery_note, 'Zostawione na zapleczu')
+        self.assertEqual(self.in_delivery.delivery_note, '')
+        self.assertEqual(self.yesterday.delivery_note, '')
+
+    def test_empty_note_removes_existing_note(self):
+        DailyOrder.objects.filter(pk=self.delivered_1.pk).update(delivery_note='Stara notatka')
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url, {'note': '   '})
+
+        self.assertEqual(response.status_code, 200)
+        self.refresh_all()
+        self.assertEqual(self.delivered_1.delivery_note, '')
+
+    def test_note_validation(self):
+        self.api.force_authenticate(self.driver_a)
+        for payload in ({'note': 'x' * 501}, {'note': ['lista']}):
+            with self.subTest(payload=payload):
+                response = self.api.post(self.url, payload, format='json')
+                self.assertEqual(response.status_code, 400)
+
+    def test_other_driver_cannot_add_note(self):
+        self.api.force_authenticate(self.driver_b)
+        response = self.api.post(self.url, {'note': 'Cudza notatka'})
+
+        self.assertEqual(response.status_code, 403)
+        self.refresh_all()
+        self.assertEqual(self.delivered_1.delivery_note, '')
+
+    def test_returns_400_without_delivered_orders(self):
+        DailyOrder.objects.filter(pk__in=[self.delivered_1.pk, self.delivered_2.pk]).update(status='in_delivery')
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.post(self.url, {'note': 'Notatka'})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_reverting_delivery_clears_note(self):
+        DailyOrder.objects.filter(pk=self.delivered_1.pk).update(delivery_note='Zostawione na zapleczu')
+        self.api.force_authenticate(self.driver_a)
+        response = self.api.patch(
+            f'/api/logistics/orders/{self.delivered_1.do_id}/status/', {'status': 'in_delivery'}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.delivered_1.refresh_from_db()
+        self.assertEqual(self.delivered_1.delivery_note, '')

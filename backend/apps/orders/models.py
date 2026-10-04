@@ -49,6 +49,7 @@ class DailyOrder(TimeStampedModel):
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
     delivered_at = models.DateTimeField(null=True, blank=True)
+    delivery_note = models.TextField(blank=True, default='')
     failure_reason = models.CharField(max_length=20, choices=FAILURE_REASON_CHOICES, blank=True, default='')
     failure_note = models.TextField(blank=True, default='')
     failed_at = models.DateTimeField(null=True, blank=True)

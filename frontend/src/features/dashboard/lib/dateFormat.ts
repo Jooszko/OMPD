@@ -13,3 +13,11 @@ export function shiftIsoDate(isoDate: string, days: number): string {
   date.setDate(date.getDate() + days);
   return toIsoDate(date);
 }
+
+export function formatDayLabel(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString('pl-PL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+}

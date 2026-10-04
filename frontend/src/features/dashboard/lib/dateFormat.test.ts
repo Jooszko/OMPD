@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTime, shiftIsoDate, toIsoDate } from './dateFormat';
+import { formatDayLabel, formatTime, shiftIsoDate, toIsoDate } from './dateFormat';
 
 describe('toIsoDate', () => {
   it('pads month and day with zeros', () => {
@@ -22,5 +22,11 @@ describe('shiftIsoDate', () => {
 describe('formatTime', () => {
   it('formats hours and minutes with leading zeros', () => {
     expect(formatTime(new Date(2026, 9, 4, 7, 5))).toBe('07:05');
+  });
+});
+
+describe('formatDayLabel', () => {
+  it('formats the weekday, day and month in Polish', () => {
+    expect(formatDayLabel('2026-10-04')).toBe('niedziela, 4 października');
   });
 });

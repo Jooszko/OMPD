@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, RefreshCw, Truck } from 'lucide-react';
+import { ArrowLeft, Inbox, RefreshCw, Truck } from 'lucide-react';
 import {
   fetchRouteDirections,
   type LogisticsOrder,
@@ -13,10 +13,8 @@ import { RouteSummary } from './RouteSummary';
 import { orderStopsByRoute } from '../lib/stopOrder';
 import { getRouteProgress } from '../lib/routeProgress';
 import { type ProblemTarget } from './ReportProblemDialog';
-import { shiftIsoDate } from '../lib/dateFormat';
-
-const DAY_NAV_BUTTON =
-  'inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed';
+import { formatDayLabel } from '../lib/dateFormat';
+import { DayNavigator, HistoryNotice } from './DayNavigator';
 
 interface DirectionsState {
   routeKey: string;
@@ -35,6 +33,7 @@ export function DriverRouteView({
   onDeliverStop,
   deliveringStopId,
   onReportProblem,
+  onSaveDeliveryNote,
   onRefresh,
   refreshing,
   lastUpdatedAt,
@@ -50,6 +49,7 @@ export function DriverRouteView({
   onDeliverStop: (clientId: number) => void;
   deliveringStopId: number | null;
   onReportProblem: (target: ProblemTarget, reason: FailureReason, note: string) => Promise<boolean>;
+  onSaveDeliveryNote: (clientId: number, note: string) => Promise<boolean>;
   onRefresh: () => void;
   refreshing: boolean;
   lastUpdatedAt: Date | null;
@@ -59,7 +59,6 @@ export function DriverRouteView({
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const route = routes.find((r) => r.route_id === selectedRouteId) ?? routes[0] ?? null;
   const isHistory = date !== today;
-  const goToDate = (target: string) => onChangeDate(target >= today ? null : target);
   const [directionsState, setDirectionsState] = useState<DirectionsState | null>(null);
   const deliveryStopIds = route?.stops.filter((s) => s.orders.length > 0).map((s) => s.client_id) ?? [];
   const deliveriesToday = deliveryStopIds.length;
@@ -77,9 +76,7 @@ export function DriverRouteView({
   const progress = route ? getRouteProgress(route.stops) : { done: 0, failed: 0, total: 0 };
   const allDone = progress.total > 0 && progress.done === progress.total;
   const allDelivered = allDone && progress.failed === 0;
-  const dateLabel = date
-    ? new Date(`${date}T00:00:00`).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })
-    : '';
+  const dateLabel = formatDayLabel(date);
   const nextStopId = isHistory
     ? null
     : (sequencedStops.find(({ stop }) => stop.orders.some((o) => o.status === 'in_delivery'))?.stop.client_id ?? null);
@@ -169,42 +166,8 @@ export function DriverRouteView({
             })}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => goToDate(shiftIsoDate(date, -1))}
-            aria-label="Poprzedni dzień"
-            className={DAY_NAV_BUTTON}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <input
-            type="date"
-            value={date}
-            max={today}
-            onChange={(e) => e.target.value && goToDate(e.target.value)}
-            aria-label="Wybierz dzień"
-            className="min-h-[44px] sm:min-h-0 px-2 py-1 text-xs font-semibold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg outline-none focus:border-bakery-accent"
-          />
-          <button
-            type="button"
-            onClick={() => goToDate(shiftIsoDate(date, 1))}
-            disabled={!isHistory}
-            aria-label="Następny dzień"
-            className={DAY_NAV_BUTTON}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          {isHistory && (
-            <button
-              type="button"
-              onClick={() => onChangeDate(null)}
-              className="min-h-[44px] sm:min-h-0 px-3 py-1 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-lg shadow-xs transition active:scale-[0.98]"
-            >
-              Dziś
-            </button>
-          )}
-        </div>
+        <DayNavigator date={date} today={today} onChangeDate={onChangeDate} />
+        {isHistory && <HistoryNotice />}
 
         {isHistory && (
           <p className="m-0 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-xs font-semibold text-sky-800">
@@ -275,6 +238,7 @@ export function DriverRouteView({
                   onDeliverStop={onDeliverStop}
                   deliveringStopId={deliveringStopId}
                   onReportProblem={onReportProblem}
+                  onSaveDeliveryNote={onSaveDeliveryNote}
                   readOnly={isHistory}
                 />
               ))

@@ -7,6 +7,7 @@ import {
   reportOrderProblem,
   reportStopProblem,
   updateOrderStatus,
+  saveStopDeliveryNote,
   withdrawProblemReport,
   type FailureReason,
   type LogisticsData,
@@ -17,6 +18,8 @@ import { DriverRouteView } from '../components/DriverRouteView';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { type ProblemTarget } from '../components/ReportProblemDialog';
 import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
+import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
+import { formatDayLabel } from '../lib/dateFormat';
 
 const AUTO_REFRESH_MS = 60_000;
 
@@ -75,6 +78,7 @@ export default function Logistics() {
     patchOrders(orderIds, {
       status,
       delivered_at: status === 'delivered' ? deliveredAt : null,
+      delivery_note: '',
       failure_reason: '',
       failure_note: '',
       failed_at: null,
@@ -194,6 +198,20 @@ export default function Logistics() {
     }
   };
 
+  const handleSaveDeliveryNote = async (clientId: number, note: string): Promise<boolean> => {
+    try {
+      const result = await saveStopDeliveryNote(clientId, note);
+      mutationVersion.current += 1;
+      patchOrders(result.updated_ids, { delivery_note: result.delivery_note });
+      setToast({ variant: 'success', text: result.delivery_note ? 'Notatka zapisana.' : 'Notatka usunięta.' });
+      return true;
+    } catch (err) {
+      console.error('Błąd podczas zapisu notatki:', err);
+      showActionError(err);
+      return false;
+    }
+  };
+
   const refreshData = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       const versionAtStart = mutationVersion.current;
@@ -274,6 +292,7 @@ export default function Logistics() {
           previewDriverName={previewDriverName}
           onExitPreview={() => setPreviewDriverId(null)}
           onReportProblem={handleReportProblem}
+          onSaveDeliveryNote={handleSaveDeliveryNote}
         />
         <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
       </div>
@@ -282,6 +301,7 @@ export default function Logistics() {
 
   const routes = data.routes;
   const unassigned = data.unassigned;
+  const isHistory = data.date !== data.today;
   const deliveriesToday =
     routes.reduce((sum, r) => sum + r.stops.filter((s) => s.orders.length > 0).length, 0) + unassigned.length;
   const problemStops = [
@@ -294,10 +314,15 @@ export default function Logistics() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>
-          <p className="text-xs text-gray-500 font-medium">
-            Plan dostaw na dziś ({data.date}) — {deliveriesToday} {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w{' '}
-            {routes.length} {routes.length === 1 ? 'trasie' : 'trasach'}.
+          <p className="text-xs text-gray-500 font-medium first-letter:uppercase">
+            {isHistory ? 'Historia dostaw' : 'Plan dostaw na dziś'}: {formatDayLabel(data.date)} — {deliveriesToday}{' '}
+            {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w {routes.length}{' '}
+            {routes.length === 1 ? 'trasie' : 'trasach'}.
           </p>
+          <div className="mt-2 flex flex-col gap-2">
+            <DayNavigator date={data.date} today={data.today} onChangeDate={setSelectedDate} />
+            {isHistory && <HistoryNotice />}
+          </div>
         </div>
 
         {data.drivers.length > 0 && (
@@ -386,7 +411,13 @@ export default function Logistics() {
                   </div>
                 ) : (
                   route.stops.map((stop) => (
-                    <StopCard key={stop.client_id} stop={stop} onAdvance={handleAdvance} updatingId={updatingId} />
+                    <StopCard
+                      key={stop.client_id}
+                      stop={stop}
+                      onAdvance={handleAdvance}
+                      updatingId={updatingId}
+                      readOnly={isHistory}
+                    />
                   ))
                 )}
               </div>
@@ -405,7 +436,13 @@ export default function Logistics() {
           </div>
           <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
             {unassigned.map((stop) => (
-              <StopCard key={stop.client_id} stop={stop} onAdvance={handleAdvance} updatingId={updatingId} />
+              <StopCard
+                key={stop.client_id}
+                stop={stop}
+                onAdvance={handleAdvance}
+                updatingId={updatingId}
+                readOnly={isHistory}
+              />
             ))}
           </div>
         </div>
