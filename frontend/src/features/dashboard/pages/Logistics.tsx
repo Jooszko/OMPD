@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
   ApiError,
-  deleteDeliveryProof,
   fetchLogistics,
-  uploadDeliveryProof,
   type DeliveryProof,
   type FailureReason,
   type LogisticsData,
@@ -371,44 +369,79 @@ export default function Logistics() {
     });
   };
 
+  const replaceProof = (clientId: number, proof: DeliveryProof) =>
+    patchStopProofs(clientId, (proofs) =>
+      [...proofs.filter((p) => p.kind !== proof.kind), proof].sort((a, b) => a.kind.localeCompare(b.kind))
+    );
+
+  const removeProof = (clientId: number, proofId: number) =>
+    patchStopProofs(clientId, (proofs) => proofs.filter((p) => p.proof_id !== proofId));
+
   const handleUploadProof = async (
     clientId: number,
     kind: DeliveryProof['kind'],
     image: Blob,
     signerName = ''
   ): Promise<boolean> => {
+    let payload: Blob;
     try {
-      const payload = kind === 'photo' ? await compressImage(image) : image;
-      const proof = await uploadDeliveryProof(clientId, kind, payload, signerName);
-      mutationVersion.current += 1;
-      patchStopProofs(clientId, (proofs) =>
-        [...proofs.filter((p) => p.kind !== proof.kind), proof].sort((a, b) => a.kind.localeCompare(b.kind))
-      );
-      setToast({ variant: 'success', text: kind === 'photo' ? 'Zdjęcie zapisane.' : 'Podpis zapisany.' });
-      return true;
+      payload = kind === 'photo' ? await compressImage(image) : image;
     } catch (err) {
-      console.error('Błąd podczas zapisu potwierdzenia:', err);
-      if (err instanceof ImageProcessingError) {
-        setToast({ text: err.message, canRefresh: false });
-      } else {
-        showActionError(err);
-      }
+      console.error('Błąd podczas przetwarzania zdjęcia:', err);
+      setToast({
+        text: err instanceof ImageProcessingError ? err.message : 'Nie udało się przetworzyć zdjęcia.',
+        canRefresh: false,
+      });
       return false;
     }
+
+    const kindLabel = kind === 'photo' ? 'zdjęcie dostawy' : 'podpis odbiorcy';
+    const action = createAction({
+      type: 'uploadProof',
+      payload: { clientId, kind, image: payload, signerName },
+      label: stopLabel(clientId, kindLabel),
+    });
+    const localProof: DeliveryProof = {
+      proof_id: -Date.now(),
+      kind,
+      signer_name: kind === 'signature' ? signerName.trim() : '',
+      created_at: action.occurredAt,
+      localImage: payload,
+      pendingActionId: action.id,
+    };
+
+    const outcome = await runAction<DeliveryProof>(action, () => replaceProof(clientId, localProof));
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') replaceProof(clientId, outcome.result);
+    const saved = kind === 'photo' ? 'Zdjęcie zapisane' : 'Podpis zapisany';
+    setToast({
+      variant: 'success',
+      text: outcome.status === 'queued' ? `${saved} w telefonie – wyślemy po odzyskaniu zasięgu.` : `${saved}.`,
+    });
+    return true;
   };
 
   const handleDeleteProof = async (clientId: number, proofId: number): Promise<boolean> => {
-    try {
-      await deleteDeliveryProof(proofId);
-      mutationVersion.current += 1;
-      patchStopProofs(clientId, (proofs) => proofs.filter((p) => p.proof_id !== proofId));
-      setToast({ variant: 'success', text: 'Potwierdzenie usunięte.' });
+    const proof = findStop(clientId)?.proofs.find((p) => p.proof_id === proofId);
+    if (proof?.pendingActionId && (await withdrawQueued(proof.pendingActionId))) {
+      removeProof(clientId, proofId);
+      setToast({ variant: 'success', text: 'Potwierdzenie usunięte (nie zostało jeszcze wysłane).' });
       return true;
-    } catch (err) {
-      console.error('Błąd podczas usuwania potwierdzenia:', err);
-      showActionError(err);
-      return false;
     }
+
+    const action = createAction({
+      type: 'deleteProof',
+      payload: { clientId, proofId },
+      label: stopLabel(clientId, 'usunięcie potwierdzenia'),
+    });
+    const outcome = await runAction(action, () => removeProof(clientId, proofId));
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') removeProof(clientId, proofId);
+    setToast({
+      variant: 'success',
+      text: outcome.status === 'queued' ? 'Potwierdzenie usunięte (w telefonie).' : 'Potwierdzenie usunięte.',
+    });
+    return true;
   };
 
   const refreshData = useCallback(

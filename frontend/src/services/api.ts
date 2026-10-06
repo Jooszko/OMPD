@@ -566,6 +566,8 @@ export interface DeliveryProof {
   kind: 'photo' | 'signature';
   signer_name: string;
   created_at: string;
+  localImage?: Blob;
+  pendingActionId?: string;
 }
 
 export interface LogisticsStop {

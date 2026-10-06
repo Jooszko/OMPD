@@ -7,6 +7,9 @@ import {
   saveStopDeliveryNote,
   updateOrderStatus,
   withdrawProblemReport,
+  deleteDeliveryProof,
+  uploadDeliveryProof,
+  type DeliveryProof,
   type ActionOptions,
   type FailureReason,
   type LogisticsOrder,
@@ -30,6 +33,12 @@ export type QueuedAction = ActionBase &
     | { type: 'reportOrderProblem'; payload: { orderId: number; reason: FailureReason; note: string } }
     | { type: 'withdrawProblem'; payload: { orderIds: number[] } }
     | { type: 'deliveryNote'; payload: { clientId: number; note: string } }
+    | { type: 'deliveryNote'; payload: { clientId: number; note: string } }
+    | {
+        type: 'uploadProof';
+        payload: { clientId: number; kind: DeliveryProof['kind']; image: Blob; signerName: string };
+      }
+    | { type: 'deleteProof'; payload: { clientId: number; proofId: number } }
   );
 
 export type FailedAction = QueuedAction & { error: string; failedAt: string };
@@ -115,6 +124,16 @@ export function executeAction(action: QueuedAction): Promise<unknown> {
       return reportOrderProblem(action.payload.orderId, action.payload.reason, action.payload.note, options);
     case 'withdrawProblem':
       return withdrawProblemReport(action.payload.orderIds, options);
+    case 'uploadProof':
+      return uploadDeliveryProof(
+        action.payload.clientId,
+        action.payload.kind,
+        action.payload.image,
+        action.payload.signerName,
+        options
+      );
+    case 'deleteProof':
+      return deleteDeliveryProof(action.payload.proofId, options);
     case 'deliveryNote':
       return saveStopDeliveryNote(action.payload.clientId, action.payload.note, options);
   }
