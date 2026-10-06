@@ -2,19 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
 import {
   ApiError,
-  deliverStop,
   fetchLogistics,
-  reportOrderProblem,
-  reportStopProblem,
-  updateOrderStatus,
-  saveStopDeliveryNote,
-  withdrawProblemReport,
-  deleteDeliveryProof,
-  uploadDeliveryProof,
   type DeliveryProof,
   type FailureReason,
   type LogisticsData,
   type LogisticsOrder,
+  type ReportProblemResult,
 } from '../../../services/api';
 import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
@@ -24,6 +17,23 @@ import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
 import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
 import { formatDayLabel } from '../lib/dateFormat';
 import { compressImage, ImageProcessingError } from '../lib/imageCompression';
+import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { OfflineBanner } from '../components/OfflineBanner';
+import {
+  createAction,
+  enqueue,
+  executeAction,
+  loadQueue,
+  removeFromQueue,
+  syncQueue,
+  clearFailed,
+  dismissFailed,
+  loadFailed,
+  type FailedAction,
+  type QueuedAction,
+} from '../../../services/actionQueue';
+import { FailedActionsPanel } from '../components/FailedActionsPanel';
 
 const AUTO_REFRESH_MS = 60_000;
 
@@ -38,8 +48,15 @@ export default function Logistics() {
   const closeToast = useCallback(() => setToast(null), []);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const isOnline = useOnlineStatus();
   const mutationVersion = useRef(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [failedActions, setFailedActions] = useState<FailedAction[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const initialSyncDone = useRef(false);
   const requestKey = `${previewDriverId ?? 'self'}|${selectedDate ?? 'today'}`;
+  const cacheKey = `logistics:${requestKey}`;
   const loading = loadState?.key !== requestKey;
   const error = loadState?.key === requestKey ? loadState.error : null;
 
@@ -51,17 +68,61 @@ export default function Logistics() {
         if (cancelled) return;
         setData(result);
         setLastUpdatedAt(new Date());
+        setIsStale(false);
         setLoadState({ key: requestKey, error: null });
       })
-      .catch((err: Error) => {
-        if (!cancelled) setLoadState({ key: requestKey, error: err.message });
+      .catch(async (err: Error) => {
+        const cached = isNetworkError(err) ? await loadCached<LogisticsData>(cacheKey) : null;
+        if (cancelled) return;
+        if (cached) {
+          setData(cached.value);
+          setLastUpdatedAt(new Date(cached.savedAt));
+          setIsStale(true);
+          setLoadState({ key: requestKey, error: null });
+        } else {
+          setLoadState({ key: requestKey, error: err.message });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [previewDriverId, selectedDate, requestKey]);
+  }, [previewDriverId, selectedDate, requestKey, cacheKey]);
 
+  // --- Kopia danych w telefonie: zapis po każdej zmianie, także offline ---
+  useEffect(() => {
+    if (data && !loading) void saveCached(cacheKey, data, lastUpdatedAt ?? new Date());
+  }, [data, loading, cacheKey, lastUpdatedAt]);
+
+  useEffect(() => {
+    loadQueue().then((queue) => setPendingCount(queue.length));
+    loadFailed().then(setFailedActions);
+  }, []);
+
+  // --- Wyszukiwanie przystanków i zamówień w aktualnych danych ---
+  const allStops = data ? [...data.routes.flatMap((route) => route.stops), ...data.unassigned] : [];
+  const findStop = (clientId: number) => allStops.find((stop) => stop.client_id === clientId) ?? null;
+  const findOrder = (orderId: number) => {
+    for (const stop of allStops) {
+      const order = stop.orders.find((o) => o.do_id === orderId);
+      if (order) return { stop, order };
+    }
+    return null;
+  };
+  const stopOrderIds = (clientId: number, status: LogisticsOrder['status']) =>
+    findStop(clientId)
+      ?.orders.filter((o) => o.status === status)
+      .map((o) => o.do_id) ?? [];
+  const orderLabel = (orderId: number, text: string) => {
+    const found = findOrder(orderId);
+    return found
+      ? `${found.stop.name}: ${found.order.product_name} x${found.order.quantity} – ${text}`
+      : `Zamówienie #${orderId} – ${text}`;
+  };
+  const stopLabel = (clientId: number, text: string) =>
+    `${findStop(clientId)?.name ?? `Klient #${clientId}`} – ${text}`;
+
+  // --- Zmiany na ekranie ---
   const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
     setData((prev) => {
@@ -88,6 +149,15 @@ export default function Logistics() {
       failed_at: null,
     });
 
+  const applyFailure = (orderIds: number[], reason: FailureReason, note: string, failedAt: string) =>
+    patchOrders(orderIds, {
+      status: 'failed',
+      delivered_at: null,
+      failure_reason: reason,
+      failure_note: note,
+      failed_at: failedAt,
+    });
+
   const showActionError = (err: unknown) => {
     if (err instanceof ApiError) {
       setToast({
@@ -105,115 +175,185 @@ export default function Logistics() {
     }
   };
 
-  const revertToInDelivery = async (orderIds: number[]) => {
-    setToast(null);
-    const results = await Promise.allSettled(orderIds.map((id) => updateOrderStatus(id, 'in_delivery')));
+  type RunOutcome<T> = { status: 'sent'; result: T } | { status: 'queued' } | { status: 'error' };
 
-    const revertedIds = orderIds.filter((_, i) => results[i].status === 'fulfilled');
-    if (revertedIds.length > 0) {
-      mutationVersion.current += 1;
-      applyOrderStatus(revertedIds, 'in_delivery');
+  const queueAction = async (action: QueuedAction, applyLocally: () => void): Promise<RunOutcome<never>> => {
+    try {
+      await enqueue(action);
+    } catch (err) {
+      console.error('Nie udało się zapisać akcji w telefonie:', err);
+      setToast({
+        text: 'Brak połączenia i nie udało się zapisać akcji w telefonie. Spróbuj ponownie.',
+        canRefresh: false,
+      });
+      return { status: 'error' };
     }
+    mutationVersion.current += 1;
+    applyLocally();
+    setPendingCount((count) => count + 1);
+    return { status: 'queued' };
+  };
 
-    const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failure) {
-      console.error('Błąd podczas cofania zmiany statusu:', failure.reason);
-      showActionError(failure.reason);
+  const runAction = async <T,>(action: QueuedAction, applyLocally: () => void): Promise<RunOutcome<T>> => {
+    if (!navigator.onLine) return queueAction(action, applyLocally);
+    try {
+      const result = (await executeAction(action)) as T;
+      mutationVersion.current += 1;
+      return { status: 'sent', result };
+    } catch (err) {
+      if (isNetworkError(err)) return queueAction(action, applyLocally);
+      console.error(`Błąd akcji „${action.label}”:`, err);
+      showActionError(err);
+      return { status: 'error' };
     }
   };
 
-  const withdrawProblem = async (orderIds: number[]) => {
+  const withdrawQueued = async (queuedActionId: string | null) => {
+    if (!queuedActionId || !(await removeFromQueue(queuedActionId))) return false;
+    mutationVersion.current += 1;
+    setPendingCount((count) => Math.max(0, count - 1));
+    return true;
+  };
+
+  const undoDelivery = async (orderIds: number[], queuedActionId: string | null) => {
     setToast(null);
-    try {
-      const result = await withdrawProblemReport(orderIds);
-      mutationVersion.current += 1;
-      applyOrderStatus(result.reverted_ids, 'in_delivery');
-      setToast({ variant: 'success', text: 'Zgłoszenie wycofane. Biuro zostało powiadomione.' });
-    } catch (err) {
-      console.error('Błąd podczas wycofywania zgłoszenia:', err);
-      showActionError(err);
+    if (await withdrawQueued(queuedActionId)) {
+      applyOrderStatus(orderIds, 'in_delivery');
+      return;
     }
+    for (const orderId of orderIds) {
+      const action = createAction({
+        type: 'status',
+        payload: { orderId, status: 'in_delivery' },
+        label: orderLabel(orderId, 'cofnięcie dostawy'),
+      });
+      const outcome = await runAction(action, () => applyOrderStatus([orderId], 'in_delivery'));
+      if (outcome.status === 'error') break;
+      if (outcome.status === 'sent') applyOrderStatus([orderId], 'in_delivery');
+    }
+  };
+
+  const undoProblem = async (orderIds: number[], queuedActionId: string | null) => {
+    setToast(null);
+    if (await withdrawQueued(queuedActionId)) {
+      applyOrderStatus(orderIds, 'in_delivery');
+      return;
+    }
+    const action = createAction({
+      type: 'withdrawProblem',
+      payload: { orderIds },
+      label: orderLabel(orderIds[0], 'wycofanie zgłoszenia problemu'),
+    });
+    const outcome = await runAction<{ reverted_ids: number[] }>(action, () =>
+      applyOrderStatus(orderIds, 'in_delivery')
+    );
+    if (outcome.status === 'error') return;
+    if (outcome.status === 'sent') applyOrderStatus(outcome.result.reverted_ids, 'in_delivery');
+    setToast({
+      variant: 'success',
+      text:
+        outcome.status === 'queued'
+          ? 'Zgłoszenie wycofane (zapisano w telefonie).'
+          : 'Zgłoszenie wycofane. Biuro zostało powiadomione.',
+    });
   };
 
   const handleAdvance = async (orderId: number, nextStatus: LogisticsOrder['status']) => {
+    const action = createAction({
+      type: 'status',
+      payload: { orderId, status: nextStatus },
+      label: orderLabel(orderId, nextStatus === 'delivered' ? 'dostarczono' : 'zmiana statusu'),
+    });
     setUpdatingId(orderId);
-    try {
-      const result = await updateOrderStatus(orderId, nextStatus);
-      mutationVersion.current += 1;
-      applyOrderStatus([orderId], nextStatus, result.delivered_at);
-      if (nextStatus === 'delivered') {
-        setToast({
-          variant: 'success',
-          text: 'Oznaczono jako dostarczone.',
-          onUndo: () => revertToInDelivery([orderId]),
-        });
-      }
-    } catch (err) {
-      console.error('Błąd podczas aktualizacji statusu zamówienia:', err);
-      showActionError(err);
-    } finally {
-      setUpdatingId(null);
+    const outcome = await runAction<{ delivered_at: string | null }>(action, () =>
+      applyOrderStatus([orderId], nextStatus, action.occurredAt)
+    );
+    setUpdatingId(null);
+    if (outcome.status === 'error') return;
+    if (outcome.status === 'sent') applyOrderStatus([orderId], nextStatus, outcome.result.delivered_at);
+    if (nextStatus === 'delivered') {
+      const queued = outcome.status === 'queued';
+      setToast({
+        variant: 'success',
+        text: queued ? 'Oznaczono jako dostarczone (zapisano w telefonie).' : 'Oznaczono jako dostarczone.',
+        onUndo: () => undoDelivery([orderId], queued ? action.id : null),
+      });
     }
   };
 
   const handleDeliverStop = async (clientId: number) => {
+    const localIds = stopOrderIds(clientId, 'in_delivery');
+    const action = createAction({
+      type: 'deliverStop',
+      payload: { clientId },
+      label: stopLabel(clientId, 'dostarczono wszystko'),
+    });
     setDeliveringStopId(clientId);
-    try {
-      const result = await deliverStop(clientId);
-      mutationVersion.current += 1;
-      applyOrderStatus(result.delivered_ids, 'delivered', result.delivered_at);
-      setToast({
-        variant: 'success',
-        text: `Przystanek oznaczony jako dostarczony (${result.delivered_ids.length} poz.).`,
-        onUndo: () => revertToInDelivery(result.delivered_ids),
-      });
-    } catch (err) {
-      console.error('Błąd podczas dostarczania przystanku:', err);
-      showActionError(err);
-    } finally {
-      setDeliveringStopId(null);
-    }
+    const outcome = await runAction<{ delivered_ids: number[]; delivered_at: string }>(action, () =>
+      applyOrderStatus(localIds, 'delivered', action.occurredAt)
+    );
+    setDeliveringStopId(null);
+    if (outcome.status === 'error') return;
+    const deliveredIds = outcome.status === 'sent' ? outcome.result.delivered_ids : localIds;
+    if (outcome.status === 'sent') applyOrderStatus(deliveredIds, 'delivered', outcome.result.delivered_at);
+    const queued = outcome.status === 'queued';
+    setToast({
+      variant: 'success',
+      text: `Przystanek oznaczony jako dostarczony (${deliveredIds.length} poz.)${queued ? ' – zapisano w telefonie' : ''}.`,
+      onUndo: () => undoDelivery(deliveredIds, queued ? action.id : null),
+    });
   };
 
   const handleReportProblem = async (target: ProblemTarget, reason: FailureReason, note: string): Promise<boolean> => {
-    try {
-      const result =
-        target.kind === 'stop'
-          ? await reportStopProblem(target.clientId, reason, note)
-          : await reportOrderProblem(target.orderId, reason, note);
-      mutationVersion.current += 1;
-      patchOrders(result.failed_ids, {
-        status: 'failed',
-        delivered_at: null,
-        failure_reason: result.failure_reason,
-        failure_note: result.failure_note,
-        failed_at: result.failed_at,
-      });
-      setToast({
-        variant: 'success',
-        text: `Zgłoszono problem: ${FAILURE_REASON_LABELS[result.failure_reason]}. Biuro zostało powiadomione.`,
-        onUndo: () => withdrawProblem(result.failed_ids),
-      });
-      return true;
-    } catch (err) {
-      console.error('Błąd podczas zgłaszania problemu:', err);
-      showActionError(err);
-      return false;
+    const localIds = target.kind === 'stop' ? stopOrderIds(target.clientId, 'in_delivery') : [target.orderId];
+    const action =
+      target.kind === 'stop'
+        ? createAction({
+            type: 'reportStopProblem',
+            payload: { clientId: target.clientId, reason, note },
+            label: stopLabel(target.clientId, `problem: ${FAILURE_REASON_LABELS[reason]}`),
+          })
+        : createAction({
+            type: 'reportOrderProblem',
+            payload: { orderId: target.orderId, reason, note },
+            label: orderLabel(target.orderId, `problem: ${FAILURE_REASON_LABELS[reason]}`),
+          });
+    const outcome = await runAction<ReportProblemResult>(action, () =>
+      applyFailure(localIds, reason, note, action.occurredAt)
+    );
+    if (outcome.status === 'error') return false;
+    const failedIds = outcome.status === 'sent' ? outcome.result.failed_ids : localIds;
+    if (outcome.status === 'sent') {
+      applyFailure(failedIds, outcome.result.failure_reason, outcome.result.failure_note, outcome.result.failed_at);
     }
+    const queued = outcome.status === 'queued';
+    setToast({
+      variant: 'success',
+      text: queued
+        ? `Zgłoszono problem: ${FAILURE_REASON_LABELS[reason]}. Zapisano w telefonie – biuro dostanie powiadomienie po odzyskaniu zasięgu.`
+        : `Zgłoszono problem: ${FAILURE_REASON_LABELS[reason]}. Biuro zostało powiadomione.`,
+      onUndo: () => undoProblem(failedIds, queued ? action.id : null),
+    });
+    return true;
   };
 
   const handleSaveDeliveryNote = async (clientId: number, note: string): Promise<boolean> => {
-    try {
-      const result = await saveStopDeliveryNote(clientId, note);
-      mutationVersion.current += 1;
-      patchOrders(result.updated_ids, { delivery_note: result.delivery_note });
-      setToast({ variant: 'success', text: result.delivery_note ? 'Notatka zapisana.' : 'Notatka usunięta.' });
-      return true;
-    } catch (err) {
-      console.error('Błąd podczas zapisu notatki:', err);
-      showActionError(err);
-      return false;
+    const localIds = stopOrderIds(clientId, 'delivered');
+    const action = createAction({
+      type: 'deliveryNote',
+      payload: { clientId, note },
+      label: stopLabel(clientId, note ? 'notatka do dostawy' : 'usunięcie notatki'),
+    });
+    const outcome = await runAction<{ updated_ids: number[]; delivery_note: string }>(action, () =>
+      patchOrders(localIds, { delivery_note: note.trim() })
+    );
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') {
+      patchOrders(outcome.result.updated_ids, { delivery_note: outcome.result.delivery_note });
     }
+    const saved = note.trim() ? 'Notatka zapisana' : 'Notatka usunięta';
+    setToast({ variant: 'success', text: outcome.status === 'queued' ? `${saved} (w telefonie).` : `${saved}.` });
+    return true;
   };
 
   const patchStopProofs = (clientId: number, update: (proofs: DeliveryProof[]) => DeliveryProof[]) => {
@@ -229,44 +369,79 @@ export default function Logistics() {
     });
   };
 
+  const replaceProof = (clientId: number, proof: DeliveryProof) =>
+    patchStopProofs(clientId, (proofs) =>
+      [...proofs.filter((p) => p.kind !== proof.kind), proof].sort((a, b) => a.kind.localeCompare(b.kind))
+    );
+
+  const removeProof = (clientId: number, proofId: number) =>
+    patchStopProofs(clientId, (proofs) => proofs.filter((p) => p.proof_id !== proofId));
+
   const handleUploadProof = async (
     clientId: number,
     kind: DeliveryProof['kind'],
     image: Blob,
     signerName = ''
   ): Promise<boolean> => {
+    let payload: Blob;
     try {
-      const payload = kind === 'photo' ? await compressImage(image) : image;
-      const proof = await uploadDeliveryProof(clientId, kind, payload, signerName);
-      mutationVersion.current += 1;
-      patchStopProofs(clientId, (proofs) =>
-        [...proofs.filter((p) => p.kind !== proof.kind), proof].sort((a, b) => a.kind.localeCompare(b.kind))
-      );
-      setToast({ variant: 'success', text: kind === 'photo' ? 'Zdjęcie zapisane.' : 'Podpis zapisany.' });
-      return true;
+      payload = kind === 'photo' ? await compressImage(image) : image;
     } catch (err) {
-      console.error('Błąd podczas zapisu potwierdzenia:', err);
-      if (err instanceof ImageProcessingError) {
-        setToast({ text: err.message, canRefresh: false });
-      } else {
-        showActionError(err);
-      }
+      console.error('Błąd podczas przetwarzania zdjęcia:', err);
+      setToast({
+        text: err instanceof ImageProcessingError ? err.message : 'Nie udało się przetworzyć zdjęcia.',
+        canRefresh: false,
+      });
       return false;
     }
+
+    const kindLabel = kind === 'photo' ? 'zdjęcie dostawy' : 'podpis odbiorcy';
+    const action = createAction({
+      type: 'uploadProof',
+      payload: { clientId, kind, image: payload, signerName },
+      label: stopLabel(clientId, kindLabel),
+    });
+    const localProof: DeliveryProof = {
+      proof_id: -Date.now(),
+      kind,
+      signer_name: kind === 'signature' ? signerName.trim() : '',
+      created_at: action.occurredAt,
+      localImage: payload,
+      pendingActionId: action.id,
+    };
+
+    const outcome = await runAction<DeliveryProof>(action, () => replaceProof(clientId, localProof));
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') replaceProof(clientId, outcome.result);
+    const saved = kind === 'photo' ? 'Zdjęcie zapisane' : 'Podpis zapisany';
+    setToast({
+      variant: 'success',
+      text: outcome.status === 'queued' ? `${saved} w telefonie – wyślemy po odzyskaniu zasięgu.` : `${saved}.`,
+    });
+    return true;
   };
 
   const handleDeleteProof = async (clientId: number, proofId: number): Promise<boolean> => {
-    try {
-      await deleteDeliveryProof(proofId);
-      mutationVersion.current += 1;
-      patchStopProofs(clientId, (proofs) => proofs.filter((p) => p.proof_id !== proofId));
-      setToast({ variant: 'success', text: 'Potwierdzenie usunięte.' });
+    const proof = findStop(clientId)?.proofs.find((p) => p.proof_id === proofId);
+    if (proof?.pendingActionId && (await withdrawQueued(proof.pendingActionId))) {
+      removeProof(clientId, proofId);
+      setToast({ variant: 'success', text: 'Potwierdzenie usunięte (nie zostało jeszcze wysłane).' });
       return true;
-    } catch (err) {
-      console.error('Błąd podczas usuwania potwierdzenia:', err);
-      showActionError(err);
-      return false;
     }
+
+    const action = createAction({
+      type: 'deleteProof',
+      payload: { clientId, proofId },
+      label: stopLabel(clientId, 'usunięcie potwierdzenia'),
+    });
+    const outcome = await runAction(action, () => removeProof(clientId, proofId));
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') removeProof(clientId, proofId);
+    setToast({
+      variant: 'success',
+      text: outcome.status === 'queued' ? 'Potwierdzenie usunięte (w telefonie).' : 'Potwierdzenie usunięte.',
+    });
+    return true;
   };
 
   const refreshData = useCallback(
@@ -279,10 +454,13 @@ export default function Logistics() {
       try {
         const result = await fetchLogistics(previewDriverId ?? undefined, selectedDate ?? undefined);
         if (mutationVersion.current !== versionAtStart) return;
+        if ((await loadQueue()).length > 0) return;
         setData(result);
         setLoadState({ key: requestKey, error: null });
         setLastUpdatedAt(new Date());
-      } catch {
+        setIsStale(false);
+      } catch (err) {
+        if (isNetworkError(err)) setIsStale(true);
         if (!silent) {
           setToast({ text: 'Nie udało się odświeżyć danych. Spróbuj ponownie.', canRefresh: true });
         }
@@ -293,19 +471,62 @@ export default function Logistics() {
     [previewDriverId, selectedDate, requestKey]
   );
 
+  const syncPending = useCallback(async () => {
+    const result = await syncQueue();
+    if (result.sent > 0 || result.failed > 0) mutationVersion.current += 1;
+    setPendingCount(result.pending);
+    if (result.failed > 0) {
+      setFailedActions(await loadFailed());
+      setToast({
+        text: `Nie udało się wysłać ${result.failed} akcji – szczegóły na górze ekranu.`,
+        canRefresh: true,
+      });
+    }
+    return result;
+  }, []);
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    const result = await syncPending();
+    setSyncing(false);
+    if (result.sent > 0 || result.failed > 0) void refreshData({ silent: true });
+    if (result.pending > 0 && result.failed === 0) {
+      setToast({ text: 'Nie udało się połączyć z serwerem. Spróbujemy ponownie automatycznie.', canRefresh: false });
+    }
+  };
+
+  const handleDismissFailed = async (actionId: string) => {
+    await dismissFailed(actionId);
+    setFailedActions((actions) => actions.filter((action) => action.id !== actionId));
+  };
+
+  const handleDismissAllFailed = async () => {
+    await clearFailed();
+    setFailedActions([]);
+  };
+
   useEffect(() => {
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible') refreshData({ silent: true });
+    const syncAndRefresh = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (navigator.onLine) await syncPending();
+      void refreshData({ silent: true });
     };
 
-    const intervalId = setInterval(refreshIfVisible, AUTO_REFRESH_MS);
-    document.addEventListener('visibilitychange', refreshIfVisible);
+    if (!initialSyncDone.current) {
+      initialSyncDone.current = true;
+      void syncAndRefresh();
+    }
+
+    const intervalId = setInterval(syncAndRefresh, AUTO_REFRESH_MS);
+    document.addEventListener('visibilitychange', syncAndRefresh);
+    window.addEventListener('online', syncAndRefresh);
 
     return () => {
       clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', refreshIfVisible);
+      document.removeEventListener('visibilitychange', syncAndRefresh);
+      window.removeEventListener('online', syncAndRefresh);
     };
-  }, [refreshData]);
+  }, [refreshData, syncPending]);
 
   if (loading) {
     return (
@@ -334,6 +555,24 @@ export default function Logistics() {
 
     return (
       <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6">
+        {(!isOnline || isStale || pendingCount > 0 || failedActions.length > 0) && (
+          <div className="max-w-3xl mx-auto mb-4 flex flex-col gap-2">
+            {(!isOnline || isStale || pendingCount > 0) && (
+              <OfflineBanner
+                isOnline={isOnline}
+                savedAt={isStale ? lastUpdatedAt : null}
+                pendingCount={pendingCount}
+                syncing={syncing}
+                onSyncNow={handleSyncNow}
+              />
+            )}
+            <FailedActionsPanel
+              actions={failedActions}
+              onDismiss={handleDismissFailed}
+              onDismissAll={handleDismissAllFailed}
+            />
+          </div>
+        )}
         <DriverRouteView
           date={data.date}
           today={data.today}
@@ -370,6 +609,20 @@ export default function Logistics() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
+      {(!isOnline || isStale || pendingCount > 0) && (
+        <OfflineBanner
+          isOnline={isOnline}
+          savedAt={isStale ? lastUpdatedAt : null}
+          pendingCount={pendingCount}
+          syncing={syncing}
+          onSyncNow={handleSyncNow}
+        />
+      )}
+      <FailedActionsPanel
+        actions={failedActions}
+        onDismiss={handleDismissFailed}
+        onDismissAll={handleDismissAllFailed}
+      />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>

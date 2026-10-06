@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NotificationBell } from '../features/dashboard/components/NotificationBell';
 import { logoutUser, fetchCurrentUser, type AppUser } from '../services/api';
+import { clearQueue, loadQueue, syncQueue } from '../services/actionQueue';
 
 type UserRole = 'admin' | 'baker' | 'driver';
 
@@ -26,7 +27,17 @@ export const DashboardLayout: React.FC = () => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (navigator.onLine) await syncQueue().catch(() => undefined);
+    const pending = await loadQueue();
+    if (pending.length > 0) {
+      const confirmed = window.confirm(
+        `Masz ${pending.length} niewysłanych akcji zapisanych w telefonie (brak połączenia z serwerem). ` +
+          'Wylogowanie je usunie i nie trafią do biura.\n\nCzy na pewno chcesz się wylogować?'
+      );
+      if (!confirmed) return;
+    }
+    await clearQueue();
     logoutUser();
     navigate('/login', { replace: true });
   };

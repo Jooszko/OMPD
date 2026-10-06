@@ -24,11 +24,14 @@ export function ProofThumbnail({
     <button
       type="button"
       onClick={() => onOpen(proof)}
-      aria-label={`Powiększ: ${PROOF_LABELS[proof.kind].toLowerCase()}`}
-      className="shrink-0 rounded-lg overflow-hidden border border-bakery-btnBorder bg-white"
+      aria-label={`Powiększ: ${PROOF_LABELS[proof.kind].toLowerCase()}${proof.pendingActionId ? ' (czeka na wysłanie)' : ''}`}
+      className={`shrink-0 rounded-lg overflow-hidden bg-white border ${
+        proof.pendingActionId ? 'border-2 border-dashed border-amber-400' : 'border-bakery-btnBorder'
+      }`}
     >
       <ProofImage
         proofId={proof.proof_id}
+        localImage={proof.localImage}
         alt={`${PROOF_LABELS[proof.kind]}: ${stopName}`}
         className={isPhoto ? 'w-14 h-14 object-cover' : 'w-24 h-14 object-contain'}
       />
@@ -66,13 +69,21 @@ export function ProofPreviewDialog({
   return (
     <Modal
       title={PROOF_LABELS[proof.kind]}
-      subtitle={[stopName, proof.signer_name, formatTime(proof.created_at)].filter(Boolean).join(' · ')}
+      subtitle={[
+        stopName,
+        proof.signer_name,
+        formatTime(proof.created_at),
+        proof.pendingActionId ? 'czeka na wysłanie' : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')}
       icon={<Icon className="w-5 h-5 text-bakery-accent" />}
       closeDisabled={deleting}
       onClose={onClose}
     >
       <ProofImage
         proofId={proof.proof_id}
+        localImage={proof.localImage}
         alt={`${PROOF_LABELS[proof.kind]}: ${stopName}`}
         className="w-full min-h-40 max-h-[60vh] object-contain rounded-lg bg-white border border-bakery-btnBorder"
       />

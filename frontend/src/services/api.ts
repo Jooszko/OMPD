@@ -1,3 +1,5 @@
+import { clearCache } from './offlineCache';
+
 const API_BASE = '/api';
 
 export interface TodayOrder {
@@ -72,6 +74,7 @@ export async function loginUser(username: string, password: string): Promise<Log
 export function logoutUser(): void {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  void clearCache();
 }
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -563,6 +566,8 @@ export interface DeliveryProof {
   kind: 'photo' | 'signature';
   signer_name: string;
   created_at: string;
+  localImage?: Blob;
+  pendingActionId?: string;
 }
 
 export interface LogisticsStop {
@@ -667,141 +672,17 @@ export async function fetchRouteDirections(routeId: number, date?: string): Prom
   return response.json();
 }
 
-export async function updateOrderStatus(
-  orderId: number,
-  newStatus: LogisticsOrder['status']
-): Promise<{ do_id: number; status: string; delivered_at: string | null }> {
-  const token = getAuthToken();
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await apiFetch(`${API_BASE}/logistics/orders/${orderId}/status/`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ status: newStatus }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      logoutUser();
-      window.location.reload();
-    }
-    const data = await response.json().catch(() => ({}));
-    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
-  }
-  return response.json();
+export interface ActionOptions {
+  actionId?: string;
+  occurredAt?: string;
 }
 
-export async function deliverStop(
-  clientId: number
-): Promise<{ client_id: number; delivered_ids: number[]; delivered_at: string }> {
-  const token = getAuthToken();
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
-    method: 'POST',
-    headers,
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      logoutUser();
-      window.location.reload();
-    }
-    const data = await response.json().catch(() => ({}));
-    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
-  }
-  return response.json();
-}
-
-export interface ReportProblemResult {
-  client_id: number;
-  failed_ids: number[];
-  failure_reason: FailureReason;
-  failure_note: string;
-  failed_at: string;
-}
-
-async function postProblemReport(path: string, reason: FailureReason, note: string): Promise<ReportProblemResult> {
-  const token = getAuthToken();
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await apiFetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ reason, note }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      logoutUser();
-      window.location.reload();
-    }
-    const data = await response.json().catch(() => ({}));
-    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
-  }
-  return response.json();
-}
-
-export function reportStopProblem(clientId: number, reason: FailureReason, note: string) {
-  return postProblemReport(`/logistics/clients/${clientId}/report-problem/`, reason, note);
-}
-
-export function reportOrderProblem(orderId: number, reason: FailureReason, note: string) {
-  return postProblemReport(`/logistics/orders/${orderId}/report-problem/`, reason, note);
-}
-
-export async function withdrawProblemReport(orderIds: number[]): Promise<{ reverted_ids: number[] }> {
-  const token = getAuthToken();
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await apiFetch(`${API_BASE}/logistics/problems/withdraw/`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ order_ids: orderIds }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      logoutUser();
-      window.location.reload();
-    }
-    const data = await response.json().catch(() => ({}));
-    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
-  }
-  return response.json();
-}
-
-export async function saveStopDeliveryNote(
-  clientId: number,
-  note: string
-): Promise<{ client_id: number; updated_ids: number[]; delivery_note: string }> {
-  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/delivery-note/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
-  }
-  return response.json();
+function actionHeaders(options: ActionOptions = {}, json = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (json) headers['Content-Type'] = 'application/json';
+  if (options.actionId) headers['X-Client-Action-Id'] = options.actionId;
+  if (options.occurredAt) headers['X-Occurred-At'] = options.occurredAt;
+  return headers;
 }
 
 async function ensureOk(response: Response): Promise<Response> {
@@ -812,11 +693,91 @@ async function ensureOk(response: Response): Promise<Response> {
   return response;
 }
 
+export async function updateOrderStatus(
+  orderId: number,
+  newStatus: LogisticsOrder['status'],
+  options?: ActionOptions
+): Promise<{ do_id: number; status: string; delivered_at: string | null }> {
+  const response = await apiFetch(`${API_BASE}/logistics/orders/${orderId}/status/`, {
+    method: 'PATCH',
+    headers: actionHeaders(options),
+    body: JSON.stringify({ status: newStatus }),
+  });
+  return (await ensureOk(response)).json();
+}
+
+export async function deliverStop(
+  clientId: number,
+  options?: ActionOptions
+): Promise<{ client_id: number; delivered_ids: number[]; delivered_at: string }> {
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/deliver/`, {
+    method: 'POST',
+    headers: actionHeaders(options),
+  });
+  return (await ensureOk(response)).json();
+}
+
+export interface ReportProblemResult {
+  client_id: number;
+  failed_ids: number[];
+  failure_reason: FailureReason;
+  failure_note: string;
+  failed_at: string;
+}
+
+async function postProblemReport(
+  path: string,
+  reason: FailureReason,
+  note: string,
+  options?: ActionOptions
+): Promise<ReportProblemResult> {
+  const response = await apiFetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: actionHeaders(options),
+    body: JSON.stringify({ reason, note }),
+  });
+  return (await ensureOk(response)).json();
+}
+
+export function reportStopProblem(clientId: number, reason: FailureReason, note: string, options?: ActionOptions) {
+  return postProblemReport(`/logistics/clients/${clientId}/report-problem/`, reason, note, options);
+}
+
+export function reportOrderProblem(orderId: number, reason: FailureReason, note: string, options?: ActionOptions) {
+  return postProblemReport(`/logistics/orders/${orderId}/report-problem/`, reason, note, options);
+}
+
+export async function withdrawProblemReport(
+  orderIds: number[],
+  options?: ActionOptions
+): Promise<{ reverted_ids: number[] }> {
+  const response = await apiFetch(`${API_BASE}/logistics/problems/withdraw/`, {
+    method: 'POST',
+    headers: actionHeaders(options),
+    body: JSON.stringify({ order_ids: orderIds }),
+  });
+  return (await ensureOk(response)).json();
+}
+
+export async function saveStopDeliveryNote(
+  clientId: number,
+  note: string,
+  options?: ActionOptions
+): Promise<{ client_id: number; updated_ids: number[]; delivery_note: string }> {
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/delivery-note/`, {
+    method: 'POST',
+    headers: actionHeaders(options),
+    body: JSON.stringify({ note }),
+  });
+  return (await ensureOk(response)).json();
+}
+
 export async function uploadDeliveryProof(
   clientId: number,
   kind: DeliveryProof['kind'],
   image: Blob,
-  signerName = ''
+  signerName = '',
+  options?: ActionOptions
 ): Promise<DeliveryProof> {
   const form = new FormData();
   form.append('kind', kind);
@@ -825,6 +786,7 @@ export async function uploadDeliveryProof(
 
   const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/proofs/`, {
     method: 'POST',
+    headers: actionHeaders(options, false),
     body: form,
   });
   return (await ensureOk(response)).json();
@@ -835,8 +797,11 @@ export async function fetchDeliveryProofImage(proofId: number): Promise<Blob> {
   return (await ensureOk(response)).blob();
 }
 
-export async function deleteDeliveryProof(proofId: number): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/logistics/proofs/${proofId}/`, { method: 'DELETE' });
+export async function deleteDeliveryProof(proofId: number, options?: ActionOptions): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/logistics/proofs/${proofId}/`, {
+    method: 'DELETE',
+    headers: actionHeaders(options, false),
+  });
   await ensureOk(response);
 }
 

@@ -8,14 +8,25 @@ interface LoadedImage {
   failed: boolean;
 }
 
-export function ProofImage({ proofId, alt, className = '' }: { proofId: number; alt: string; className?: string }) {
+export function ProofImage({
+  proofId,
+  localImage,
+  alt,
+  className = '',
+}: {
+  proofId: number;
+  localImage?: Blob;
+  alt: string;
+  className?: string;
+}) {
   const [loaded, setLoaded] = useState<LoadedImage | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
 
-    fetchDeliveryProofImage(proofId)
+    const source = localImage ? Promise.resolve(localImage) : fetchDeliveryProofImage(proofId);
+    source
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
@@ -29,7 +40,7 @@ export function ProofImage({ proofId, alt, className = '' }: { proofId: number; 
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [proofId]);
+  }, [proofId, localImage]);
 
   const current = loaded?.proofId === proofId ? loaded : null;
 
@@ -45,7 +56,9 @@ export function ProofImage({ proofId, alt, className = '' }: { proofId: number; 
   }
 
   if (!current?.url) {
-    return <div className={`bg-bakery-rowBg animate-pulse ${className}`} role="img" aria-label={`Wczytywanie: ${alt}`} />;
+    return (
+      <div className={`bg-bakery-rowBg animate-pulse ${className}`} role="img" aria-label={`Wczytywanie: ${alt}`} />
+    );
   }
 
   return <img src={current.url} alt={alt} className={className} />;

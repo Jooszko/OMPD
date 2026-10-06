@@ -1,6 +1,8 @@
+import uuid
+from functools import wraps
 import mimetypes
-from datetime import date, timedelta
-from django.db import transaction
+from datetime import date, datetime, timedelta
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, IntegerField, Prefetch, Q, Sum, When
 from django.db.models.functions import Coalesce
@@ -21,6 +23,7 @@ from users.models import Notification, User
 from .services.optimize import optimize_stop_order
 from .services.directions_cache import get_cached_route_directions
 from .services.routing import RoutingError
+from .models import ClientAction
 
 class DashboardView(APIView):
     def get(self, request):
@@ -276,6 +279,50 @@ DRIVER_ALLOWED_TRANSITIONS = {
 
 DRIVER_UNDO_WINDOW = timedelta(minutes=10)
 
+MAX_CLOCK_SKEW = timedelta(minutes=5)
+
+def _occurred_at(request):
+    raw = request.headers.get('X-Occurred-At')
+    if not raw:
+        return timezone.now(), None
+    try:
+        moment = datetime.fromisoformat(raw)
+    except ValueError:
+        return None, 'Nieprawidłowy czas akcji.'
+    if timezone.is_naive(moment):
+        return None, 'Czas akcji musi zawierać strefę czasową.'
+    now = timezone.now()
+    if moment > now + MAX_CLOCK_SKEW:
+        return None, 'Czas akcji nie może być w przyszłości.'
+    if moment.astimezone().date() != date.today():
+        return None, 'Akcja z innego dnia nie może zostać zapisana.'
+    return min(moment, now), None
+
+def idempotent_action(view_method):
+    @wraps(view_method)
+    def wrapper(self, request, *args, **kwargs):
+        raw_id = request.headers.get('X-Client-Action-Id')
+        if not raw_id:
+            return view_method(self, request, *args, **kwargs)
+        try:
+            action_id = uuid.UUID(raw_id)
+        except ValueError:
+            return Response(
+                {'error': 'Nieprawidłowy identyfikator akcji.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        if ClientAction.objects.filter(action_id=action_id).exists():
+            return Response({'duplicate': True})
+        try:
+            with transaction.atomic():
+                response = view_method(self, request, *args, **kwargs)
+                if 200 <= response.status_code < 300:
+                    ClientAction.objects.create(action_id=action_id, user=request.user)
+        except IntegrityError:
+            return Response({'duplicate': True})
+        return response
+    return wrapper
+
 ISSUE_SOURCE_STATUSES = {'planned', 'in_production', 'failed'}
 
 def _snapshot_assignment(order):
@@ -362,8 +409,9 @@ def _driver_can_access_proof(driver_id, proof):
         DailyOrder.objects.filter(client_id=proof.client_id, order_date=proof.order_date)
     ).filter(effective_driver_id=driver_id).exists()
 
-def _within_driver_undo_window(moment):
-    return moment is not None and timezone.now() - moment <= DRIVER_UNDO_WINDOW
+def _within_driver_undo_window(moment, reference=None):
+    reference = reference or timezone.now()
+    return moment is not None and reference - moment <= DRIVER_UNDO_WINDOW
 
 MAX_NOTE_LENGTH = 500
 
@@ -391,6 +439,10 @@ def _notify_admins_about_failure(sender, client, orders, reason, note):
     _notify_admins(sender, f'Problem z dostawą: {client.name}', message)
 
 def _report_failure(request, client, orders_qs):
+    occurred_at, time_error = _occurred_at(request)
+    if time_error:
+        return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
+
     reason = request.data.get('reason')
     note = str(request.data.get('note') or '').strip()
 
@@ -424,13 +476,12 @@ def _report_failure(request, client, orders_qs):
             )
 
         failed_ids = [o.do_id for o in orders]
-        now = timezone.now()
         DailyOrder.objects.filter(pk__in=failed_ids).update(
             status='failed',
             failure_reason=reason,
             failure_note=note,
-            failed_at=now,
-            updated_at=now,
+            failed_at=occurred_at,
+            updated_at=timezone.now(),
         )
         _notify_admins_about_failure(request.user, client, orders, reason, note)
 
@@ -439,14 +490,18 @@ def _report_failure(request, client, orders_qs):
         'failed_ids': failed_ids,
         'failure_reason': reason,
         'failure_note': note,
-        'failed_at': now,
+        'failed_at': occurred_at,
     })
 
 class UpdateOrderStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def patch(self, request, pk):
         user = request.user
+        occurred_at, time_error = _occurred_at(request)
+        if time_error:
+            return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
         order = get_object_or_404(DailyOrder.objects.select_related('client__route'), pk=pk)
         new_status = request.data.get('status')
 
@@ -478,7 +533,7 @@ class UpdateOrderStatusView(APIView):
                     {'error': 'Kierowca może oznaczyć zamówienie w dostawie jako "dostarczone" albo cofnąć to oznaczenie.'},
                     status=http_status.HTTP_403_FORBIDDEN,
                 )
-            if order.status == 'delivered' and not _within_driver_undo_window(order.delivered_at):
+            if order.status == 'delivered' and not _within_driver_undo_window(order.delivered_at, occurred_at):
                 return Response(
                     {'error': 'Czas na cofnięcie dostawy minął. Skontaktuj się z biurem.'},
                     status=http_status.HTTP_403_FORBIDDEN,
@@ -490,7 +545,7 @@ class UpdateOrderStatusView(APIView):
             )
 
         if new_status == 'delivered' and order.status != 'delivered':
-            order.delivered_at = timezone.now()
+            order.delivered_at = occurred_at
         elif new_status != 'delivered':
             order.delivered_at = None
             order.delivery_note = ''
@@ -512,8 +567,12 @@ class UpdateOrderStatusView(APIView):
 class DeliverStopView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def post(self, request, pk):
         user = request.user
+        occurred_at, time_error = _occurred_at(request)
+        if time_error:
+            return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
 
         if user.role not in ('admin', 'driver'):
             return Response(
@@ -541,18 +600,17 @@ class DeliverStopView(APIView):
                     {'error': 'U tego klienta nie ma dziś zamówień w dostawie.'},
                     status=http_status.HTTP_400_BAD_REQUEST,
                 )
-            now = timezone.now()
             DailyOrder.objects.filter(pk__in=delivered_ids).update(
                 status='delivered',
-                delivered_at=now,
-                updated_at=now,
+                delivered_at=occurred_at,
+                updated_at=timezone.now(),
             )
 
-        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': now})
-
+        return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': occurred_at})
 class StopDeliveryNoteView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def post(self, request, pk):
         user = request.user
 
@@ -606,6 +664,7 @@ class StopDeliveryProofView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 
+    @idempotent_action
     def post(self, request, pk):
         user = request.user
 
@@ -720,6 +779,7 @@ class DeliveryProofFileView(APIView):
 class DeliveryProofDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def delete(self, request, pk):
         user = request.user
 
@@ -747,6 +807,7 @@ class DeliveryProofDetailView(APIView):
 class ReportStopProblemView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def post(self, request, pk):
         user = request.user
 
@@ -770,6 +831,7 @@ class ReportStopProblemView(APIView):
 class ReportOrderProblemView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def post(self, request, pk):
         user = request.user
 
@@ -792,6 +854,7 @@ class ReportOrderProblemView(APIView):
 class WithdrawProblemView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @idempotent_action
     def post(self, request):
         user = request.user
 
