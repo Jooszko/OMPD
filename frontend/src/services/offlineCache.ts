@@ -7,9 +7,9 @@ export interface CachedEntry<T> {
   savedAt: string;
 }
 
-export async function saveCached<T>(key: string, value: T): Promise<void> {
+export async function saveCached<T>(key: string, value: T, savedAt: Date = new Date()): Promise<void> {
   try {
-    await set(CACHE_PREFIX + key, { value, savedAt: new Date().toISOString() });
+    await set(CACHE_PREFIX + key, { value, savedAt: savedAt.toISOString() });
   } catch {
     // Brak dostępu do IndexedDB (np. tryb prywatny) – aplikacja działa dalej, tylko bez pamięci offline.
   }
