@@ -12,6 +12,7 @@ import Contractors from '../features/dashboard/pages/Contractors';
 import Warehouse from '../features/dashboard/pages/Warehouse';
 import Logistics from '../features/dashboard/pages/Logistics';
 import Notifications from '../features/dashboard/pages/Notifications';
+import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
 
 import { Login } from '../features/dashboard/pages/Login';
 import { getAuthToken } from '../services/api';
@@ -31,8 +32,8 @@ export const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
 
-      <Route 
-        path="/" 
+      <Route
+        path="/"
         element={
           <ProtectedRoute>
             <DashboardLayout />
@@ -41,9 +42,10 @@ export const AppRoutes: React.FC = () => {
       >
         <Route index element={<HomeDashboard />} />
         <Route path="orders" element={<ZamowieniaPanel />} />
-        
+
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="logistics" element={<Logistics />} />
+        <Route path="delivery-stats" element={<DeliveryStats />} />
         <Route path="products" element={<Produkty />} />
         <Route path="finance" element={<Finance />} />
         <Route path="users" element={<Users />} />
