@@ -5,6 +5,8 @@ import { shiftIsoDate, toIsoDate } from '../lib/dateFormat';
 import { formatPercent } from '../lib/statsFormat';
 import { DailyDeliveriesChart } from '../components/DailyDeliveriesChart';
 import { HorizontalBarList } from '../components/HorizontalBarList';
+import { DriversTable } from '../components/DriversTable';
+import { ProofCoverage } from '../components/ProofCoverage';
 
 const PRESETS = [7, 30, 90] as const;
 
@@ -246,6 +248,20 @@ export default function DeliveryStatsPage() {
                   color={PROBLEM_BAR_COLOR}
                   emptyText="Brak nieudanych dostaw w tym okresie."
                 />
+              </ChartCard>
+              <ChartCard
+                title="Porównanie kierowców"
+                subtitle="Czas w trasie: średnio dziennie, od pierwszej do ostatniej obsłużonej dostawy. Dni w trasie i przystanki liczone tylko z dni, w których kierowca obsłużył choć jeden przystanek."
+                className="lg:col-span-2"
+              >
+                <DriversTable drivers={stats.drivers} />
+              </ChartCard>
+              <ChartCard
+                title="Pokrycie potwierdzeniami"
+                subtitle="Odsetek dostarczonych przystanków z danym rodzajem potwierdzenia. Jeden przystanek może mieć kilka rodzajów naraz."
+                className="lg:col-span-2"
+              >
+                <ProofCoverage coverage={stats.proof_coverage} />
               </ChartCard>
             </div>
           )}

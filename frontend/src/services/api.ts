@@ -818,8 +818,9 @@ export interface DeliveryStatsDriver {
   delivered: number;
   failed: number;
   success_rate: number | null;
+  days_on_route: number;
+  avg_stops_per_day: number;
   avg_route_minutes: number | null;
-  avg_minutes_per_stop: number | null;
 }
 
 export interface DeliveryStats {

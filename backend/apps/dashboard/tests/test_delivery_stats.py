@@ -80,8 +80,9 @@ class DeliveryStatsTests(TestCase):
         self.assertEqual(anna['full_name'], 'Anna Kierowca')
         self.assertEqual((anna['delivered'], anna['failed']), (2, 1))
         self.assertEqual(anna['success_rate'], 66.7)
+        self.assertEqual(anna['days_on_route'], 1)
+        self.assertEqual(anna['avg_stops_per_day'], 3.0)
         self.assertEqual(anna['avg_route_minutes'], 120.0)
-        self.assertEqual(anna['avg_minutes_per_stop'], 60.0)
 
     def test_proof_coverage_of_delivered_stops(self):
         stats = build_delivery_stats(self.day1, self.today)

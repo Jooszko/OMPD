@@ -84,13 +84,13 @@ def build_delivery_stats(start, end):
             coverage['note'] += any(o.delivery_note for o in stop_orders)
 
     route_minutes = defaultdict(list)
-    minutes_per_stop = defaultdict(list)
+    days_on_route = Counter()
     for (driver_key, _), day in driver_days.items():
+        days_on_route[driver_key] += 1
         if day['stops'] < 2 or len(day['events']) < 2:
             continue
         minutes = (max(day['events']) - min(day['events'])).total_seconds() / 60
         route_minutes[driver_key].append(minutes)
-        minutes_per_stop[driver_key].append(minutes / (day['stops'] - 1))
 
     reason_labels = dict(DailyOrder.FAILURE_REASON_CHOICES)
     delivered = sum(day['delivered'] for day in daily.values())
@@ -121,8 +121,9 @@ def build_delivery_stats(start, end):
                 {
                     **entry,
                     'success_rate': _rate(entry['delivered'], entry['delivered'] + entry['failed']),
+                    'days_on_route': days_on_route[key],
+                    'avg_stops_per_day': round((entry['delivered'] + entry['failed']) / days_on_route[key], 1),
                     'avg_route_minutes': _average(route_minutes[key]),
-                    'avg_minutes_per_stop': _average(minutes_per_stop[key]),
                 }
                 for key, entry in drivers.items()
             ),
