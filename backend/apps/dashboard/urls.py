@@ -3,6 +3,7 @@ from .views import (
     DashboardView,
     DeliveryProofDetailView,
     DeliveryProofFileView,
+    DeliveryStatsView,
     DeliverStopView,
     LogisticsView,
     ReportOrderProblemView,
@@ -25,6 +26,7 @@ urlpatterns = [
     path('logistics/problems/withdraw/', WithdrawProblemView.as_view(), name='logistics-withdraw-problem'),
     path('logistics/clients/<int:pk>/proofs/', StopDeliveryProofView.as_view(), name='logistics-stop-proofs'),
     path('logistics/proofs/<int:pk>/', DeliveryProofDetailView.as_view(), name='logistics-proof-detail'),
+    path('delivery-stats/', DeliveryStatsView.as_view(), name='delivery-stats'),
     path('logistics/proofs/<int:pk>/file/', DeliveryProofFileView.as_view(), name='logistics-proof-file'),
     path('logistics/routes/<int:pk>/directions/', RouteDirectionsView.as_view(), name='route-directions'),
 ]

@@ -23,6 +23,7 @@ from users.models import Notification, User
 from .services.optimize import optimize_stop_order
 from .services.directions_cache import get_cached_route_directions
 from .services.routing import RoutingError
+from .services.delivery_stats import build_delivery_stats
 from .models import ClientAction
 
 class DashboardView(APIView):
@@ -1006,3 +1007,38 @@ class RouteDirectionsView(APIView):
                 for c in routable
             ],
         })
+
+MAX_STATS_DAYS = 366
+
+class DeliveryStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response(
+                {'error': 'Statystyki dostaw są dostępne tylko dla administratora.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        today = date.today()
+        try:
+            start = date.fromisoformat(request.query_params.get('start') or str(today - timedelta(days=29)))
+            end = date.fromisoformat(request.query_params.get('end') or str(today))
+        except ValueError:
+            return Response(
+                {'error': 'Nieprawidłowy format daty (YYYY-MM-DD).'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if start > end:
+            return Response(
+                {'error': 'Data początkowa nie może być późniejsza niż końcowa.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        if (end - start).days >= MAX_STATS_DAYS:
+            return Response(
+                {'error': f'Okres statystyk może obejmować najwyżej {MAX_STATS_DAYS} dni.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(build_delivery_stats(start, end))
