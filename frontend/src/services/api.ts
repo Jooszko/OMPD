@@ -805,6 +805,39 @@ export async function deleteDeliveryProof(proofId: number, options?: ActionOptio
   await ensureOk(response);
 }
 
+export interface DeliveryStatsDay {
+  date: string;
+  delivered: number;
+  failed: number;
+  pending: number;
+}
+
+export interface DeliveryStatsDriver {
+  driver_id: number | null;
+  full_name: string;
+  delivered: number;
+  failed: number;
+  success_rate: number | null;
+  avg_route_minutes: number | null;
+  avg_minutes_per_stop: number | null;
+}
+
+export interface DeliveryStats {
+  period: { start: string; end: string };
+  summary: { delivered: number; failed: number; pending: number; success_rate: number | null };
+  daily: DeliveryStatsDay[];
+  failure_reasons: { reason: FailureReason; label: string; count: number }[];
+  problem_clients: { client_id: number; name: string; failed: number }[];
+  drivers: DeliveryStatsDriver[];
+  proof_coverage: { delivered_stops: number; photo: number; signature: number; note: number };
+}
+
+export async function fetchDeliveryStats(start: string, end: string): Promise<DeliveryStats> {
+  const params = new URLSearchParams({ start, end });
+  const response = await apiFetch(`${API_BASE}/delivery-stats/?${params}`);
+  return (await ensureOk(response)).json();
+}
+
 export async function fetchSuppliers(): Promise<any[]> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
