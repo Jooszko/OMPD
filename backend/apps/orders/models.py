@@ -94,3 +94,25 @@ class DeliveryProof(TimeStampedModel):
 
     def __str__(self):
         return f'{self.order_date} - {self.client.name} ({self.kind})'
+
+
+class ProductReturn(TimeStampedModel):
+    return_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey('clients.Client', on_delete=models.CASCADE, related_name='product_returns')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='returns')
+    return_date = models.DateField()
+    source_date = models.DateField()
+    quantity = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    recorded_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='recorded_returns'
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['client', 'product', 'return_date'], name='unique_product_return_per_day'),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name='product_return_quantity_positive'),
+        ]
+
+    def __str__(self):
+        return f'{self.return_date} - {self.client.name}: zwrot {self.product.name} x{self.quantity}'
