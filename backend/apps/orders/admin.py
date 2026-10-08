@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import StandingOrder, DailyOrder
+from .models import StandingOrder, DailyOrder, ProductReturn
 
 class TimeStampedAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
@@ -13,3 +13,9 @@ class StandingOrderAdmin(TimeStampedAdmin):
 class DailyOrderAdmin(TimeStampedAdmin):
     list_display = ('order_date', 'client', 'product', 'quantity', 'status')
     list_filter = ('order_date', 'status')
+
+
+@admin.register(ProductReturn)
+class ProductReturnAdmin(TimeStampedAdmin):
+    list_display = ('return_date', 'client', 'product', 'quantity', 'unit_price', 'recorded_by')
+    list_filter = ('return_date',)

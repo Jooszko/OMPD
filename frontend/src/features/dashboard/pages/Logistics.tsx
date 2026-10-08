@@ -8,6 +8,8 @@ import {
   type LogisticsData,
   type LogisticsOrder,
   type ReportProblemResult,
+  type SaveReturnsResult,
+  type StopReturns,
 } from '../../../services/api';
 import { StopCard } from '../components/StopCard';
 import { DriverRouteView } from '../components/DriverRouteView';
@@ -17,6 +19,7 @@ import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
 import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
 import { formatDayLabel } from '../lib/dateFormat';
 import { compressImage, ImageProcessingError } from '../lib/imageCompression';
+import { applyReturnQuantities, type ReturnQuantities } from '../lib/returns';
 import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { OfflineBanner } from '../components/OfflineBanner';
@@ -356,6 +359,46 @@ export default function Logistics() {
     return true;
   };
 
+  const patchStopReturns = (clientId: number, returns: StopReturns | null) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const patchStop = (stop: (typeof prev.unassigned)[number]) =>
+        stop.client_id === clientId ? { ...stop, returns } : stop;
+      return {
+        ...prev,
+        routes: prev.routes.map((route) => ({ ...route, stops: route.stops.map(patchStop) })),
+        unassigned: prev.unassigned.map(patchStop),
+      };
+    });
+  };
+
+  const handleSaveReturns = async (clientId: number, quantities: ReturnQuantities): Promise<boolean> => {
+    const current = findStop(clientId)?.returns;
+    if (!current) return false;
+    const items = current.items.map((item) => ({
+      product_id: item.product_id,
+      quantity: quantities[item.product_id] ?? 0,
+    }));
+    const action = createAction({
+      type: 'saveReturns',
+      payload: { clientId, items, date: data?.date },
+      label: stopLabel(clientId, 'zwroty towaru'),
+    });
+    const outcome = await runAction<SaveReturnsResult>(action, () =>
+      patchStopReturns(clientId, applyReturnQuantities(current, quantities))
+    );
+    if (outcome.status === 'error') return false;
+    if (outcome.status === 'sent') patchStopReturns(clientId, outcome.result.returns);
+    setToast({
+      variant: 'success',
+      text:
+        outcome.status === 'queued'
+          ? 'Zwroty zapisane w telefonie – wyślemy po odzyskaniu zasięgu.'
+          : 'Zwroty zapisane.',
+    });
+    return true;
+  };
+
   const patchStopProofs = (clientId: number, update: (proofs: DeliveryProof[]) => DeliveryProof[]) => {
     setData((prev) => {
       if (!prev) return prev;
@@ -589,6 +632,7 @@ export default function Logistics() {
           onExitPreview={() => setPreviewDriverId(null)}
           onReportProblem={handleReportProblem}
           onSaveDeliveryNote={handleSaveDeliveryNote}
+          onSaveReturns={handleSaveReturns}
           onUploadProof={handleUploadProof}
           onDeleteProof={handleDeleteProof}
         />
@@ -730,6 +774,7 @@ export default function Logistics() {
                       updatingId={updatingId}
                       readOnly={isHistory}
                       onDeleteProof={handleDeleteProof}
+                      onSaveReturns={handleSaveReturns}
                     />
                   ))
                 )}
@@ -756,6 +801,7 @@ export default function Logistics() {
                 updatingId={updatingId}
                 readOnly={isHistory}
                 onDeleteProof={handleDeleteProof}
+                onSaveReturns={handleSaveReturns}
               />
             ))}
           </div>

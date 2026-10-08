@@ -17,6 +17,7 @@ import { type ProblemTarget } from './ReportProblemDialog';
 import { formatDayLabel } from '../lib/dateFormat';
 import { DayNavigator, HistoryNotice } from './DayNavigator';
 import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
+import type { ReturnQuantities } from '../lib/returns';
 
 interface DirectionsState {
   routeKey: string;
@@ -43,6 +44,7 @@ export function DriverRouteView({
   onExitPreview,
   onUploadProof,
   onDeleteProof,
+  onSaveReturns,
 }: {
   date: string;
   today: string;
@@ -61,6 +63,7 @@ export function DriverRouteView({
   onExitPreview?: () => void;
   onUploadProof: (clientId: number, kind: DeliveryProof['kind'], image: Blob, signerName?: string) => Promise<boolean>;
   onDeleteProof: (clientId: number, proofId: number) => Promise<boolean>;
+  onSaveReturns: (clientId: number, quantities: ReturnQuantities) => Promise<boolean>;
 }) {
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const route = routes.find((r) => r.route_id === selectedRouteId) ?? routes[0] ?? null;
@@ -255,6 +258,7 @@ export function DriverRouteView({
                   readOnly={isHistory}
                   onUploadProof={onUploadProof}
                   onDeleteProof={onDeleteProof}
+                  onSaveReturns={onSaveReturns}
                 />
               ))
             )}

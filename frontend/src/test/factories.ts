@@ -28,6 +28,7 @@ export function makeStop(overrides: Partial<LogisticsStop> = {}): LogisticsStop 
     longitude: '18.780000',
     orders: [],
     proofs: [],
+    returns: null,
     ...overrides,
   };
 }

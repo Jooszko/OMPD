@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport
 from .serializers import SupplierSerializer
 from products.models import Ingredient, Recipe
-from orders.models import DailyOrder
+from orders.models import DailyOrder, ProductReturn
 
 class SupplierListView(APIView):
     def get(self, request):
@@ -73,7 +73,7 @@ def _parse_date_range(request, default_days=30):
     return start, end
 
 
-def _revenue_for_date(target_date):
+def _sales_for_date(target_date):
     result = (
         DailyOrder.objects
         .filter(order_date=target_date)
@@ -83,6 +83,17 @@ def _revenue_for_date(target_date):
         ))
     )
     return result['total'] or Decimal('0')
+
+
+def _returns_for_date(target_date):
+    result = ProductReturn.objects.filter(return_date=target_date).aggregate(total=Sum(
+        ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
+    ))
+    return result['total'] or Decimal('0')
+
+
+def _revenue_for_date(target_date):
+    return _sales_for_date(target_date) - _returns_for_date(target_date)
 
 
 def _expenses_for_date(target_date):
@@ -141,10 +152,14 @@ class DailySummaryView(APIView):
         except ValueError:
             return Response({'error': 'Nieprawidłowy format daty.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        revenue = _revenue_for_date(target_date)
+        sales = _sales_for_date(target_date)
+        returns = _returns_for_date(target_date)
+        revenue = sales - returns
         expenses = _expenses_for_date(target_date)
         return Response({
             'date': str(target_date),
+            'sales': str(sales),
+            'returns': str(returns),
             'revenue': str(revenue),
             'expenses': str(expenses),
             'balance': str(revenue - expenses),
@@ -221,7 +236,7 @@ class CategoryBreakdownView(APIView):
 class PeriodIncomesView(APIView):
     def get(self, request):
         start, end = _parse_date_range(request)
-        rows = (
+        sales = (
             DailyOrder.objects
             .filter(order_date__gte=start, order_date__lte=end)
             .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
@@ -229,18 +244,30 @@ class PeriodIncomesView(APIView):
             .annotate(amount=Sum(
                 ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
             ))
-            .order_by('-order_date')
         )
-        return Response([
-            {'client_name': r['client__name'], 'amount': str(r['amount']), 'date': str(r['order_date'])}
-            for r in rows
-        ])
+        returns = (
+            ProductReturn.objects
+            .filter(return_date__gte=start, return_date__lte=end)
+            .values('client__name', 'return_date')
+            .annotate(amount=Sum(
+                ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
+            ))
+        )
+        rows = [
+            {'client_name': r['client__name'], 'amount': str(r['amount']), 'date': str(r['order_date']), 'kind': 'sale'}
+            for r in sales
+        ] + [
+            {'client_name': r['client__name'], 'amount': str(-r['amount']), 'date': str(r['return_date']), 'kind': 'return'}
+            for r in returns
+        ]
+        rows.sort(key=lambda row: row['date'], reverse=True)
+        return Response(rows)
 
 
 class TopClientsView(APIView):
     def get(self, request):
         start, end = _parse_date_range(request)
-        rows = (
+        sales = (
             DailyOrder.objects
             .filter(order_date__gte=start, order_date__lte=end)
             .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
@@ -248,9 +275,20 @@ class TopClientsView(APIView):
             .annotate(total=Sum(
                 ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
             ))
-            .order_by('-total')[:5]
+            .values_list('client__name', 'total')
         )
-        return Response([{'client_name': r['client__name'], 'total': str(r['total'])} for r in rows])
+        returns = dict(
+            ProductReturn.objects
+            .filter(return_date__gte=start, return_date__lte=end)
+            .values('client__name')
+            .annotate(total=Sum(
+                ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
+            ))
+            .values_list('client__name', 'total')
+        )
+        totals = [(name, total - returns.get(name, Decimal('0'))) for name, total in sales]
+        totals.sort(key=lambda row: row[1], reverse=True)
+        return Response([{'client_name': name, 'total': str(total)} for name, total in totals[:5]])
 
 
 class ProfitTrendView(APIView):

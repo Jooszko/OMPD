@@ -11,6 +11,7 @@ from .views import (
     RouteDirectionsView,
     StopDeliveryNoteView,
     StopDeliveryProofView,
+    StopReturnsView,
     UpdateOrderStatusView,
     WithdrawProblemView,
 )
@@ -23,6 +24,7 @@ urlpatterns = [
     path('logistics/clients/<int:pk>/report-problem/', ReportStopProblemView.as_view(), name='logistics-report-stop-problem'),
     path('logistics/orders/<int:pk>/report-problem/', ReportOrderProblemView.as_view(), name='logistics-report-order-problem'),
     path('logistics/clients/<int:pk>/delivery-note/', StopDeliveryNoteView.as_view(), name='logistics-stop-delivery-note'),
+    path('logistics/clients/<int:pk>/returns/', StopReturnsView.as_view(), name='logistics-stop-returns'),
     path('logistics/problems/withdraw/', WithdrawProblemView.as_view(), name='logistics-withdraw-problem'),
     path('logistics/clients/<int:pk>/proofs/', StopDeliveryProofView.as_view(), name='logistics-stop-proofs'),
     path('logistics/proofs/<int:pk>/', DeliveryProofDetailView.as_view(), name='logistics-proof-detail'),

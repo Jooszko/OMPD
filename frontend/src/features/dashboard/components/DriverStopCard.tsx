@@ -11,6 +11,7 @@ import {
   StickyNote,
   Camera,
   Signature,
+  Undo2,
 } from 'lucide-react';
 import { type FailureReason, type LogisticsOrder, type LogisticsStop, type DeliveryProof } from '../../../services/api';
 import {
@@ -26,6 +27,8 @@ import { ReportProblemDialog, type ProblemTarget } from './ReportProblemDialog';
 import { DeliveryNoteDialog } from './DeliveryNoteDialog';
 import { ProofPreviewDialog, ProofThumbnail } from './ProofPreview';
 import { SignatureDialog } from './SignatureDialog';
+import { ReturnsDialog } from './ReturnsDialog';
+import { formatMoney, summarizeReturns, type ReturnQuantities } from '../lib/returns';
 
 const SEQUENCE_BADGE_CLASSES: Record<StopState, string> = {
   none: 'bg-bakery-accent text-black',
@@ -84,6 +87,7 @@ export function DriverStopCard({
   onSaveDeliveryNote,
   onUploadProof,
   onDeleteProof,
+  onSaveReturns,
 }: {
   stop: LogisticsStop;
   sequence?: number | null;
@@ -97,6 +101,7 @@ export function DriverStopCard({
   onSaveDeliveryNote: (clientId: number, note: string) => Promise<boolean>;
   onUploadProof: (clientId: number, kind: DeliveryProof['kind'], image: Blob, signerName?: string) => Promise<boolean>;
   onDeleteProof: (clientId: number, proofId: number) => Promise<boolean>;
+  onSaveReturns: (clientId: number, quantities: ReturnQuantities) => Promise<boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [problemDialog, setProblemDialog] = useState<ProblemDialogState | null>(null);
@@ -104,6 +109,7 @@ export function DriverStopCard({
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewProof, setPreviewProof] = useState<DeliveryProof | null>(null);
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+  const [returnsDialogOpen, setReturnsDialogOpen] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const hasDeliveryToday = stop.orders.length > 0;
   const inDeliveryCount = stop.orders.filter((o) => o.status === 'in_delivery').length;
@@ -119,6 +125,9 @@ export function DriverStopCard({
   const photo = stop.proofs.find((p) => p.kind === 'photo') ?? null;
   const signature = stop.proofs.find((p) => p.kind === 'signature') ?? null;
   const canAddProof = !readOnly && hasDeliveredOrders;
+  const returnsSummary = stop.returns ? summarizeReturns(stop.returns) : null;
+  const canRecordReturns =
+    !readOnly && !!stop.returns && stop.orders.some((o) => o.status === 'in_delivery' || o.status === 'delivered');
 
   const openStopProblem = () =>
     setProblemDialog({
@@ -168,6 +177,12 @@ export function DriverStopCard({
     return ok;
   };
 
+  const submitReturns = async (quantities: ReturnQuantities) => {
+    const ok = await onSaveReturns(stop.client_id, quantities);
+    if (ok) setReturnsDialogOpen(false);
+    return ok;
+  };
+
   if (handled && !expanded) {
     const failed = stopState === 'failed';
     return (
@@ -197,6 +212,9 @@ export function DriverStopCard({
         )}
         {signature && (
           <Signature className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma podpis odbiorcy" />
+        )}
+        {returnsSummary && returnsSummary.count > 0 && (
+          <Undo2 className="w-3.5 h-3.5 text-bakery-accent shrink-0" aria-label="Przystanek ma zwroty towaru" />
         )}
         {failed ? (
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-rose-700 whitespace-nowrap">
@@ -414,6 +432,35 @@ export function DriverStopCard({
               )}
             </div>
           )}
+          {returnsSummary && returnsSummary.count > 0 ? (
+            <div className="flex items-center justify-between gap-2 mt-1 bg-bakery-inactive border border-bakery-btnBorder rounded-lg px-3 py-2">
+              <p className="m-0 flex items-center gap-1.5 text-xs text-bakery-dark min-w-0">
+                <Undo2 className="w-3.5 h-3.5 text-bakery-accent shrink-0" />
+                <span>
+                  Zwroty: <strong>{returnsSummary.count} szt.</strong> · {formatMoney(returnsSummary.value)}
+                </span>
+              </p>
+              {canRecordReturns && (
+                <button
+                  type="button"
+                  onClick={() => setReturnsDialogOpen(true)}
+                  className="shrink-0 min-h-[44px] sm:min-h-0 px-2 text-[11px] font-bold text-bakery-dark hover:underline"
+                >
+                  Edytuj
+                </button>
+              )}
+            </div>
+          ) : (
+            canRecordReturns && (
+              <button
+                type="button"
+                onClick={() => setReturnsDialogOpen(true)}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 px-3 text-xs font-bold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]"
+              >
+                <Undo2 className="w-3.5 h-3.5 text-bakery-accent" /> Zwroty towaru
+              </button>
+            )
+          )}
           {!readOnly && inDeliveryCount >= 2 && (
             <div className="flex gap-2 mt-1">
               <button
@@ -470,6 +517,14 @@ export function DriverStopCard({
           subtitle={stop.name}
           onSubmit={submitSignature}
           onClose={() => setSignatureDialogOpen(false)}
+        />
+      )}
+      {returnsDialogOpen && stop.returns && (
+        <ReturnsDialog
+          subtitle={stop.name}
+          returns={stop.returns}
+          onSubmit={submitReturns}
+          onClose={() => setReturnsDialogOpen(false)}
         />
       )}
     </div>
