@@ -16,7 +16,7 @@ from PIL import Image, UnidentifiedImageError
 from rest_framework.parsers import MultiPartParser
 
 from clients.models import Client, Route
-from orders.models import DailyOrder, DeliveryProof
+from orders.models import DailyOrder, DeliveryProof, ProductReturn
 from products.models import Ingredient, Recipe
 from finance.models import DailyFinancialReport
 from users.models import Notification, User
@@ -24,6 +24,7 @@ from .services.optimize import optimize_stop_order
 from .services.directions_cache import get_cached_route_directions
 from .services.routing import RoutingError
 from .services.delivery_stats import build_delivery_stats
+from .services.returns import last_delivery_items, returns_overview
 from .models import ClientAction
 
 class DashboardView(APIView):
@@ -202,6 +203,7 @@ class LogisticsView(APIView):
         for proof in DeliveryProof.objects.filter(order_date=target_date).order_by('kind'):
             proofs_by_client.setdefault(proof.client_id, []).append(_proof_payload(proof))
 
+        returns_by_client = returns_overview({client_id for _, client_id in orders_by_stop}, target_date)
         route_ids_with_orders = {route_id for route_id, _ in orders_by_stop}
 
         routes_qs = (
@@ -230,7 +232,7 @@ class LogisticsView(APIView):
             stops = []
             for client_id, client in stop_clients.items():
                 shown_stops.add((route.route_id, client_id))
-                stops.append(_stop_payload(client, orders_by_stop.get((route.route_id, client_id), []), proofs_by_client.get(client_id, [])))
+                stops.append(_stop_payload(client, orders_by_stop.get((route.route_id, client_id), []), proofs_by_client.get(client_id, []), returns_by_client.get(client_id)))
             stops.sort(key=lambda s: (len(s['orders']) == 0, s['name']))
 
             routes_data.append({
@@ -245,7 +247,7 @@ class LogisticsView(APIView):
 
         if scoped_driver_id is None:
             unassigned = [
-                _stop_payload(client_by_id[client_id], orders, proofs_by_client.get(client_id, []))
+                _stop_payload(client_by_id[client_id], orders, proofs_by_client.get(client_id, []), returns_by_client.get(client_id))
                 for (route_id, client_id), orders in orders_by_stop.items()
                 if (route_id, client_id) not in shown_stops
             ]
@@ -364,7 +366,7 @@ def _orders_for_driver_today(client, driver_id):
     ).filter(effective_driver_id=driver_id)
 
 
-def _stop_payload(client, orders, proofs=()):
+def _stop_payload(client, orders, proofs=(), returns=None):
     return {
         'client_id': client.client_id,
         'name': client.name,
@@ -374,6 +376,7 @@ def _stop_payload(client, orders, proofs=()):
         'longitude': client.longitude,
         'orders': orders,
         'proofs': list(proofs) if orders else [],
+        'returns': returns if orders else None,
     }
 
 MAX_PROOF_SIZE = 5 * 1024 * 1024
@@ -660,6 +663,110 @@ class StopDeliveryNoteView(APIView):
             )
 
         return Response({'client_id': client.client_id, 'updated_ids': updated_ids, 'delivery_note': note})
+
+
+RETURNABLE_STOP_STATUSES = ('in_delivery', 'delivered')
+
+
+def _parse_return_items(raw_items):
+    if not isinstance(raw_items, list):
+        return None, 'Lista zwrotów musi być tablicą.'
+    items = {}
+    for entry in raw_items:
+        if not isinstance(entry, dict):
+            return None, 'Nieprawidłowa pozycja zwrotu.'
+        product_id, quantity = entry.get('product_id'), entry.get('quantity')
+        if any(not isinstance(v, int) or isinstance(v, bool) for v in (product_id, quantity)):
+            return None, 'Produkt i ilość muszą być liczbami całkowitymi.'
+        if quantity < 0:
+            return None, 'Ilość zwrotu nie może być ujemna.'
+        if product_id in items:
+            return None, 'Każdy produkt może wystąpić na liście tylko raz.'
+        items[product_id] = quantity
+    return items, None
+
+class StopReturnsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @idempotent_action
+    def post(self, request, pk):
+        user = request.user
+
+        if user.role not in ('admin', 'driver'):
+            return Response(
+                {'error': 'Brak dostępu do modułu logistyki.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        client = get_object_or_404(Client, pk=pk)
+
+        if user.role == 'driver':
+            _, time_error = _occurred_at(request)
+            if time_error:
+                return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
+            if not _driver_can_access_stop(user.user_id, client):
+                return Response(
+                    {'error': 'Nie masz dostępu do tego przystanku.'},
+                    status=http_status.HTTP_403_FORBIDDEN,
+                )
+            if not _orders_for_driver_today(client, user.user_id).filter(status__in=RETURNABLE_STOP_STATUSES).exists():
+                return Response(
+                    {'error': 'Zwrot można zapisać tylko przy przystanku w dostawie lub już dostarczonym.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+            return_date = date.today()
+        else:
+            try:
+                return_date = date.fromisoformat(request.data.get('date') or str(date.today()))
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'Nieprawidłowy format daty (YYYY-MM-DD).'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+
+        items, items_error = _parse_return_items(request.data.get('items'))
+        if items_error:
+            return Response({'error': items_error}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        returnable = last_delivery_items([client.client_id], return_date).get(client.client_id)
+        allowed = {item['product_id']: item for item in returnable['items']} if returnable else {}
+        to_save = {product_id: quantity for product_id, quantity in items.items() if quantity > 0}
+
+        for product_id, quantity in to_save.items():
+            item = allowed.get(product_id)
+            if item is None:
+                return Response(
+                    {'error': 'Można zwrócić tylko produkty z ostatniej dostawy do tego klienta.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+            if quantity > item['quantity']:
+                return Response(
+                    {'error': f'{item["product_name"]}: zwrot ({quantity}) większy niż dostawa ({item["quantity"]}).'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+
+        with transaction.atomic():
+            ProductReturn.objects.filter(client=client, return_date=return_date).exclude(
+                product_id__in=to_save.keys()
+            ).delete()
+            for product_id, quantity in to_save.items():
+                ProductReturn.objects.update_or_create(
+                    client=client,
+                    product_id=product_id,
+                    return_date=return_date,
+                    defaults={
+                        'source_date': returnable['source_date'],
+                        'quantity': quantity,
+                        'unit_price': allowed[product_id]['unit_price'],
+                        'recorded_by': user,
+                    },
+                )
+
+        return Response({
+            'client_id': client.client_id,
+            'date': str(return_date),
+            'returns': returns_overview([client.client_id], return_date).get(client.client_id),
+        })
 
 class StopDeliveryProofView(APIView):
     permission_classes = [IsAuthenticated]
