@@ -418,6 +418,8 @@ export async function markAllNotificationsRead(): Promise<void> {
 
 export interface DailySummary {
   date: string;
+  sales: string;
+  returns: string;
   revenue: string;
   expenses: string;
   balance: string;
@@ -442,6 +444,7 @@ export interface PeriodIncomeRow {
   client_name: string;
   amount: string;
   date: string;
+  kind: 'sale' | 'return';
 }
 
 export interface TopClientRow {
@@ -570,6 +573,19 @@ export interface DeliveryProof {
   pendingActionId?: string;
 }
 
+export interface StopReturnItem {
+  product_id: number;
+  product_name: string;
+  delivered_quantity: number;
+  returned_quantity: number;
+  unit_price: string;
+}
+
+export interface StopReturns {
+  source_date: string;
+  items: StopReturnItem[];
+}
+
 export interface LogisticsStop {
   client_id: number;
   name: string;
@@ -579,6 +595,7 @@ export interface LogisticsStop {
   longitude: string | null;
   orders: LogisticsOrder[];
   proofs: DeliveryProof[];
+  returns: StopReturns | null;
 }
 
 export interface LogisticsRoute {
@@ -768,6 +785,31 @@ export async function saveStopDeliveryNote(
     method: 'POST',
     headers: actionHeaders(options),
     body: JSON.stringify({ note }),
+  });
+  return (await ensureOk(response)).json();
+}
+
+export interface ReturnItemInput {
+  product_id: number;
+  quantity: number;
+}
+
+export interface SaveReturnsResult {
+  client_id: number;
+  date: string;
+  returns: StopReturns | null;
+}
+
+export async function saveStopReturns(
+  clientId: number,
+  items: ReturnItemInput[],
+  options?: ActionOptions,
+  date?: string
+): Promise<SaveReturnsResult> {
+  const response = await apiFetch(`${API_BASE}/logistics/clients/${clientId}/returns/`, {
+    method: 'POST',
+    headers: actionHeaders(options),
+    body: JSON.stringify({ items, date }),
   });
   return (await ensureOk(response)).json();
 }

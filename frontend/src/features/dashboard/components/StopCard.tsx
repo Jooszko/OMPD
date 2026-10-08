@@ -1,8 +1,10 @@
-import { AlertTriangle, MapPin, Package, StickyNote } from 'lucide-react';
+import { AlertTriangle, MapPin, Package, StickyNote, Undo2 } from 'lucide-react';
 import { type LogisticsOrder, type LogisticsStop, type DeliveryProof } from '../../../services/api';
 import { FAILURE_REASON_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, getNextStep } from '../lib/logisticsStatus';
 import { formatTime } from '../lib/dateFormat';
 import { ProofPreviewDialog, ProofThumbnail } from './ProofPreview';
+import { ReturnsDialog } from './ReturnsDialog';
+import { formatMoney, summarizeReturns, type ReturnQuantities } from '../lib/returns';
 import { useState } from 'react';
 
 function StatusBadge({ status }: { status: LogisticsOrder['status'] }) {
@@ -26,22 +28,34 @@ export function StopCard({
   updatingId,
   readOnly = false,
   onDeleteProof,
+  onSaveReturns,
 }: {
   stop: LogisticsStop;
   onAdvance: (orderId: number, nextStatus: LogisticsOrder['status']) => void;
   updatingId: number | null;
   readOnly?: boolean;
   onDeleteProof?: (clientId: number, proofId: number) => Promise<boolean>;
+  onSaveReturns?: (clientId: number, quantities: ReturnQuantities) => Promise<boolean>;
 }) {
   const hasDeliveryToday = stop.orders.length > 0;
   const hasProblem = stop.orders.some((o) => o.status === 'failed');
   const deliveryNote = stop.orders.find((o) => o.status === 'delivered' && o.delivery_note)?.delivery_note ?? '';
   const [previewProof, setPreviewProof] = useState<DeliveryProof | null>(null);
+  const [returnsDialogOpen, setReturnsDialogOpen] = useState(false);
+  const returnsSummary = stop.returns ? summarizeReturns(stop.returns) : null;
+  const returnedItems = stop.returns?.items.filter((item) => item.returned_quantity > 0) ?? [];
 
   const deleteProof = async (proof: DeliveryProof) => {
     if (!onDeleteProof) return false;
     const ok = await onDeleteProof(stop.client_id, proof.proof_id);
     if (ok) setPreviewProof(null);
+    return ok;
+  };
+
+  const submitReturns = async (quantities: ReturnQuantities) => {
+    if (!onSaveReturns) return false;
+    const ok = await onSaveReturns(stop.client_id, quantities);
+    if (ok) setReturnsDialogOpen(false);
     return ok;
   };
 
@@ -147,6 +161,30 @@ export function StopCard({
           ))}
         </div>
       )}
+      {returnsSummary && (returnsSummary.count > 0 || onSaveReturns) && (
+        <div className="flex items-center justify-between gap-2 text-[11px] text-bakery-dark bg-bakery-inactive border border-bakery-btnBorder rounded px-2 py-1.5">
+          <p className="m-0 flex items-start gap-1.5 min-w-0">
+            <Undo2 className="w-3.5 h-3.5 text-bakery-accent shrink-0 mt-px" />
+            {returnsSummary.count > 0 ? (
+              <span className="break-words">
+                Zwroty: {returnedItems.map((i) => `${i.product_name} ×${i.returned_quantity}`).join(', ')} ·{' '}
+                <strong>{formatMoney(returnsSummary.value)}</strong>
+              </span>
+            ) : (
+              <span className="text-gray-500 italic">Brak zwrotów</span>
+            )}
+          </p>
+          {onSaveReturns && (
+            <button
+              type="button"
+              onClick={() => setReturnsDialogOpen(true)}
+              className="shrink-0 px-2 py-1 text-[10px] font-bold bg-white border border-bakery-btnBorder rounded shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98] whitespace-nowrap"
+            >
+              {returnsSummary.count > 0 ? 'Popraw' : 'Dodaj zwrot'}
+            </button>
+          )}
+        </div>
+      )}
       {previewProof && (
         <ProofPreviewDialog
           proof={previewProof}
@@ -154,6 +192,14 @@ export function StopCard({
           canDelete={!!onDeleteProof}
           onDelete={deleteProof}
           onClose={() => setPreviewProof(null)}
+        />
+      )}
+      {returnsDialogOpen && stop.returns && (
+        <ReturnsDialog
+          subtitle={stop.name}
+          returns={stop.returns}
+          onSubmit={submitReturns}
+          onClose={() => setReturnsDialogOpen(false)}
         />
       )}
     </div>
