@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'finance.apps.FinanceConfig',
     'dashboard.apps.DashboardConfig',
+    'audit.apps.AuditConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'

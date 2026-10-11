@@ -3,9 +3,33 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from audit.services import field_changes, record_event
 from users.permissions import AdminOrBaker
 from .models import Ingredient, Product, Recipe
 from .serializers import IngredientSerializer, ProductSerializer
+
+PRODUCT_AUDIT_LABELS = {'name': 'Nazwa', 'category': 'Kategoria', 'base_price': 'Cena'}
+
+
+def _product_state(product):
+    return {
+        'name': product.name,
+        'category': product.get_category_display(),
+        'base_price': str(product.base_price),
+    }
+
+
+def _recipe_state(product):
+    """{ingredient name: 'amount unit'} for the product's current recipe."""
+    return {
+        r.ingredient.name: f'{r.amount} {r.ingredient.unit}'
+        for r in Recipe.objects.filter(product=product).select_related('ingredient')
+    }
+
+
+def _recipe_changes(before, after):
+    names = sorted(set(before) | set(after))
+    return field_changes(before, after, {name: name for name in names})
 
 
 class IngredientListView(APIView):
@@ -29,10 +53,25 @@ class ProductDetailView(APIView):
     def patch(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
         serializer = ProductSerializer(product, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        before = _product_state(product)
+        with transaction.atomic():
+            product = serializer.save()
+            changes = field_changes(before, _product_state(product), PRODUCT_AUDIT_LABELS)
+            if changes:
+                only_price = [c['field'] for c in changes] == ['base_price']
+                record_event(
+                    request, category='products',
+                    action='product.price_changed' if only_price else 'product.updated',
+                    obj=product, object_label=product.name, changes=changes,
+                    description=(
+                        f'Zmieniono cenę produktu {product.name}.' if only_price
+                        else f'Zmieniono produkt {product.name}.'
+                    ),
+                )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 def _serialize_recipe(product):
@@ -84,6 +123,11 @@ class RecipeListCreateView(APIView):
                     ingredient_id=item['ingredient_id'],
                     amount=item['amount'],
                 )
+            record_event(
+                request, category='products', action='recipe.created', obj=product, object_label=product.name,
+                description=f'Dodano produkt {product.name} z recepturą ({len(items)} składn.).',
+                changes=_recipe_changes({}, _recipe_state(product)),
+            )
 
         return Response(_serialize_recipe(product), status=status.HTTP_201_CREATED)
 
@@ -101,6 +145,7 @@ class RecipeDetailView(APIView):
             )
 
         with transaction.atomic():
+            before = _recipe_state(product)
             Recipe.objects.filter(product=product).delete()
             for item in items:
                 Recipe.objects.create(
@@ -108,10 +153,24 @@ class RecipeDetailView(APIView):
                     ingredient_id=item['ingredient_id'],
                     amount=item['amount'],
                 )
+            changes = _recipe_changes(before, _recipe_state(product))
+            if changes:
+                record_event(
+                    request, category='products', action='recipe.updated', obj=product, object_label=product.name,
+                    description=f'Zmieniono recepturę produktu {product.name}.', changes=changes,
+                )
 
         return Response(_serialize_recipe(product), status=status.HTTP_200_OK)
 
     def delete(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
-        Recipe.objects.filter(product=product).delete()
+        with transaction.atomic():
+            before = _recipe_state(product)
+            Recipe.objects.filter(product=product).delete()
+            if before:
+                record_event(
+                    request, category='products', action='recipe.deleted', obj=product, object_label=product.name,
+                    description=f'Usunięto recepturę produktu {product.name}.',
+                    changes=_recipe_changes(before, {}),
+                )
         return Response(status=status.HTTP_204_NO_CONTENT)
