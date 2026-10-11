@@ -9,8 +9,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['user_id', 'username', 'password', 'full_name', 'role', 'is_active']
-        read_only_fields = ['user_id']
+        fields = ['user_id', 'username', 'password', 'full_name', 'role', 'is_active', 'must_change_password']
+        read_only_fields = ['user_id', 'must_change_password']
 
     def validate(self, attrs):
         password = attrs.get('password')
@@ -28,7 +28,8 @@ class UserSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             full_name=validated_data.get('full_name', ''),
             role=validated_data.get('role', 'baker'),
-            is_active=validated_data.get('is_active', True)
+            is_active=validated_data.get('is_active', True),
+            must_change_password=True,
         )
         return user
 
@@ -38,7 +39,8 @@ class UserSerializer(serializers.ModelSerializer):
         user = super().update(instance, validated_data)
         if password:
             user.set_password(password)
-            user.save(update_fields=['password'])
+            user.must_change_password = True
+            user.save(update_fields=['password', 'must_change_password'])
         if password or (was_active and not user.is_active):
             revoke_refresh_tokens(user)
         return user

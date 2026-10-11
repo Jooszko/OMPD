@@ -15,8 +15,8 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await loginUser(username, password);
-      navigate('/'); 
+      const data = await loginUser(username, password);
+      navigate(data.must_change_password ? '/set-password' : '/');
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);

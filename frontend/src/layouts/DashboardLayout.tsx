@@ -17,11 +17,15 @@ export const DashboardLayout: React.FC = () => {
   useEffect(() => {
     fetchCurrentUser()
       .then((user) => {
+        if (user.must_change_password) {
+          navigate('/set-password', { replace: true });
+          return;
+        }
         setCurrentUser(user);
         setCurrentRole(user.role);
       })
       .catch((err) => console.error('Błąd podczas ładowania danych konta:', err));
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     setMobileMenuOpen(false);

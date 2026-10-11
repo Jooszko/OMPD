@@ -15,6 +15,7 @@ import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
 
 import { Login } from '../features/dashboard/pages/Login';
+import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
 
 const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
@@ -31,7 +32,14 @@ export const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-
+      <Route
+        path="/set-password"
+        element={
+          <ProtectedRoute>
+            <SetPassword />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/"
         element={

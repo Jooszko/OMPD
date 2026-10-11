@@ -10,6 +10,10 @@ from django.core.cache import cache
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework_simplejwt.tokens import RefreshToken
+from .tokens import revoke_refresh_tokens
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -161,4 +165,39 @@ class LoginView(TokenObtainPairView):
             )
 
         cache.delete(failures_key)
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response(
+            {**serializer.validated_data, 'must_change_password': serializer.user.must_change_password},
+            status=status.HTTP_200_OK,
+        )
+
+class ChangeInitialPasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.must_change_password:
+            return Response(
+                {'error': 'Hasło może zmienić tylko kierownik.', 'code': 'not_required'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        new_password = request.data.get('new_password')
+        if not isinstance(new_password, str) or not new_password:
+            return Response({'new_password': ['Podaj nowe hasło.']}, status=status.HTTP_400_BAD_REQUEST)
+        if user.check_password(new_password):
+            return Response(
+                {'new_password': ['Nowe hasło musi być inne niż hasło tymczasowe.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            password_validation.validate_password(new_password, user)
+        except DjangoValidationError as exc:
+            return Response({'new_password': list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.must_change_password = False
+        user.save(update_fields=['password', 'must_change_password'])
+        revoke_refresh_tokens(user)
+
+        refresh = RefreshToken.for_user(user)
+        return Response({'access': str(refresh.access_token), 'refresh': str(refresh)})
