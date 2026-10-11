@@ -48,21 +48,50 @@ export interface DashboardData {
 export interface LoginResponse {
   refresh: string;
   access: string;
+  must_change_password: boolean;
+  role: AppUser['role'];
 }
 
 export function getAuthToken(): string | null {
   return localStorage.getItem('access_token');
 }
 
+export class LoginError extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export const SESSION_EXPIRED_KEY = 'auth:session-expired';
+
+function markSessionExpired(): void {
+  try {
+    sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
+  } catch {
+    // brak dostępu do sessionStorage – komunikat się po prostu nie pokaże
+  }
+}
+
 export async function loginUser(username: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE}/auth/login/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch {
+    throw new LoginError('Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.', 'network');
+  }
 
   if (!response.ok) {
-    throw new Error('Błędna nazwa użytkownika lub hasło');
+    const body: { error?: unknown; detail?: unknown; code?: unknown } = await response.json().catch(() => ({}));
+    const message = typeof body.error === 'string' ? body.error : typeof body.detail === 'string' ? body.detail : null;
+    const code = typeof body.code === 'string' ? body.code : response.status === 429 ? 'too_many_attempts' : 'unknown';
+    throw new LoginError(message ?? 'Nie udało się zalogować. Spróbuj ponownie.', code);
   }
 
   const data: LoginResponse = await response.json();
@@ -75,6 +104,20 @@ export function logoutUser(): void {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   void clearCache();
+}
+
+export async function revokeSession(): Promise<void> {
+  const refresh = localStorage.getItem('refresh_token');
+  if (!refresh) return;
+  try {
+    await fetch(`${API_BASE}/auth/logout/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+  } catch {
+    // brak połączenia – tokeny i tak zostaną usunięte z urządzenia
+  }
 }
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -90,8 +133,9 @@ async function refreshAccessToken(): Promise<boolean> {
   });
   if (!response.ok) return false;
 
-  const data: { access: string } = await response.json();
+  const data: { access: string; refresh?: string } = await response.json();
   localStorage.setItem('access_token', data.access);
+  if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
   return true;
 }
 
@@ -118,6 +162,7 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
   const refreshed = await refreshAccessTokenOnce();
   if (!refreshed) {
     logoutUser();
+    markSessionExpired();
     window.location.reload();
     return response;
   }
@@ -149,6 +194,7 @@ export interface AppUser {
   role: 'admin' | 'baker' | 'driver';
   full_name: string;
   is_active: boolean;
+  must_change_password: boolean;
 }
 
 function authHeaders(): HeadersInit {
@@ -185,6 +231,27 @@ async function handleJsonResponse(response: Response): Promise<any> {
 export async function fetchCurrentUser(): Promise<AppUser> {
   const response = await apiFetch(`${API_BASE}/users/me/`, { headers: authHeaders() });
   return handleJsonResponse(response);
+}
+
+export async function changeInitialPassword(newPassword: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/auth/change-password/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+  const body: { access?: string; refresh?: string; new_password?: unknown; error?: unknown } = await response
+    .json()
+    .catch(() => ({}));
+
+  if (!response.ok) {
+    const messages = Array.isArray(body.new_password)
+      ? body.new_password.filter((m): m is string => typeof m === 'string')
+      : [typeof body.error === 'string' ? body.error : 'Nie udało się zapisać hasła. Spróbuj ponownie.'];
+    throw new Error(messages.join('\n'));
+  }
+
+  localStorage.setItem('access_token', body.access ?? '');
+  localStorage.setItem('refresh_token', body.refresh ?? '');
 }
 
 export async function fetchUsers(): Promise<AppUser[]> {

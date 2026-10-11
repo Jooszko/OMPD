@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react';
 import { Edit, Trash2, UserPlus, Shield, CheckCircle, XCircle, Key, X } from 'lucide-react';
 import { fetchUsers, createUser, updateUser, deleteUser, type AppUser } from '../../../services/api';
 
+function describeApiError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  try {
+    const data = JSON.parse(error.message) as Record<string, unknown>;
+    const messages = Object.values(data)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter((value): value is string => typeof value === 'string');
+    if (messages.length > 0) return messages.join('\n');
+  } catch {
+    // komunikat nie jest JSON-em z serwera
+  }
+  return fallback;
+}
+
 export default function UsersPanel() {
     const [users, setUsers] = useState<AppUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +106,7 @@ export default function UsersPanel() {
             setSelectedUserId(null);
         } catch (error) {
             console.error('Błąd podczas zapisu użytkownika:', error);
-            alert('Nie udało się zapisać użytkownika. Sprawdź czy login nie jest już zajęty.');
+            alert(describeApiError(error, 'Nie udało się zapisać użytkownika.'));
         }
     };
 
@@ -105,7 +119,7 @@ export default function UsersPanel() {
                 setSelectedUserId(null);
             } catch (error) {
                 console.error('Błąd podczas usuwania użytkownika:', error);
-                alert('Nie udało się usunąć użytkownika.');
+                alert(describeApiError(error, 'Nie udało się usunąć użytkownika.'));
             }
         }
     };

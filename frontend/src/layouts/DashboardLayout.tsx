@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NotificationBell } from '../features/dashboard/components/NotificationBell';
-import { logoutUser, fetchCurrentUser, type AppUser } from '../services/api';
+import { logoutUser, fetchCurrentUser, revokeSession, type AppUser } from '../services/api';
 import { clearQueue, loadQueue, syncQueue } from '../services/actionQueue';
 
 type UserRole = 'admin' | 'baker' | 'driver';
@@ -17,11 +17,15 @@ export const DashboardLayout: React.FC = () => {
   useEffect(() => {
     fetchCurrentUser()
       .then((user) => {
+        if (user.must_change_password) {
+          navigate('/set-password', { replace: true });
+          return;
+        }
         setCurrentUser(user);
         setCurrentRole(user.role);
       })
       .catch((err) => console.error('Błąd podczas ładowania danych konta:', err));
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -38,6 +42,7 @@ export const DashboardLayout: React.FC = () => {
       if (!confirmed) return;
     }
     await clearQueue();
+    await revokeSession();
     logoutUser();
     navigate('/login', { replace: true });
   };

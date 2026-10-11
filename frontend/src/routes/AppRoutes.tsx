@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
@@ -14,15 +14,17 @@ import Logistics from '../features/dashboard/pages/Logistics';
 import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
 
-import { Login } from '../features/dashboard/pages/Login';
+import Login from '../features/auth/pages/Login';
+import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
 
 const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const location = useLocation();
   const token = getAuthToken();
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
   return children;
 };
@@ -31,7 +33,14 @@ export const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-
+      <Route
+        path="/set-password"
+        element={
+          <ProtectedRoute>
+            <SetPassword />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/"
         element={
