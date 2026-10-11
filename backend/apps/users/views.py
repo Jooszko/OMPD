@@ -14,6 +14,8 @@ from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .tokens import revoke_refresh_tokens
+from django.db import transaction
+from audit.services import field_changes, record_event
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -32,10 +34,33 @@ class UserListCreateView(APIView):
 
     def post(self, request):
         serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            user = serializer.save()
+            record_event(
+                request, category='accounts', action='user.created', obj=user, object_label=user.full_name,
+                description=f'Założono konto {user.full_name} (login {user.username}, {user.get_role_display()}).',
+            )
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+USER_AUDIT_LABELS = {
+    'username': 'Login',
+    'full_name': 'Imię i nazwisko',
+    'role': 'Rola',
+    'is_active': 'Konto aktywne',
+}
+
+
+def _user_state(user):
+    return {
+        'username': user.username,
+        'full_name': user.full_name,
+        'role': user.get_role_display(),
+        'is_active': user.is_active,
+    }
+
 
 class UserDetailView(APIView):
     permission_classes = [IsAdminRole]
@@ -54,15 +79,39 @@ class UserDetailView(APIView):
             )
 
         serializer = UserSerializer(user, data=data, partial=True)
-        if serializer.is_valid():
-            return Response(UserSerializer(serializer.save()).data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        before = _user_state(user)
+        with transaction.atomic():
+            saved = serializer.save()
+            changes = field_changes(before, _user_state(saved), USER_AUDIT_LABELS)
+            if changes:
+                record_event(
+                    request, category='accounts', action='user.updated', obj=saved, object_label=saved.full_name,
+                    description=f'Zmieniono dane konta {saved.full_name}.', changes=changes,
+                )
+            if 'password' in data:
+                record_event(
+                    request, category='accounts', action='user.password_reset', obj=saved,
+                    object_label=saved.full_name,
+                    description=(
+                        f'Ustawiono hasło tymczasowe dla konta {saved.full_name}. '
+                        'Pracownik zmieni je przy następnym logowaniu.'
+                    ),
+                )
+        return Response(UserSerializer(saved).data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk):
         user = get_object_or_404(User, pk=pk)
         if user.pk == request.user.pk:
             return Response({'error': 'Nie możesz usunąć własnego konta.'}, status=status.HTTP_400_BAD_REQUEST)
-        user.delete()
+        with transaction.atomic():
+            record_event(
+                request, category='accounts', action='user.deleted', obj=user, object_label=user.full_name,
+                description=f'Usunięto konto {user.full_name} (login {user.username}, {user.get_role_display()}).',
+            )
+            user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class NotificationListView(APIView):
@@ -153,23 +202,49 @@ class LoginView(TokenObtainPairView):
             serializer.is_valid(raise_exception=True)
         except AuthenticationFailed:
             user = User.objects.filter(username=username).first()
+            label = user.full_name if user else username
             if user and not user.is_active and user.check_password(password):
+                record_event(
+                    request, category='accounts', action='login.inactive_account', obj=user, object_label=label,
+                    actor_name=username, description=f'Próba logowania na wyłączone konto {user.full_name}.',
+                )
                 return Response(
                     {'error': 'To konto jest wyłączone. Skontaktuj się z kierownikiem.', 'code': 'account_inactive'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            cache.set(failures_key, cache.get(failures_key, 0) + 1, LOGIN_LOCKOUT_SECONDS)
+
+            failures = cache.get(failures_key, 0) + 1
+            cache.set(failures_key, failures, LOGIN_LOCKOUT_SECONDS)
+            record_event(
+                request, category='accounts', action='login.failed', obj=user, object_label=label,
+                actor_name=username,
+                description=f'Nieudane logowanie na login „{username}” (próba {failures} z {MAX_LOGIN_FAILURES}).',
+            )
+            if failures >= MAX_LOGIN_FAILURES:
+                record_event(
+                    request, category='accounts', action='login.locked', obj=user, object_label=label,
+                    actor_name=username,
+                    description=(
+                        f'Login „{username}” zablokowany na {LOGIN_LOCKOUT_SECONDS // 60} minut '
+                        f'po {MAX_LOGIN_FAILURES} nieudanych próbach.'
+                    ),
+                )
             return Response(
                 {'error': 'Nieprawidłowy login lub hasło.', 'code': 'invalid_credentials'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
         cache.delete(failures_key)
+        user = serializer.user
+        record_event(
+            request, category='accounts', action='login.succeeded', obj=user, object_label=user.full_name,
+            actor=user, description=f'Zalogowano: {user.full_name}.',
+        )
         return Response(
             {
                 **serializer.validated_data,
-                'must_change_password': serializer.user.must_change_password,
-                'role': serializer.user.role,
+                'must_change_password': user.must_change_password,
+                'role': user.role,
             },
             status=status.HTTP_200_OK,
         )
@@ -198,10 +273,15 @@ class ChangeInitialPasswordView(APIView):
         except DjangoValidationError as exc:
             return Response({'new_password': list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
-        user.set_password(new_password)
-        user.must_change_password = False
-        user.save(update_fields=['password', 'must_change_password'])
-        revoke_refresh_tokens(user)
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.must_change_password = False
+            user.save(update_fields=['password', 'must_change_password'])
+            revoke_refresh_tokens(user)
+            record_event(
+                request, category='accounts', action='password.initial_set', obj=user, object_label=user.full_name,
+                description=f'{user.full_name} ustawił(a) własne hasło po pierwszym logowaniu.',
+            )
 
         refresh = RefreshToken.for_user(user)
         return Response({'access': str(refresh.access_token), 'refresh': str(refresh)})
