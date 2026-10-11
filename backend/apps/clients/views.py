@@ -2,12 +2,13 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
+from users.permissions import AdminOnly, role_permission
 from .models import Client, Route
 from .serializers import ClientSerializer, RouteSerializer
 
 
 class RouteListView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         routes = Route.objects.filter(is_active=True).order_by('route_name')
         serializer = RouteSerializer(routes, many=True)
@@ -15,6 +16,7 @@ class RouteListView(APIView):
 
 
 class ClientListCreateView(APIView):
+    permission_classes = [role_permission('admin', read=('admin', 'baker'))]
     def get(self, request):
         clients = Client.objects.select_related('route').order_by('name')
         serializer = ClientSerializer(clients, many=True)
@@ -29,6 +31,7 @@ class ClientListCreateView(APIView):
 
 
 class ClientDetailView(APIView):
+    permission_classes = [AdminOnly]
     def put(self, request, pk):
         client = get_object_or_404(Client, pk=pk)
         serializer = ClientSerializer(client, data=request.data, partial=True)

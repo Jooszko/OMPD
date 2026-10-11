@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
+from users.permissions import AdminOrBaker
 from products.models import Product
 from .models import DailyOrder, StandingOrder
 
@@ -51,6 +51,7 @@ def _group_daily_orders(queryset):
 
 
 class DailyOrdersView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         date_param = request.query_params.get('date')
         try:
@@ -119,6 +120,7 @@ class DailyOrdersView(APIView):
 
 
 class OrderHistoryView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         today = date_cls.today()
         qs = (
@@ -131,6 +133,7 @@ class OrderHistoryView(APIView):
 
 
 class StandingOrdersView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         qs = (
             StandingOrder.objects

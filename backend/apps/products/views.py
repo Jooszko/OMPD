@@ -3,12 +3,13 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
+from users.permissions import AdminOrBaker
 from .models import Ingredient, Product, Recipe
 from .serializers import IngredientSerializer, ProductSerializer
 
 
 class IngredientListView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         ingredients = Ingredient.objects.all().order_by('name')
         serializer = IngredientSerializer(ingredients, many=True)
@@ -16,6 +17,7 @@ class IngredientListView(APIView):
 
 
 class ProductListView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         products = Product.objects.all().order_by('name')
         serializer = ProductSerializer(products, many=True)
@@ -23,6 +25,7 @@ class ProductListView(APIView):
 
 
 class ProductDetailView(APIView):
+    permission_classes = [AdminOrBaker]
     def patch(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
         serializer = ProductSerializer(product, data=request.data, partial=True)
@@ -51,6 +54,7 @@ def _serialize_recipe(product):
 
 
 class RecipeListCreateView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         products = (
             Product.objects
@@ -85,6 +89,7 @@ class RecipeListCreateView(APIView):
 
 
 class RecipeDetailView(APIView):
+    permission_classes = [AdminOrBaker]
     def put(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
         items = request.data.get('items', [])
