@@ -29,6 +29,7 @@ class LoginViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
+        self.assertEqual(response.data['role'], 'driver')
 
     def test_wrong_password_returns_clear_error(self):
         response = self.login('zle-haslo')

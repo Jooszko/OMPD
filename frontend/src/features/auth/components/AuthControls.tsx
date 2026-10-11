@@ -35,11 +35,17 @@ export function AuthInput({
   );
 }
 
-export function AuthAlert({ children }: { children: ReactNode }) {
+const ALERT_TONES = {
+  error: 'bg-[rgba(248,113,113,0.16)] text-[#fecaca]',
+  warn: 'bg-[rgba(244,159,28,0.16)] text-[#fcd9a5]',
+  info: 'bg-[rgba(147,197,253,0.14)] text-[#dbeafe]',
+};
+
+export function AuthAlert({ children, tone = 'error' }: { children: ReactNode; tone?: keyof typeof ALERT_TONES }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2.5 whitespace-pre-line rounded-[14px] bg-[rgba(248,113,113,0.16)] px-3.5 py-3 text-sm font-semibold leading-snug text-[#fecaca]"
+      className={`flex items-start gap-2.5 whitespace-pre-line rounded-[14px] px-3.5 py-3 text-sm font-semibold leading-snug ${ALERT_TONES[tone]}`}
     >
       <CircleAlert className="mt-px h-[18px] w-[18px] shrink-0" aria-hidden />
       <span>{children}</span>

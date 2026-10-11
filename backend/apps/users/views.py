@@ -166,7 +166,11 @@ class LoginView(TokenObtainPairView):
 
         cache.delete(failures_key)
         return Response(
-            {**serializer.validated_data, 'must_change_password': serializer.user.must_change_password},
+            {
+                **serializer.validated_data,
+                'must_change_password': serializer.user.must_change_password,
+                'role': serializer.user.role,
+            },
             status=status.HTTP_200_OK,
         )
 
