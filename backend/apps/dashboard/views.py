@@ -26,8 +26,10 @@ from .services.routing import RoutingError
 from .services.delivery_stats import build_delivery_stats
 from .services.returns import last_delivery_items, returns_overview
 from .models import ClientAction
+from users.permissions import AdminOrBaker
 
 class DashboardView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         today = date.today()
         today_orders_qs = DailyOrder.objects.filter(order_date=today).select_related('client', 'product')

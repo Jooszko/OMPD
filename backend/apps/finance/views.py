@@ -5,6 +5,7 @@ from django.db.models import Sum, Avg, F, DecimalField, ExpressionWrapper
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport
 from .serializers import SupplierSerializer
@@ -12,6 +13,7 @@ from products.models import Ingredient, Recipe
 from orders.models import DailyOrder, ProductReturn
 
 class SupplierListView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         suppliers = Supplier.objects.all().prefetch_related('ingredients_catalog__ingredient')
         serializer = SupplierSerializer(suppliers, many=True)
@@ -35,6 +37,7 @@ class SupplierListView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class SupplierDetailView(APIView):
+    permission_classes = [AdminOnly]
     def put(self, request, pk):
         supplier = get_object_or_404(Supplier, pk=pk)
         
@@ -145,6 +148,7 @@ def _serialize_report(report):
 
 
 class DailySummaryView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         date_param = request.query_params.get('date')
         try:
@@ -167,6 +171,7 @@ class DailySummaryView(APIView):
 
 
 class ExpenseListCreateView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         expenses = Expense.objects.filter(date__gte=start, date__lte=end).order_by('-date')
@@ -218,6 +223,7 @@ class ExpenseListCreateView(APIView):
 
 
 class CategoryBreakdownView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         rows = (
@@ -234,6 +240,7 @@ class CategoryBreakdownView(APIView):
 
 
 class PeriodIncomesView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         sales = (
@@ -265,6 +272,7 @@ class PeriodIncomesView(APIView):
 
 
 class TopClientsView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         sales = (
@@ -292,6 +300,7 @@ class TopClientsView(APIView):
 
 
 class ProfitTrendView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request, default_days=6)
         trend = []
@@ -305,6 +314,7 @@ class ProfitTrendView(APIView):
 
 
 class FinancialReportListView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         reports = DailyFinancialReport.objects.all().order_by('-report_date')
         return Response([_serialize_report(r) for r in reports])
@@ -332,6 +342,7 @@ class FinancialReportListView(APIView):
 
 
 class FinancialReportDetailView(APIView):
+    permission_classes = [AdminOnly]
     def delete(self, request, report_date):
         try:
             parsed_date = date_cls.fromisoformat(report_date)
