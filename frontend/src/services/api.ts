@@ -70,7 +70,9 @@ export const SESSION_EXPIRED_KEY = 'auth:session-expired';
 function markSessionExpired(): void {
   try {
     sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
-  } catch {}
+  } catch {
+    // brak dostępu do sessionStorage – komunikat się po prostu nie pokaże
+  }
 }
 
 export async function loginUser(username: string, password: string): Promise<LoginResponse> {
@@ -113,7 +115,9 @@ export async function revokeSession(): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh }),
     });
-  } catch {}
+  } catch {
+    // brak połączenia – tokeny i tak zostaną usunięte z urządzenia
+  }
 }
 
 let refreshPromise: Promise<boolean> | null = null;

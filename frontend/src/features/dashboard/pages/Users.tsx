@@ -10,7 +10,9 @@ function describeApiError(error: unknown, fallback: string): string {
       .flatMap((value) => (Array.isArray(value) ? value : [value]))
       .filter((value): value is string => typeof value === 'string');
     if (messages.length > 0) return messages.join('\n');
-  } catch {}
+  } catch {
+    // komunikat nie jest JSON-em z serwera
+  }
   return fallback;
 }
 
