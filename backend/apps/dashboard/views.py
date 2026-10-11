@@ -27,6 +27,7 @@ from .services.delivery_stats import build_delivery_stats
 from .services.returns import last_delivery_items, returns_overview
 from .models import ClientAction
 from users.permissions import AdminOrBaker
+from audit.services import field_changes, record_event
 
 class DashboardView(APIView):
     permission_classes = [AdminOrBaker]
@@ -433,6 +434,30 @@ def _format_order_items(orders):
     return ', '.join(f'{o.product.name} x{o.quantity}' for o in orders)
 
 
+STATUS_LABELS = dict(DailyOrder.STATUS_CHOICES)
+
+
+def _stop_label(client, day=None):
+    return f'{client.name}, {(day or date.today()):%d.%m.%Y}'
+
+
+def _status_change(old, new):
+    return field_changes({'status': STATUS_LABELS[old]}, {'status': STATUS_LABELS[new]}, {'status': 'Status'})
+
+
+def _returns_state(client, return_date):
+    return {
+        name: f'{quantity} szt.'
+        for name, quantity in ProductReturn.objects
+        .filter(client=client, return_date=return_date)
+        .values_list('product__name', 'quantity')
+    }
+
+
+def _named_changes(before, after):
+    return field_changes(before, after, {name: name for name in sorted(before.keys() | after.keys())})
+
+
 def _notify_admins_about_failure(sender, client, orders, reason, note):
     reason_label = dict(DailyOrder.FAILURE_REASON_CHOICES)[reason]
     message = (
@@ -490,6 +515,18 @@ def _report_failure(request, client, orders_qs):
             updated_at=timezone.now(),
         )
         _notify_admins_about_failure(request.user, client, orders, reason, note)
+        reason_label = dict(DailyOrder.FAILURE_REASON_CHOICES)[reason]
+        description = (
+            f'Zgłoszono problem z dostawą do klienta {client.name}: {reason_label} '
+            f'({_format_order_items(orders)}).'
+        )
+        if note:
+            description += f' Notatka: {note}'
+        record_event(
+            request, category='logistics', action='delivery.failed', obj=client,
+            object_label=_stop_label(client), description=description,
+            changes=_status_change('in_delivery', 'failed'),
+        )
 
     return Response({
         'client_id': client.client_id,
@@ -508,7 +545,7 @@ class UpdateOrderStatusView(APIView):
         occurred_at, time_error = _occurred_at(request)
         if time_error:
             return Response({'error': time_error}, status=http_status.HTTP_400_BAD_REQUEST)
-        order = get_object_or_404(DailyOrder.objects.select_related('client__route'), pk=pk)
+        order = get_object_or_404(DailyOrder.objects.select_related('client__route', 'product'), pk=pk)
         new_status = request.data.get('status')
 
         if new_status not in dict(DailyOrder.STATUS_CHOICES):
@@ -550,6 +587,7 @@ class UpdateOrderStatusView(APIView):
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
+        old_status = order.status
         if new_status == 'delivered' and order.status != 'delivered':
             order.delivered_at = occurred_at
         elif new_status != 'delivered':
@@ -564,10 +602,22 @@ class UpdateOrderStatusView(APIView):
         order.failure_note = ''
         order.failed_at = None
         order.status = new_status
-        order.save(update_fields=[
-            'status', 'delivered_at', 'delivery_note', 'failure_reason', 'failure_note', 'failed_at',
-            'assigned_route', 'assigned_driver', 'updated_at',
-        ])
+        with transaction.atomic():
+            order.save(update_fields=[
+                'status', 'delivered_at', 'delivery_note', 'failure_reason', 'failure_note', 'failed_at',
+                'assigned_route', 'assigned_driver', 'updated_at',
+            ])
+            changes = _status_change(old_status, new_status)
+            if changes:
+                record_event(
+                    request, category='logistics', action='order.status_changed', obj=order,
+                    object_label=_stop_label(order.client, order.order_date),
+                    description=(
+                        f'Zmieniono status zamówienia „{order.product.name} x{order.quantity}” '
+                        f'klienta {order.client.name}.'
+                    ),
+                    changes=changes,
+                )
         return Response({'do_id': order.do_id, 'status': order.status, 'delivered_at': order.delivered_at})
 
 class DeliverStopView(APIView):
@@ -611,6 +661,13 @@ class DeliverStopView(APIView):
                 delivered_at=occurred_at,
                 updated_at=timezone.now(),
             )
+            orders = DailyOrder.objects.filter(pk__in=delivered_ids).select_related('product')
+            record_event(
+                request, category='logistics', action='stop.delivered', obj=client,
+                object_label=_stop_label(client),
+                description=f'Dostarczono zamówienia do klienta {client.name} ({_format_order_items(orders)}).',
+                changes=_status_change('in_delivery', 'delivered'),
+            )
 
         return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': occurred_at})
 class StopDeliveryNoteView(APIView):
@@ -648,21 +705,30 @@ class StopDeliveryNoteView(APIView):
             )
 
         with transaction.atomic():
-            updated_ids = list(
+            delivered = list(
                 _orders_for_user(DailyOrder.objects.filter(client=client), user)
                 .select_for_update(of=('self',))
                 .filter(order_date=date.today(), status='delivered')
-                .values_list('do_id', flat=True)
+                .values_list('do_id', 'delivery_note')
             )
-            if not updated_ids:
+            if not delivered:
                 return Response(
                     {'error': 'U tego klienta nie ma dziś dostarczonych zamówień.'},
                     status=http_status.HTTP_400_BAD_REQUEST,
                 )
+            updated_ids = [do_id for do_id, _ in delivered]
             DailyOrder.objects.filter(pk__in=updated_ids).update(
                 delivery_note=note,
                 updated_at=timezone.now(),
             )
+            changes = field_changes({'note': delivered[0][1]}, {'note': note}, {'note': 'Notatka'})
+            if changes:
+                record_event(
+                    request, category='logistics', action='stop.note_changed', obj=client,
+                    object_label=_stop_label(client),
+                    description=f'Zmieniono notatkę do dostawy u klienta {client.name}.',
+                    changes=changes,
+                )
 
         return Response({'client_id': client.client_id, 'updated_ids': updated_ids, 'delivery_note': note})
 
@@ -748,6 +814,7 @@ class StopReturnsView(APIView):
                 )
 
         with transaction.atomic():
+            before = _returns_state(client, return_date)
             ProductReturn.objects.filter(client=client, return_date=return_date).exclude(
                 product_id__in=to_save.keys()
             ).delete()
@@ -762,6 +829,14 @@ class StopReturnsView(APIView):
                         'unit_price': allowed[product_id]['unit_price'],
                         'recorded_by': user,
                     },
+                )
+            changes = _named_changes(before, _returns_state(client, return_date))
+            if changes:
+                record_event(
+                    request, category='logistics', action='returns.updated', obj=client,
+                    object_label=_stop_label(client, return_date),
+                    description=f'Zapisano zwroty towaru od klienta {client.name} z dnia {return_date:%d.%m.%Y}.',
+                    changes=changes,
                 )
 
         return Response({
@@ -851,6 +926,17 @@ class StopDeliveryProofView(APIView):
                 signer_name=signer_name,
                 uploaded_by=user,
             )
+            description = (
+                f'{"Zastąpiono" if previous is not None else "Dodano"} potwierdzenie dostawy '
+                f'({proof.get_kind_display().lower()}) u klienta {client.name}.'
+            )
+            if signer_name:
+                description += f' Osoba podpisująca: {signer_name}.'
+            record_event(
+                request, category='logistics',
+                action='proof.replaced' if previous is not None else 'proof.added',
+                obj=proof, object_label=_stop_label(client, today), description=description,
+            )
 
         return Response(_proof_payload(proof), status=http_status.HTTP_201_CREATED)
 
@@ -909,6 +995,14 @@ class DeliveryProofDetailView(APIView):
 
         storage, name = proof.image.storage, proof.image.name
         with transaction.atomic():
+            record_event(
+                request, category='logistics', action='proof.deleted', obj=proof,
+                object_label=_stop_label(proof.client, proof.order_date),
+                description=(
+                    f'Usunięto potwierdzenie dostawy ({proof.get_kind_display().lower()}) '
+                    f'u klienta {proof.client.name}.'
+                ),
+            )
             proof.delete()
             transaction.on_commit(lambda: storage.delete(name))
 
@@ -1022,13 +1116,20 @@ class WithdrawProblemView(APIView):
             for order in orders:
                 orders_by_client.setdefault(order.client, []).append(order)
             for client, client_orders in orders_by_client.items():
+                items = _format_order_items(client_orders)
                 _notify_admins(
                     user,
                     f'Zgłoszenie wycofane: {client.name}',
                     f'{user.full_name} wycofał zgłoszenie problemu z dostawą do klienta '
                     f'{client.name} ({client.address}).\n'
-                    f'Pozycje: {_format_order_items(client_orders)}\n'
+                    f'Pozycje: {items}\n'
                     f'Zamówienia wróciły do statusu „W dostawie”.',
+                )
+                record_event(
+                    request, category='logistics', action='delivery.problem_withdrawn', obj=client,
+                    object_label=_stop_label(client),
+                    description=f'Wycofano zgłoszenie problemu z dostawą do klienta {client.name} ({items}).',
+                    changes=_status_change('failed', 'in_delivery'),
                 )
 
         return Response({'reverted_ids': sorted(requested_ids)})
