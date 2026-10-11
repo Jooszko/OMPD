@@ -55,14 +55,21 @@ export function getAuthToken(): string | null {
 }
 
 export async function loginUser(username: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE}/auth/login/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch {
+    throw new Error('Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.');
+  }
 
   if (!response.ok) {
-    throw new Error('Błędna nazwa użytkownika lub hasło');
+    const body: { error?: unknown; detail?: unknown } = await response.json().catch(() => ({}));
+    const message = typeof body.error === 'string' ? body.error : typeof body.detail === 'string' ? body.detail : null;
+    throw new Error(message ?? 'Nie udało się zalogować. Spróbuj ponownie.');
   }
 
   const data: LoginResponse = await response.json();
@@ -75,6 +82,18 @@ export function logoutUser(): void {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   void clearCache();
+}
+
+export async function revokeSession(): Promise<void> {
+  const refresh = localStorage.getItem('refresh_token');
+  if (!refresh) return;
+  try {
+    await fetch(`${API_BASE}/auth/logout/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+  } catch {}
 }
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -90,8 +109,9 @@ async function refreshAccessToken(): Promise<boolean> {
   });
   if (!response.ok) return false;
 
-  const data: { access: string } = await response.json();
+  const data: { access: string; refresh?: string } = await response.json();
   localStorage.setItem('access_token', data.access);
+  if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
   return true;
 }
 
