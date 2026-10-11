@@ -1,0 +1,53 @@
+ACTIONS = {
+    'accounts': {
+        'user.created': 'Utworzenie konta',
+        'user.updated': 'Zmiana danych konta',
+        'user.password_reset': 'Reset hasła',
+        'user.deleted': 'Usunięcie konta',
+        'password.initial_set': 'Ustawienie własnego hasła',
+        'login.succeeded': 'Udane logowanie',
+        'login.failed': 'Nieudane logowanie',
+        'login.locked': 'Blokada logowania',
+        'login.inactive_account': 'Logowanie na wyłączone konto',
+    },
+    'clients': {
+        'client.created': 'Dodanie klienta',
+        'client.updated': 'Zmiana danych klienta',
+    },
+    'products': {
+        'product.updated': 'Zmiana produktu',
+        'product.price_changed': 'Zmiana ceny',
+        'recipe.created': 'Dodanie receptury',
+        'recipe.updated': 'Zmiana receptury',
+        'recipe.deleted': 'Usunięcie receptury',
+    },
+    'orders': {
+        'order.created': 'Nowe zamówienie',
+        'order.updated': 'Zmiana zamówienia',
+        'order.deleted': 'Usunięcie zamówienia',
+        'standing_order.created': 'Nowe zamówienie stałe',
+        'standing_order.updated': 'Zmiana zamówienia stałego',
+        'standing_order.deleted': 'Usunięcie zamówienia stałego',
+    },
+    'finance': {
+        'supplier.created': 'Dodanie dostawcy',
+        'supplier.updated': 'Zmiana danych dostawcy',
+        'expense.created': 'Nowy wydatek',
+        'report.generated': 'Wygenerowanie raportu',
+        'report.regenerated': 'Ponowne wygenerowanie raportu',
+        'report.deleted': 'Usunięcie raportu',
+    },
+    'logistics': {
+        'stop.delivered': 'Dostarczenie przystanku',
+        'order.status_changed': 'Zmiana statusu zamówienia',
+        'delivery.failed': 'Zgłoszenie problemu z dostawą',
+        'delivery.problem_withdrawn': 'Wycofanie zgłoszenia',
+        'stop.note_changed': 'Notatka do dostawy',
+        'returns.updated': 'Zwroty towaru',
+        'proof.added': 'Dodanie potwierdzenia',
+        'proof.replaced': 'Zastąpienie potwierdzenia',
+        'proof.deleted': 'Usunięcie potwierdzenia',
+    },
+}
+
+ACTION_LABELS = {code: label for actions in ACTIONS.values() for code, label in actions.items()}

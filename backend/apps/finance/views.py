@@ -46,6 +46,7 @@ def _save_supplier_catalog(supplier, products_data):
             SupplierIngredient.objects.get_or_create(supplier=supplier, ingredient=ingredient)
         except Ingredient.DoesNotExist:
             continue
+
 class SupplierListView(APIView):
     permission_classes = [AdminOnly]
     def get(self, request):

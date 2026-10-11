@@ -13,7 +13,7 @@ import Warehouse from '../features/dashboard/pages/Warehouse';
 import Logistics from '../features/dashboard/pages/Logistics';
 import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
-
+import AuditLog from '../features/dashboard/pages/AuditLog';
 import Login from '../features/auth/pages/Login';
 import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
@@ -58,6 +58,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="products" element={<Produkty />} />
         <Route path="finance" element={<Finance />} />
         <Route path="users" element={<Users />} />
+        <Route path="audit-log" element={<AuditLog />} />
         <Route path="clients" element={<Clients />} />
         <Route path="contractors" element={<Contractors />} />
         <Route path="notifications" element={<Notifications />} />

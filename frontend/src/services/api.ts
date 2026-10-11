@@ -1039,3 +1039,60 @@ export async function saveStandingOrder(payload: {
   });
   return handleJsonResponse(response);
 }
+
+export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics';
+
+export interface AuditChange {
+  field: string;
+  label: string;
+  old: unknown;
+  new: unknown;
+}
+
+export interface AuditEntry {
+  entry_id: number;
+  created_at: string;
+  actor: number | null;
+  actor_name: string;
+  category: AuditCategory;
+  category_label: string;
+  action: string;
+  action_label: string;
+  object_type: string;
+  object_id: string;
+  object_label: string;
+  description: string;
+  changes: AuditChange[];
+  ip_address: string | null;
+}
+
+export interface AuditPage {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: AuditEntry[];
+}
+
+export interface AuditFilterOptions {
+  categories: { value: AuditCategory; label: string }[];
+  actions: { value: string; label: string; category: AuditCategory }[];
+  actors: { id: number; name: string }[];
+}
+
+export type AuditQuery = Partial<
+  Record<'category' | 'action' | 'actor' | 'date_from' | 'date_to' | 'q' | 'object_type' | 'object_id' | 'page', string>
+>;
+
+export async function fetchAuditEntries(query: AuditQuery): Promise<AuditPage> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  const response = await apiFetch(`${API_BASE}/audit/?${params}`);
+  return (await ensureOk(response)).json();
+}
+
+export async function fetchAuditFilterOptions(): Promise<AuditFilterOptions> {
+  const response = await apiFetch(`${API_BASE}/audit/filters/`);
+  return (await ensureOk(response)).json();
+}

@@ -56,6 +56,7 @@ export const DashboardLayout: React.FC = () => {
     { path: '/products', label: 'Produkty', roles: ['admin', 'baker'] },
     { path: '/finance', label: 'Finanse', roles: ['admin'] },
     { path: '/users', label: 'Użytkownicy', roles: ['admin'] },
+    { path: '/audit-log', label: 'Dziennik zmian', roles: ['admin'] },
     { path: '/clients', label: 'Klienci', roles: ['admin'] },
     { path: '/contractors', label: 'Kontrahenci', roles: ['admin'] },
   ];
