@@ -1351,7 +1351,7 @@ export function deleteBakeSpec(productId: number): Promise<void> {
   return sendProductionSettings(`bake-specs/${productId}/`, 'DELETE');
 }
 
-export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics';
+export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics' | 'production';
 
 export interface AuditChange {
   field: string;

@@ -48,6 +48,19 @@ ACTIONS = {
         'proof.replaced': 'Zastąpienie potwierdzenia',
         'proof.deleted': 'Usunięcie potwierdzenia',
     },
+    'production': {
+        'plan.generated': 'Zatwierdzenie planu produkcji',
+        'plan.regenerated': 'Przeliczenie planu produkcji',
+        'batch.stage_completed': 'Zakończenie etapu dzieży',
+        'batch.waste_recorded': 'Zgłoszenie straty',
+        'mixer.created': 'Dodanie mieszałki',
+        'mixer.updated': 'Zmiana mieszałki',
+        'dough.created': 'Dodanie ciasta',
+        'dough.updated': 'Zmiana ciasta',
+        'dough.deleted': 'Usunięcie ciasta',
+        'bake_spec.updated': 'Zmiana parametrów wyrobu',
+        'bake_spec.deleted': 'Odłączenie wyrobu od produkcji',
+    },
 }
 
 ACTION_LABELS = {code: label for actions in ACTIONS.values() for code, label in actions.items()}
