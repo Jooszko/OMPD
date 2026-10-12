@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -12,13 +13,16 @@ from production.models import (
     ProductBakeSpec,
     ProductionBatch,
     ProductionPlan,
+    WasteRecord,
 )
 from production.services.planning import (
     PieceDemand,
     PlanLockedError,
     PlanningError,
     build_plan_preview,
+    current_production_date,
     generate_plan,
+    plan_overview,
     production_date_for,
     split_into_batches,
 )
@@ -176,16 +180,39 @@ class BuildPlanPreviewTests(PlanTestBase):
         self.assertIsNone(dough['mixer'])
         self.assertTrue(dough['warnings'])
 
-    def test_dough_specific_mixer_takes_precedence(self):
+    def test_dough_specific_mixer_wins_a_tie(self):
         small = Mixer.objects.create(name='Mała 40', max_capacity_kg=Decimal('40'))
         self.dough.mixer = small
         self.dough.save()
-        self.order(self.bread_500, 100)  # 56.1 kg → 2 dzieże w mieszałce 40 kg
+        self.order(self.bread_500, 50)  # 28.05 kg — jedna dzieża w każdej mieszałce
 
         dough = build_plan_preview(self.delivery)['doughs'][0]
 
         self.assertEqual(dough['mixer']['name'], 'Mała 40')
-        self.assertEqual(len(dough['batches']), 2)
+        self.assertEqual(dough['notes'], [])
+
+    def test_larger_mixer_replaces_assigned_one_when_it_needs_fewer_batches(self):
+        small = Mixer.objects.create(name='Mała 40', max_capacity_kg=Decimal('40'))
+        self.dough.mixer = small
+        self.dough.save()
+        self.order(self.bread_500, 100)  # 56.1 kg → 2 dzieże w małej, 1 w dużej
+
+        dough = build_plan_preview(self.delivery)['doughs'][0]
+
+        self.assertEqual(dough['mixer']['name'], 'Spiralna 120')
+        self.assertEqual(len(dough['batches']), 1)
+        self.assertEqual(
+            dough['notes'], ['Użyto mieszałki Spiralna 120 zamiast przypisanej Mała 40 (1 dzieża zamiast 2).']
+        )
+
+    def test_smaller_mixer_avoids_batch_below_minimum(self):
+        Mixer.objects.create(name='Mała 40', max_capacity_kg=Decimal('40'))
+        self.order(self.bread_500, 10)  # 5.61 kg — poniżej minimum 20 kg dużej mieszałki
+
+        dough = build_plan_preview(self.delivery)['doughs'][0]
+
+        self.assertEqual(dough['mixer']['name'], 'Mała 40')
+        self.assertEqual(dough['warnings'], [])
 
 
 class GeneratePlanTests(PlanTestBase):
@@ -227,8 +254,91 @@ class GeneratePlanTests(PlanTestBase):
         with self.assertRaises(PlanLockedError):
             generate_plan(self.delivery, self.admin)
 
+    def test_refuses_to_regenerate_after_waste_was_recorded(self):
+        self.order(self.bread_500, 10)
+        plan, _ = generate_plan(self.delivery, self.admin)
+        batch = plan.batches.get()
+        WasteRecord.objects.create(batch=batch, product=self.bread_500, stage='mixing', quantity=1, reason='damaged')
+
+        with self.assertRaises(PlanLockedError):
+            generate_plan(self.delivery, self.admin)
+
     def test_refuses_empty_plan(self):
         self.order(self.cake, 3)
 
         with self.assertRaises(PlanningError):
             generate_plan(self.delivery, self.admin)
+
+
+@override_settings(PRODUCTION_SHIFT_CUTOFF_HOUR=6, PRODUCTION_TIMEZONE='Europe/Warsaw')
+class CurrentProductionDateTests(SimpleTestCase):
+    WARSAW = ZoneInfo('Europe/Warsaw')
+
+    def at(self, *args):
+        return datetime(*args, tzinfo=self.WARSAW)
+
+    def test_first_shift_starts_the_production_day_at_six(self):
+        self.assertEqual(current_production_date(self.at(2026, 10, 12, 6, 0)), date(2026, 10, 12))
+
+    def test_second_shift_in_the_evening_keeps_the_same_day(self):
+        self.assertEqual(current_production_date(self.at(2026, 10, 12, 22, 0)), date(2026, 10, 12))
+
+    def test_second_shift_keeps_its_day_after_midnight(self):
+        self.assertEqual(current_production_date(self.at(2026, 10, 13, 5, 59)), date(2026, 10, 12))
+
+    def test_uses_local_time_not_utc(self):
+        # 03:30 UTC to już 05:30 w Warszawie (czas letni) — wciąż doba produkcyjna z 12.10.
+        utc_moment = datetime(2026, 10, 13, 3, 30, tzinfo=ZoneInfo('UTC'))
+        self.assertEqual(current_production_date(utc_moment), date(2026, 10, 12))
+        # 04:30 UTC to 06:30 w Warszawie — zaczęła się już doba 13.10, choć w UTC jest przed szóstą.
+        utc_moment = datetime(2026, 10, 13, 4, 30, tzinfo=ZoneInfo('UTC'))
+        self.assertEqual(current_production_date(utc_moment), date(2026, 10, 13))
+
+
+class PlanOverviewTests(PlanTestBase):
+    def test_without_plan_shows_live_preview(self):
+        self.order(self.bread_500, 10)
+
+        preview, changes = plan_overview(self.delivery, None)
+
+        self.assertEqual(preview['doughs'][0]['products'][0]['ordered_qty'], 10)
+        self.assertEqual(changes, [])
+
+    def test_saved_plan_is_shown_and_order_changes_are_reported(self):
+        self.order(self.bread_500, 40)
+        plan, _ = generate_plan(self.delivery, self.admin)
+        self.order(self.bread_500, 15, client=self.shop_b)
+        self.order(self.bread_800, 5)
+
+        preview, changes = plan_overview(self.delivery, plan)
+
+        dough = preview['doughs'][0]
+        self.assertEqual([p['ordered_qty'] for p in dough['products']], [40])
+        self.assertEqual(sum(o['pieces'] for b in dough['batches'] for o in b['outputs']), 40)
+        self.assertEqual(
+            [(c['product_name'], c['planned_qty'], c['current_qty'], c['difference']) for c in changes],
+            [('Chleb wiejski 500g', 40, 55, 15), ('Chleb wiejski 800g', 0, 5, 5)],
+        )
+
+    def test_cancelled_order_shows_as_negative_change(self):
+        order = self.order(self.bread_500, 40)
+        plan, _ = generate_plan(self.delivery, self.admin)
+        order.status = 'cancelled'
+        order.save()
+
+        _, changes = plan_overview(self.delivery, plan)
+
+        self.assertEqual([(c['planned_qty'], c['current_qty'], c['difference']) for c in changes], [(40, 0, -40)])
+
+    def test_saved_plan_matches_preview_it_was_created_from(self):
+        self.order(self.bread_500, 100)
+        self.order(self.bread_800, 50)
+        _, preview_at_approval = generate_plan(self.delivery, self.admin)
+        plan = ProductionPlan.objects.get()
+
+        saved, changes = plan_overview(self.delivery, plan)
+
+        self.assertEqual(changes, [])
+        for key in ('total_mass_kg', 'raw_mass_kg'):
+            self.assertEqual(saved['doughs'][0][key], preview_at_approval['doughs'][0][key])
+        self.assertEqual(saved['ingredient_totals'], preview_at_approval['ingredient_totals'])

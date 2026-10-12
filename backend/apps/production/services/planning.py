@@ -4,10 +4,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
 from orders.models import DailyOrder
 from products.models import IngredientStock, Product
@@ -21,6 +23,7 @@ from ..models import (
     ProductBakeSpec,
     ProductionBatch,
     ProductionPlan,
+    WasteRecord,
 )
 
 KG = Decimal('0.001')
@@ -49,6 +52,16 @@ def production_date_for(delivery_date):
 
 def delivery_date_for(production_date):
     return production_date + timedelta(days=shift_lag_days())
+
+
+def current_production_date(now=None):
+    """Dzień produkcyjny trwa od godziny granicznej (domyślnie 6:00) do tej samej godziny następnego dnia.
+    Pierwsza i druga zmiana pracują więc na jeden plan, a tablica nie przeskakuje o północy."""
+    zone = ZoneInfo(getattr(settings, 'PRODUCTION_TIMEZONE', 'Europe/Warsaw'))
+    local = timezone.localtime(now or timezone.now(), zone)
+    if local.hour < getattr(settings, 'PRODUCTION_SHIFT_CUTOFF_HOUR', 6):
+        return local.date() - timedelta(days=1)
+    return local.date()
 
 
 def product_demand(delivery_date):
@@ -118,10 +131,100 @@ def split_into_batches(demands, loss_factor, max_capacity_kg):
     ]
 
 
-def _pick_mixer(dough, active_mixers):
-    if dough.mixer_id and dough.mixer.is_active:
-        return dough.mixer
-    return active_mixers[0] if active_mixers else None
+def _batches_label(count):
+    if count == 1:
+        return '1 dzieża'
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return f'{count} dzieże'
+    return f'{count} dzieży'
+
+
+def _split_score(splits, mixer):
+    """Im mniejszy, tym lepiej: najpierw dzieże ponad pojemność, potem poniżej minimum, potem ich liczba."""
+    over = sum(1 for s in splits if s.dough_mass_kg > mixer.max_capacity_kg)
+    under = sum(1 for s in splits if s.dough_mass_kg < mixer.min_capacity_kg)
+    return over, under, len(splits)
+
+
+def _choose_mixer(dough, active_mixers, demands, loss_factor):
+    """Dobiera mieszałkę i podział na dzieże.
+
+    Mieszałka przypisana do ciasta ma pierwszeństwo, ale ustępuje innej, jeśli tamta pozwala
+    uniknąć wsadu poniżej minimum albo zrobić ciasto w mniejszej liczbie dzieży.
+    Zwraca (mieszałka, podział, notatka o zmianie mieszałki lub None).
+    """
+    preferred = dough.mixer if dough.mixer_id and dough.mixer.is_active else None
+    candidates = active_mixers if preferred is None else (
+        [preferred] + [m for m in active_mixers if m.mixer_id != preferred.mixer_id]
+    )
+
+    scored = []
+    for mixer in candidates:
+        splits = split_into_batches(demands, loss_factor, mixer.max_capacity_kg)
+        scored.append((_split_score(splits, mixer), mixer, splits))
+    if not scored:
+        return None, [], None
+
+    # min() bierze pierwszy z równych wyników, więc przy remisie wygrywa mieszałka przypisana.
+    best_score, mixer, splits = min(scored, key=lambda entry: entry[0])
+    note = None
+    if preferred is not None and mixer.mixer_id != preferred.mixer_id:
+        preferred_score = scored[0][0]
+        if best_score[1] < preferred_score[1]:
+            reason = 'bez wsadu poniżej minimum'
+        else:
+            reason = f'{_batches_label(best_score[2])} zamiast {preferred_score[2]}'
+        note = f'Użyto mieszałki {mixer.name} zamiast przypisanej {preferred.name} ({reason}).'
+    return mixer, splits, note
+
+
+def _mixer_payload(mixer):
+    if mixer is None:
+        return None
+    return {
+        'mixer_id': mixer.mixer_id,
+        'name': mixer.name,
+        'min_capacity_kg': mixer.min_capacity_kg,
+        'max_capacity_kg': mixer.max_capacity_kg,
+    }
+
+
+def _batch_warnings(sequence, mass_kg, mixer):
+    warnings = []
+    if mixer is None:
+        return warnings
+    if mass_kg > mixer.max_capacity_kg:
+        warnings.append(
+            f'Dzieża #{sequence} ({mass_kg} kg) przekracza pojemność mieszałki '
+            f'{mixer.name} — pojedynczy kęs jest zbyt ciężki.'
+        )
+    if mass_kg < mixer.min_capacity_kg:
+        warnings.append(
+            f'Dzieża #{sequence} ({mass_kg} kg) jest poniżej minimalnego wsadu '
+            f'mieszałki {mixer.name} ({mixer.min_capacity_kg} kg).'
+        )
+    return warnings
+
+
+def _add_to_totals(totals, ingredients):
+    for item in ingredients:
+        total = totals.setdefault(item['ingredient_id'], {**item, 'amount': Decimal('0')})
+        total['amount'] += item['amount']
+
+
+def _ingredient_balance(ingredient_totals):
+    """Zapotrzebowanie na surowce zestawione ze stanem magazynu."""
+    stock = _ingredient_stock(ingredient_totals.keys())
+    balance = []
+    for ingredient_id, item in sorted(ingredient_totals.items(), key=lambda kv: kv[1]['name']):
+        current = stock.get(ingredient_id, Decimal('0'))
+        balance.append({
+            **item,
+            'amount': _kg(item['amount']),
+            'current_stock': current,
+            'shortage': _kg(max(Decimal('0'), item['amount'] - current)),
+        })
+    return balance
 
 
 def _scaled_ingredients(dough, mass_kg):
@@ -175,33 +278,23 @@ def build_plan_preview(delivery_date):
             for s in dough_specs
         ]
         raw_mass = sum((row['raw_mass_kg'] for row in product_rows), Decimal('0'))
-        mixer = _pick_mixer(dough, active_mixers)
+        mixer, splits, mixer_note = _choose_mixer(
+            dough,
+            active_mixers,
+            [PieceDemand(s.product_id, demand[s.product_id], s.piece_weight_kg) for s in dough_specs],
+            loss_factor,
+        )
         warnings = []
+        notes = [mixer_note] if mixer_note else []
         batches = []
 
         if mixer is None:
             warnings.append('Brak aktywnej mieszałki — nie można podzielić ciasta na dzieże.')
         else:
-            splits = split_into_batches(
-                [PieceDemand(s.product_id, demand[s.product_id], s.piece_weight_kg) for s in dough_specs],
-                loss_factor,
-                mixer.max_capacity_kg,
-            )
             for sequence, split in enumerate(splits, start=1):
-                if split.dough_mass_kg > mixer.max_capacity_kg:
-                    warnings.append(
-                        f'Dzieża #{sequence} ({split.dough_mass_kg} kg) przekracza pojemność mieszałki '
-                        f'{mixer.name} — pojedynczy kęs jest zbyt ciężki.'
-                    )
-                if split.dough_mass_kg < mixer.min_capacity_kg:
-                    warnings.append(
-                        f'Dzieża #{sequence} ({split.dough_mass_kg} kg) jest poniżej minimalnego wsadu '
-                        f'mieszałki {mixer.name} ({mixer.min_capacity_kg} kg).'
-                    )
+                warnings.extend(_batch_warnings(sequence, split.dough_mass_kg, mixer))
                 ingredients = _scaled_ingredients(dough, split.dough_mass_kg)
-                for item in ingredients:
-                    total = ingredient_totals.setdefault(item['ingredient_id'], {**item, 'amount': Decimal('0')})
-                    total['amount'] += item['amount']
+                _add_to_totals(ingredient_totals, ingredients)
                 batches.append({
                     'sequence': sequence,
                     'dough_mass_kg': split.dough_mass_kg,
@@ -226,15 +319,11 @@ def build_plan_preview(delivery_date):
             'loss_buffer_pct': dough.loss_buffer_pct,
             'raw_mass_kg': _kg(raw_mass),
             'total_mass_kg': _kg(raw_mass * loss_factor),
-            'mixer': None if mixer is None else {
-                'mixer_id': mixer.mixer_id,
-                'name': mixer.name,
-                'min_capacity_kg': mixer.min_capacity_kg,
-                'max_capacity_kg': mixer.max_capacity_kg,
-            },
+            'mixer': _mixer_payload(mixer),
             'products': product_rows,
             'batches': batches,
             'warnings': warnings,
+            'notes': notes,
         })
 
     unassigned = sorted(
@@ -246,24 +335,116 @@ def build_plan_preview(delivery_date):
         key=lambda row: row['product_name'],
     )
 
-    stock = _ingredient_stock(ingredient_totals.keys())
-    totals = []
-    for ingredient_id, item in sorted(ingredient_totals.items(), key=lambda kv: kv[1]['name']):
-        current = stock.get(ingredient_id, Decimal('0'))
-        totals.append({
-            **item,
-            'amount': _kg(item['amount']),
-            'current_stock': current,
-            'shortage': _kg(max(Decimal('0'), item['amount'] - current)),
-        })
-
     return {
         'delivery_date': delivery_date,
         'production_date': production_date_for(delivery_date),
         'doughs': dough_plans,
         'unassigned_products': unassigned,
-        'ingredient_totals': totals,
+        'ingredient_totals': _ingredient_balance(ingredient_totals),
     }
+
+
+def build_saved_plan(plan):
+    """Ciasta i dzieże z zapisanego planu, w kształcie podglądu — to, co faktycznie idzie na produkcję."""
+    ordered = dict(plan.lines.values_list('product_id', 'ordered_qty'))
+    batches = (
+        plan.batches
+        .select_related('dough', 'mixer')
+        .prefetch_related('ingredients__ingredient', 'outputs__product')
+        .order_by('dough__name', 'sequence')
+    )
+
+    by_dough = {}
+    ingredient_totals = {}
+    for batch in batches:
+        entry = by_dough.setdefault(batch.dough_id, {
+            'dough': batch.dough, 'mixer': batch.mixer, 'products': {}, 'batches': [], 'warnings': [],
+        })
+        outputs = sorted(batch.outputs.all(), key=lambda o: o.product.name)
+        for output in outputs:
+            qty = ordered.get(output.product_id, 0)
+            entry['products'].setdefault(output.product_id, {
+                'product_id': output.product_id,
+                'product_name': output.product.name,
+                'ordered_qty': qty,
+                'piece_weight_kg': output.piece_weight_kg,
+                'raw_mass_kg': _kg(qty * output.piece_weight_kg),
+                'bake_temp_c': output.bake_temp_c,
+                'bake_time_min': output.bake_time_min,
+            })
+        ingredients = [
+            {
+                'ingredient_id': item.ingredient_id,
+                'name': item.ingredient.name,
+                'unit': item.ingredient.unit,
+                'amount': item.amount,
+            }
+            for item in batch.ingredients.all()
+        ]
+        _add_to_totals(ingredient_totals, ingredients)
+        entry['warnings'].extend(_batch_warnings(batch.sequence, batch.dough_mass_kg, batch.mixer))
+        entry['batches'].append({
+            'sequence': batch.sequence,
+            'dough_mass_kg': batch.dough_mass_kg,
+            'outputs': [
+                {'product_id': o.product_id, 'product_name': o.product.name, 'pieces': o.planned_pieces}
+                for o in outputs
+            ],
+            'ingredients': ingredients,
+        })
+
+    doughs = []
+    for entry in sorted(by_dough.values(), key=lambda e: e['dough'].name):
+        products = sorted(entry['products'].values(), key=lambda row: row['product_name'])
+        doughs.append({
+            'dough_id': entry['dough'].dough_id,
+            'name': entry['dough'].name,
+            'loss_buffer_pct': entry['dough'].loss_buffer_pct,
+            'raw_mass_kg': _kg(sum((row['raw_mass_kg'] for row in products), Decimal('0'))),
+            'total_mass_kg': _kg(sum((b['dough_mass_kg'] for b in entry['batches']), Decimal('0'))),
+            'mixer': _mixer_payload(entry['mixer']),
+            'products': products,
+            'batches': entry['batches'],
+            'warnings': entry['warnings'],
+            'notes': [],
+        })
+    return doughs, _ingredient_balance(ingredient_totals)
+
+
+def order_changes(plan, preview):
+    """Różnice między ilościami z zatwierdzonego planu a bieżącymi zamówieniami (tylko wyroby z ciastem)."""
+    planned = {
+        line.product_id: (line.product.name, line.ordered_qty)
+        for line in plan.lines.select_related('product')
+    }
+    current = {
+        row['product_id']: (row['product_name'], row['ordered_qty'])
+        for dough in preview['doughs']
+        for row in dough['products']
+    }
+    changes = []
+    for product_id in planned.keys() | current.keys():
+        name, planned_qty = planned.get(product_id, (None, 0))
+        current_name, current_qty = current.get(product_id, (None, 0))
+        if planned_qty != current_qty:
+            changes.append({
+                'product_id': product_id,
+                'product_name': name or current_name,
+                'planned_qty': planned_qty,
+                'current_qty': current_qty,
+                'difference': current_qty - planned_qty,
+            })
+    return sorted(changes, key=lambda row: row['product_name'])
+
+
+def plan_overview(delivery_date, plan):
+    """Widok planowania: podgląd na żywo, a po zatwierdzeniu — zapisane dzieże i zmiany w zamówieniach."""
+    preview = build_plan_preview(delivery_date)
+    if plan is None:
+        return preview, []
+    doughs, ingredient_totals = build_saved_plan(plan)
+    changes = order_changes(plan, preview)
+    return {**preview, 'doughs': doughs, 'ingredient_totals': ingredient_totals}, changes
 
 
 def _ingredient_stock(ingredient_ids):
@@ -275,8 +456,10 @@ def _ingredient_stock(ingredient_ids):
 
 
 def plan_is_locked(plan):
-    """Plan jest zablokowany, gdy którakolwiek dzieża wyszła poza oczekiwanie na mieszanie."""
-    return plan.batches.exclude(stage=ProductionBatch.STAGE_MIXING, stage_started_at__isnull=True).exists()
+    """Plan jest zablokowany, gdy którakolwiek dzieża ruszyła albo zgłoszono w niej stratę —
+    przeliczenie usunęłoby dzieże razem z tą historią."""
+    started = plan.batches.exclude(stage=ProductionBatch.STAGE_MIXING, stage_started_at__isnull=True).exists()
+    return started or WasteRecord.objects.filter(batch__plan=plan).exists()
 
 
 @transaction.atomic
@@ -285,7 +468,9 @@ def generate_plan(delivery_date, user):
     existing = ProductionPlan.objects.select_for_update().filter(delivery_date=delivery_date).first()
     if existing is not None:
         if plan_is_locked(existing):
-            raise PlanLockedError('Produkcja dla tej daty już się rozpoczęła — planu nie można przeliczyć.')
+            raise PlanLockedError(
+                'Produkcja dla tej daty już się rozpoczęła lub zgłoszono straty — planu nie można przeliczyć.'
+            )
         existing.delete()
 
     preview = build_plan_preview(delivery_date)
