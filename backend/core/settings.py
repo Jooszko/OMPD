@@ -19,6 +19,9 @@ ALLOWED_HOSTS = []
 # Falls back to the public OSRM demo server when unset.
 ORS_API_KEY = config('ORS_API_KEY', default='')
 
+# Production runs ahead of delivery: the evening shift on day D bakes for delivery on D + lag.
+PRODUCTION_SHIFT_LAG_DAYS = config('PRODUCTION_SHIFT_LAG_DAYS', default=1, cast=int)
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -38,6 +41,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'finance.apps.FinanceConfig',
     'dashboard.apps.DashboardConfig',
+    'production.apps.ProductionConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
