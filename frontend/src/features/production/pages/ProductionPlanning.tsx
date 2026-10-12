@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, ChevronRight, Factory, Lock } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Factory, Info, Lock, RefreshCw } from 'lucide-react';
 import {
   fetchProductionBoard,
   fetchProductionPlan,
   generateProductionPlan,
   type CoverageRow,
+  type PlanOrderChange,
   type PlanPreviewDough,
   type ProductionPlanResponse,
 } from '../../../services/api';
+import { Modal } from '../../dashboard/components/Modal';
 import { formatDayLabel, formatTime, shiftIsoDate } from '../../dashboard/lib/dateFormat';
 import { CoveragePanel } from '../components/CoveragePanel';
 import { formatAmount, formatKg } from '../lib/productionStage';
@@ -56,6 +58,12 @@ function DoughCard({ dough }: { dough: PlanPreviewDough }) {
         </tbody>
       </table>
 
+      {dough.notes.map((note) => (
+        <p key={note} className="m-0 flex items-start gap-2 bg-white border border-bakery-btnBorder rounded px-3 py-2 text-xs font-semibold text-gray-700">
+          <Info className="w-4 h-4 shrink-0" /> {note}
+        </p>
+      ))}
+
       {dough.warnings.map((warning) => (
         <p key={warning} className="m-0 flex items-start gap-2 bg-amber-50 border border-amber-300 rounded px-3 py-2 text-xs font-semibold text-amber-900">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {warning}
@@ -89,6 +97,86 @@ function DoughCard({ dough }: { dough: PlanPreviewDough }) {
   );
 }
 
+function formatDifference(difference: number) {
+  return `${difference > 0 ? '+' : ''}${difference} szt.`;
+}
+
+function OrderChangesBanner({
+  changes,
+  locked,
+  canRegenerate,
+}: {
+  changes: PlanOrderChange[];
+  locked: boolean;
+  canRegenerate: boolean;
+}) {
+  return (
+    <section className="flex flex-col gap-2 bg-amber-50 border border-amber-300 rounded px-3 py-3 text-amber-900">
+      <p className="m-0 flex items-start gap-2 text-sm font-bold">
+        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+        Zamówienia zmieniły się od zatwierdzenia planu — poniżej zapisany plan, nie bieżące zamówienia.
+      </p>
+      <ul className="m-0 pl-6 text-xs font-semibold flex flex-col gap-0.5">
+        {changes.map((c) => (
+          <li key={c.product_id}>
+            {c.product_name}: w planie {c.planned_qty} szt., zamówiono {c.current_qty} szt.{' '}
+            <span className={c.difference > 0 ? 'text-red-700' : 'text-emerald-700'}>({formatDifference(c.difference)})</span>
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 pl-6 text-xs">
+        {locked
+          ? 'Produkcja już ruszyła (lub zgłoszono straty), więc planu nie można przeliczyć — różnicę trzeba uzupełnić ręcznie.'
+          : canRegenerate
+            ? 'Przelicz plan, aby uwzględnić zmiany.'
+            : 'Kierownik może przeliczyć plan, aby uwzględnić zmiany.'}
+      </p>
+    </section>
+  );
+}
+
+function RegenerateConfirmDialog({
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  busy: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title="Przeliczyć plan?"
+      icon={<RefreshCw className="w-5 h-5" />}
+      closeDisabled={busy}
+      onClose={onClose}
+    >
+      <p className="m-0 text-sm">
+        Obecne dzieże zostaną usunięte i utworzone od nowa na podstawie bieżących zamówień. Listy odważeń mogą się
+        zmienić — jeśli piekarze je wydrukowali, trzeba je rozdać ponownie.
+      </p>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          className="px-4 h-10 rounded border border-bakery-btnBorder bg-white text-sm font-bold disabled:opacity-40"
+        >
+          Anuluj
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="px-4 h-10 rounded bg-bakery-accent text-black text-sm font-bold shadow-sm active:scale-[0.98] disabled:opacity-40"
+        >
+          {busy ? 'Przeliczanie…' : 'Przelicz plan'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function ProductionPlanning() {
   const { currentRole } = useOutletContext<{ currentRole: UserRole }>();
   const [deliveryDate, setDeliveryDate] = useState<string | undefined>(undefined);
@@ -96,6 +184,7 @@ export default function ProductionPlanning() {
   const [coverage, setCoverage] = useState<CoverageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -125,6 +214,7 @@ export default function ProductionPlanning() {
       setError(err instanceof Error ? err.message : 'Nie udało się wygenerować planu.');
     } finally {
       setGenerating(false);
+      setConfirmingRegenerate(false);
     }
   };
 
@@ -222,9 +312,9 @@ export default function ProductionPlanning() {
             {currentRole === 'admin' && (
               <button
                 type="button"
-                onClick={handleGenerate}
+                onClick={plan ? () => setConfirmingRegenerate(true) : handleGenerate}
                 disabled={generating || Boolean(plan?.locked) || preview.doughs.length === 0}
-                title={plan?.locked ? 'Produkcja już ruszyła — planu nie można przeliczyć.' : undefined}
+                title={plan?.locked ? 'Produkcja już ruszyła lub zgłoszono straty — planu nie można przeliczyć.' : undefined}
                 className="px-4 h-10 rounded bg-bakery-accent text-black text-sm font-bold shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generating ? 'Generowanie…' : plan ? 'Przelicz plan' : 'Zatwierdź plan i utwórz dzieże'}
@@ -232,12 +322,30 @@ export default function ProductionPlanning() {
             )}
           </div>
 
+          {plan && data.order_changes.length > 0 && (
+            <OrderChangesBanner
+              changes={data.order_changes}
+              locked={plan.locked}
+              canRegenerate={currentRole === 'admin'}
+            />
+          )}
+
           {preview.unassigned_products.length > 0 && (
             <p className="m-0 flex items-start gap-2 bg-amber-50 border border-amber-300 rounded px-3 py-2 text-xs font-semibold text-amber-900">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Wyroby bez przypisanej bazy ciasta (pominięte w planie):{' '}
-              {preview.unassigned_products.map((p) => `${p.product_name} (${p.ordered_qty} szt.)`).join(', ')}. Przypisz
-              ciasto i wagę kęsa w panelu administracyjnym (Produkcja → Parametry wyrobów).
+              {preview.unassigned_products.map((p) => `${p.product_name} (${p.ordered_qty} szt.)`).join(', ')}.{' '}
+              {currentRole === 'admin' ? (
+                <>
+                  Przypisz ciasto i wagę kęsa w{' '}
+                  <Link to="/production/settings" className="font-bold text-amber-900 underline">
+                    Ustawieniach produkcji
+                  </Link>
+                  .
+                </>
+              ) : (
+                'Kierownik musi przypisać im ciasto i wagę kęsa w Ustawieniach produkcji.'
+              )}
             </p>
           )}
 
@@ -289,6 +397,14 @@ export default function ProductionPlanning() {
             </section>
           )}
         </>
+      )}
+
+      {confirmingRegenerate && (
+        <RegenerateConfirmDialog
+          busy={generating}
+          onConfirm={handleGenerate}
+          onClose={() => setConfirmingRegenerate(false)}
+        />
       )}
     </div>
   );

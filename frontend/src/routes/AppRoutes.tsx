@@ -15,6 +15,7 @@ import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
 import ProductionPlanning from '../features/production/pages/ProductionPlanning';
 import ProductionKiosk from '../features/production/pages/ProductionKiosk';
+import ProductionSettings from '../features/production/pages/ProductionSettings';
 
 import { Login } from '../features/dashboard/pages/Login';
 import { getAuthToken } from '../services/api';
@@ -47,6 +48,7 @@ export const AppRoutes: React.FC = () => {
 
         <Route path="production" element={<ProductionPlanning />} />
         <Route path="production/board" element={<ProductionKiosk />} />
+        <Route path="production/settings" element={<ProductionSettings />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="logistics" element={<Logistics />} />
         <Route path="delivery-stats" element={<DeliveryStats />} />

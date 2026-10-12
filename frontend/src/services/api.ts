@@ -1013,6 +1013,7 @@ export interface PlanPreviewDough {
   }[];
   batches: PlanPreviewBatch[];
   warnings: string[];
+  notes: string[];
 }
 
 export interface PlanPreview {
@@ -1030,9 +1031,19 @@ export interface ProductionPlanSummary {
   locked: boolean;
 }
 
+export interface PlanOrderChange {
+  product_id: number;
+  product_name: string;
+  planned_qty: number;
+  current_qty: number;
+  difference: number;
+}
+
 export interface ProductionPlanResponse {
   preview: PlanPreview;
   plan: ProductionPlanSummary | null;
+  /** Różnice między zatwierdzonym planem a bieżącymi zamówieniami; puste, gdy plan nie jest zapisany. */
+  order_changes: PlanOrderChange[];
 }
 
 export interface BatchOutput {
@@ -1173,4 +1184,102 @@ export function recordBatchWaste(
   payload: { product_id: number; quantity: number; reason: WasteReason }
 ): Promise<BatchActionResult> {
   return postBatchAction(batchId, 'waste', payload);
+}
+
+// ---------------------------------------------------------------------------
+// Ustawienia produkcji: mieszałki, ciasta z recepturą, parametry wyrobów
+// ---------------------------------------------------------------------------
+
+/** Kwoty dziesiętne przychodzą z Django jako tekst, np. "120.000". */
+export interface ProductionMixer {
+  mixer_id: number;
+  name: string;
+  min_capacity_kg: string;
+  max_capacity_kg: string;
+  is_active: boolean;
+}
+
+export interface DoughRecipeItem {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+  amount_per_kg: string;
+}
+
+export interface ProductionDough {
+  dough_id: number;
+  name: string;
+  mixer_id: number | null;
+  loss_buffer_pct: string;
+  mixing_time_min: number;
+  target_dough_temp_c: string;
+  proofing_time_min: number;
+  mixing_instructions: string;
+  ingredients: DoughRecipeItem[];
+  products_count: number;
+}
+
+export interface BakeSpecValues {
+  dough_id: number;
+  piece_weight_kg: string;
+  bake_temp_c: number;
+  bake_time_min: number;
+}
+
+export interface ProductBakeSpecRow {
+  product_id: number;
+  product_name: string;
+  category: string;
+  spec: (BakeSpecValues & { dough_name: string }) | null;
+}
+
+export interface ProductionSettings {
+  mixers: ProductionMixer[];
+  doughs: ProductionDough[];
+  products: ProductBakeSpecRow[];
+  ingredients: { ingredient_id: number; name: string; unit: string }[];
+}
+
+export type MixerInput = Omit<ProductionMixer, 'mixer_id'>;
+export type DoughInput = Omit<ProductionDough, 'dough_id' | 'products_count' | 'ingredients'> & {
+  ingredients: { ingredient_id: number; amount_per_kg: string }[];
+};
+
+async function sendProductionSettings<T>(path: string, method: string, payload?: object): Promise<T> {
+  const response = await apiFetch(`${API_BASE}/production/${path}`, {
+    method,
+    headers: authHeaders(),
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  if (response.status === 204) return undefined as T;
+  return productionJson(response);
+}
+
+export async function fetchProductionSettings(): Promise<ProductionSettings> {
+  const response = await apiFetch(`${API_BASE}/production/settings/`, { headers: authHeaders() });
+  return productionJson(response);
+}
+
+export function saveMixer(payload: Partial<MixerInput>, mixerId: number | null): Promise<ProductionMixer> {
+  return mixerId === null
+    ? sendProductionSettings('mixers/', 'POST', payload)
+    : sendProductionSettings(`mixers/${mixerId}/`, 'PATCH', payload);
+}
+
+export function saveDough(payload: DoughInput, doughId: number | null): Promise<ProductionDough> {
+  return doughId === null
+    ? sendProductionSettings('doughs/', 'POST', payload)
+    : sendProductionSettings(`doughs/${doughId}/`, 'PATCH', payload);
+}
+
+export function deleteDough(doughId: number): Promise<void> {
+  return sendProductionSettings(`doughs/${doughId}/`, 'DELETE');
+}
+
+export function saveBakeSpec(productId: number, payload: BakeSpecValues): Promise<ProductBakeSpecRow> {
+  return sendProductionSettings(`bake-specs/${productId}/`, 'PUT', payload);
+}
+
+export function deleteBakeSpec(productId: number): Promise<void> {
+  return sendProductionSettings(`bake-specs/${productId}/`, 'DELETE');
 }
