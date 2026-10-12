@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.db import transaction
 from django.db.models import Prefetch, ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import status as http_status
@@ -9,6 +10,7 @@ from rest_framework.views import APIView
 
 from products.models import Ingredient, Product
 
+from . import audit as production_audit
 from .models import BatchStageLog, Dough, Mixer, ProductBakeSpec, ProductionBatch, ProductionPlan, WasteRecord
 from .serializers import BakeSpecSerializer, DoughSerializer, MixerSerializer
 from .services.lifecycle import (
@@ -182,7 +184,11 @@ class ProductionPlanView(APIView):
             return Response({'error': 'Nieprawidłowy format daty.'}, status=http_status.HTTP_400_BAD_REQUEST)
 
         try:
-            plan, preview = generate_plan(delivery_date, request.user)
+            with transaction.atomic():
+                previous = ProductionPlan.objects.filter(delivery_date=delivery_date).first()
+                before = production_audit.plan_state(previous)
+                plan, preview = generate_plan(delivery_date, request.user)
+                production_audit.plan_generated(request, plan, preview, before)
         except PlanLockedError as exc:
             return Response({'error': str(exc)}, status=http_status.HTTP_409_CONFLICT)
         except PlanningError as exc:
@@ -232,7 +238,8 @@ class _BatchActionView(APIView):
         if not ProductionBatch.objects.filter(pk=pk).exists():
             return Response({'error': 'Nie znaleziono dzieży.'}, status=http_status.HTTP_404_NOT_FOUND)
         try:
-            extra = self.perform(request, pk) or {}
+            with transaction.atomic():
+                extra = self.perform(request, pk) or {}
         except StaleStageError as exc:
             return Response({'error': str(exc)}, status=http_status.HTTP_409_CONFLICT)
         except BatchActionError as exc:
@@ -253,7 +260,10 @@ class BatchStartStageView(_BatchActionView):
 
 class BatchAdvanceStageView(_BatchActionView):
     def perform(self, request, pk):
-        advance_stage(pk, request.user, expected_stage=request.data.get('stage'))
+        advanced = advance_stage(pk, request.user, expected_stage=request.data.get('stage'))
+        finished_stage = ProductionBatch.STAGE_ORDER[ProductionBatch.STAGE_ORDER.index(advanced.stage) - 1]
+        batch = ProductionBatch.objects.select_related('dough', 'plan').get(pk=pk)
+        production_audit.stage_completed(request, batch, finished_stage)
 
 
 class BatchWasteView(_BatchActionView):
@@ -264,6 +274,8 @@ class BatchWasteView(_BatchActionView):
         except (TypeError, ValueError):
             raise BatchActionError('Podaj wyrób i liczbę sztuk.')
         record, coverage_row = record_waste(pk, request.user, product_id, quantity, request.data.get('reason'))
+        batch = ProductionBatch.objects.select_related('dough', 'plan').get(pk=pk)
+        production_audit.waste_recorded(request, batch, record, coverage_row)
         return {
             'waste_id': record.waste_id,
             'shortfall': coverage_row['shortfall'] if coverage_row else 0,
@@ -346,7 +358,9 @@ class MixerListView(APIView):
         serializer = MixerSerializer(data=request.data)
         if not serializer.is_valid():
             return _invalid(serializer)
-        serializer.save()
+        with transaction.atomic():
+            mixer = serializer.save()
+            production_audit.mixer_saved(request, mixer, before={})
         return Response(serializer.data, status=http_status.HTTP_201_CREATED)
 
 
@@ -358,10 +372,14 @@ class MixerDetailView(APIView):
     def patch(self, request, pk):
         if denied := _only_admin(request):
             return denied
-        serializer = MixerSerializer(get_object_or_404(Mixer, pk=pk), data=request.data, partial=True)
+        mixer = get_object_or_404(Mixer, pk=pk)
+        before = production_audit.mixer_state(mixer)
+        serializer = MixerSerializer(mixer, data=request.data, partial=True)
         if not serializer.is_valid():
             return _invalid(serializer)
-        serializer.save()
+        with transaction.atomic():
+            mixer = serializer.save()
+            production_audit.mixer_saved(request, mixer, before)
         return Response(serializer.data)
 
 
@@ -374,7 +392,9 @@ class DoughListView(APIView):
         serializer = DoughSerializer(data=request.data)
         if not serializer.is_valid():
             return _invalid(serializer)
-        dough = serializer.save()
+        with transaction.atomic():
+            dough = serializer.save()
+            production_audit.dough_saved(request, dough, before={})
         return Response(DoughSerializer(_dough_queryset().get(pk=dough.pk)).data, status=http_status.HTTP_201_CREATED)
 
 
@@ -384,18 +404,25 @@ class DoughDetailView(APIView):
     def patch(self, request, pk):
         if denied := _only_admin(request):
             return denied
-        serializer = DoughSerializer(get_object_or_404(Dough, pk=pk), data=request.data, partial=True)
+        dough = get_object_or_404(Dough.objects.select_related('mixer'), pk=pk)
+        before = production_audit.dough_state(dough)
+        serializer = DoughSerializer(dough, data=request.data, partial=True)
         if not serializer.is_valid():
             return _invalid(serializer)
-        dough = serializer.save()
+        with transaction.atomic():
+            dough = serializer.save()
+            production_audit.dough_saved(request, dough, before)
         return Response(DoughSerializer(_dough_queryset().get(pk=dough.pk)).data)
 
     def delete(self, request, pk):
         if denied := _only_admin(request):
             return denied
-        dough = get_object_or_404(Dough, pk=pk)
+        dough = get_object_or_404(Dough.objects.select_related('mixer'), pk=pk)
         try:
-            dough.delete()
+            with transaction.atomic():
+                # Wpis powstaje przed usunięciem (potrzebny jest identyfikator), a blokada usunięcia cofa go.
+                production_audit.dough_deleted(request, dough, production_audit.dough_state(dough))
+                dough.delete()
         except ProtectedError:
             return Response(
                 {'error': f'Ciasto „{dough.name}” jest używane przez wyroby lub zapisane plany — '
@@ -414,15 +441,25 @@ class BakeSpecDetailView(APIView):
         if denied := _only_admin(request):
             return denied
         product = get_object_or_404(Product, pk=product_id)
-        serializer = BakeSpecSerializer(ProductBakeSpec.objects.filter(product=product).first(), data=request.data)
+        spec = ProductBakeSpec.objects.select_related('dough').filter(product=product).first()
+        before = production_audit.bake_spec_state(spec)
+        serializer = BakeSpecSerializer(spec, data=request.data)
         if not serializer.is_valid():
             return _invalid(serializer)
-        serializer.save(product=product)
+        with transaction.atomic():
+            spec = serializer.save(product=product)
+            production_audit.bake_spec_saved(request, product, before, spec)
         product = Product.objects.select_related('bake_spec__dough').get(pk=product.pk)
         return Response(_bake_spec_row(product))
 
     def delete(self, request, product_id):
         if denied := _only_admin(request):
             return denied
-        ProductBakeSpec.objects.filter(product_id=product_id).delete()
+        spec = ProductBakeSpec.objects.select_related('dough', 'product').filter(product_id=product_id).first()
+        if spec is not None:
+            with transaction.atomic():
+                before = production_audit.bake_spec_state(spec)
+                product = spec.product
+                spec.delete()
+                production_audit.bake_spec_deleted(request, product, before)
         return Response(status=http_status.HTTP_204_NO_CONTENT)

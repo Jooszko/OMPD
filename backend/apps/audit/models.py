@@ -9,6 +9,7 @@ class AuditEntry(models.Model):
         ('orders', 'Zamówienia'),
         ('finance', 'Finanse'),
         ('logistics', 'Logistyka'),
+        ('production', 'Produkcja'),
     ]
 
     entry_id = models.BigAutoField(primary_key=True)

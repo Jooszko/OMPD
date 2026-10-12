@@ -11,9 +11,16 @@ const CATEGORY_TONES: Record<AuditEntry['category'], string> = {
   orders: 'bg-violet-100 border-violet-200 text-violet-800',
   finance: 'bg-emerald-100 border-emerald-200 text-emerald-800',
   logistics: 'bg-orange-100 border-orange-200 text-orange-800',
+  production: 'bg-rose-100 border-rose-200 text-rose-800',
 };
 
-const WARNING_ACTIONS = new Set(['login.failed', 'login.locked', 'login.inactive_account', 'delivery.failed']);
+const WARNING_ACTIONS = new Set([
+  'login.failed',
+  'login.locked',
+  'login.inactive_account',
+  'delivery.failed',
+  'batch.waste_recorded',
+]);
 
 export function AuditEntryItem({
   entry,
