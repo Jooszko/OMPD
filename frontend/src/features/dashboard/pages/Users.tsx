@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react';
 import { Edit, Trash2, UserPlus, Shield, CheckCircle, XCircle, Key, X } from 'lucide-react';
 import { fetchUsers, createUser, updateUser, deleteUser, type AppUser } from '../../../services/api';
 
+function describeApiError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  try {
+    const data = JSON.parse(error.message) as Record<string, unknown>;
+    const messages = Object.values(data)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter((value): value is string => typeof value === 'string');
+    if (messages.length > 0) return messages.join('\n');
+  } catch {
+    // komunikat nie jest JSON-em z serwera
+  }
+  return fallback;
+}
+
 export default function UsersPanel() {
     const [users, setUsers] = useState<AppUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +106,7 @@ export default function UsersPanel() {
             setSelectedUserId(null);
         } catch (error) {
             console.error('Błąd podczas zapisu użytkownika:', error);
-            alert('Nie udało się zapisać użytkownika. Sprawdź czy login nie jest już zajęty.');
+            alert(describeApiError(error, 'Nie udało się zapisać użytkownika.'));
         }
     };
 
@@ -105,7 +119,7 @@ export default function UsersPanel() {
                 setSelectedUserId(null);
             } catch (error) {
                 console.error('Błąd podczas usuwania użytkownika:', error);
-                alert('Nie udało się usunąć użytkownika.');
+                alert(describeApiError(error, 'Nie udało się usunąć użytkownika.'));
             }
         }
     };
@@ -180,32 +194,34 @@ export default function UsersPanel() {
                     </div>
                 </div>
 
-                <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
-                    <button
-                        onClick={handleOpenAdd}
-                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
-                    >
-                        <UserPlus className="w-4 h-4 text-bakery-accent" /> Utwórz Użytkownika
-                    </button>
+                <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
+                    <div className="flex flex-col items-center min-[1016px]:flex-row gap-2">
+                        <button
+                            onClick={handleOpenAdd}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
+                        >
+                            <UserPlus className="w-4 h-4 text-bakery-accent" /> Utwórz Użytkownika
+                        </button>
 
-                    <button
-                        onClick={handleOpenEdit}
-                        disabled={!selectedUserId}
-                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-                    >
-                        <Edit className="w-4 h-4" /> Edytuj
-                    </button>
+                        <button
+                            onClick={handleOpenEdit}
+                            disabled={!selectedUserId}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                        >
+                            <Edit className="w-4 h-4" /> Edytuj
+                        </button>
 
-                    <button
-                        onClick={handleDeleteUser}
-                        disabled={!selectedUserId}
-                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-red-50 border border-red-200 text-red-700 rounded shadow-2xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-                    >
-                        <Trash2 className="w-4 h-4" /> Usuń konto
-                    </button>
+                        <button
+                            onClick={handleDeleteUser}
+                            disabled={!selectedUserId}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-red-50 border border-red-200 text-red-700 rounded shadow-2xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                        >
+                            <Trash2 className="w-4 h-4" /> Usuń konto
+                        </button>
+                    </div>
 
                     {!selectedUserId && (
-                        <span className="text-[10px] text-gray-500 font-semibold ml-2 italic">Zaznacz pracownika z listy powyżej, aby zmodyfikować jego uprawnienia lub zablokować dostęp do systemu.</span>
+                        <span className="text-[10px] text-gray-500 font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2 italic">Zaznacz pracownika z listy powyżej, aby zmodyfikować jego uprawnienia lub zablokować dostęp do systemu.</span>
                     )}
                 </div>
             </div>

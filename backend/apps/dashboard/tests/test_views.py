@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from products.models import Ingredient, IngredientStock
+from users.models import User
 
 
 class DashboardViewWarehouseStockTests(TestCase):
@@ -13,8 +15,10 @@ class DashboardViewWarehouseStockTests(TestCase):
             current_stock=Decimal('12.500'),
             min_stock_level=Decimal('5.000'),
         )
+        api = APIClient()
+        api.force_authenticate(User.objects.create_user(username='baker_d', password='x', role='baker', full_name='Baker D'))
 
-        response = self.client.get('/api/dashboard/')
+        response = api.get('/api/dashboard/')
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

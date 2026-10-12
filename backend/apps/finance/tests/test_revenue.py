@@ -8,6 +8,7 @@ from clients.models import Client, Route
 from finance.views import _returns_for_date, _revenue_for_date
 from orders.models import DailyOrder, ProductReturn
 from products.models import Product
+from users.models import User
 
 
 class RevenueStatusTests(TestCase):
@@ -30,6 +31,9 @@ class RevenueStatusTests(TestCase):
 class ReturnsInFinanceTests(TestCase):
     def setUp(self):
         self.api = APIClient()
+        self.api.force_authenticate(
+            User.objects.create_user(username='admin_fin', password='x', role='admin', full_name='Admin Fin')
+        )
         self.today = date.today()
         self.yesterday = self.today - timedelta(days=1)
         route = Route.objects.create(route_name='Trasa Zwroty')

@@ -5,13 +5,50 @@ from django.db.models import Sum, Avg, F, DecimalField, ExpressionWrapper
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport
 from .serializers import SupplierSerializer
 from products.models import Ingredient, Recipe
 from orders.models import DailyOrder, ProductReturn
+from django.db import transaction
+from audit.services import field_changes, record_event, snapshot
+
+SUPPLIER_AUDIT_LABELS = {
+    'name': 'Nazwa',
+    'phone': 'Telefon',
+    'email': 'E-mail',
+    'address': 'Adres',
+    'nip': 'NIP',
+    'is_active': 'Aktywny',
+    '_catalog': 'Asortyment',
+}
+REPORT_AUDIT_LABELS = {
+    'total_revenue': 'Przychód',
+    'total_cogs': 'Koszt surowców',
+    'total_operating_expenses': 'Koszty operacyjne',
+    'net_profit': 'Zysk netto',
+}
+
+
+def _supplier_state(supplier):
+    catalog = sorted(
+        SupplierIngredient.objects.filter(supplier=supplier).values_list('ingredient__name', flat=True)
+    )
+    fields = [field for field in SUPPLIER_AUDIT_LABELS if not field.startswith('_')]
+    return {**snapshot(supplier, fields), '_catalog': ', '.join(catalog)}
+
+
+def _save_supplier_catalog(supplier, products_data):
+    for p in products_data:
+        try:
+            ingredient = Ingredient.objects.get(pk=p.get('product_id'))
+            SupplierIngredient.objects.get_or_create(supplier=supplier, ingredient=ingredient)
+        except Ingredient.DoesNotExist:
+            continue
 
 class SupplierListView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         suppliers = Supplier.objects.all().prefetch_related('ingredients_catalog__ingredient')
         serializer = SupplierSerializer(suppliers, many=True)
@@ -20,45 +57,46 @@ class SupplierListView(APIView):
     def post(self, request):
         products_data = request.data.pop('products', [])
         serializer = SupplierSerializer(data=request.data)
-        
-        if serializer.is_valid():
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
             supplier = serializer.save()
-            
-            for p in products_data:
-                try:
-                    ingredient = Ingredient.objects.get(pk=p.get('product_id'))
-                    SupplierIngredient.objects.get_or_create(supplier=supplier, ingredient=ingredient)
-                except Ingredient.DoesNotExist:
-                    continue
-                    
-            return Response(SupplierSerializer(supplier).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            _save_supplier_catalog(supplier, products_data)
+            changes = [
+                c for c in field_changes({}, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
+                if c['new'] not in (None, '')
+            ]
+            record_event(
+                request, category='finance', action='supplier.created', obj=supplier,
+                description=f'Dodano dostawcę {supplier.name}.', changes=changes,
+            )
+        return Response(SupplierSerializer(supplier).data, status=status.HTTP_201_CREATED)
 
 class SupplierDetailView(APIView):
+    permission_classes = [AdminOnly]
     def put(self, request, pk):
         supplier = get_object_or_404(Supplier, pk=pk)
-        
+
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
         products_data = data.pop('products', [])
-        
-        serializer = SupplierSerializer(supplier, data=data, partial=True)
-        
-        if serializer.is_valid():
-            serializer.save()
-            
-            SupplierIngredient.objects.filter(supplier=supplier).delete()
-            for p in products_data:
-                try:
-                    ingredient = Ingredient.objects.get(pk=p.get('product_id'))
-                    SupplierIngredient.objects.get_or_create(supplier=supplier, ingredient=ingredient)
-                except Ingredient.DoesNotExist:
-                    continue
-            
-            return Response(SupplierSerializer(supplier).data, status=status.HTTP_200_OK)
-        
-        print("BŁĘDY WALIDACJI:", serializer.errors)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = SupplierSerializer(supplier, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            before = _supplier_state(supplier)
+            serializer.save()
+            SupplierIngredient.objects.filter(supplier=supplier).delete()
+            _save_supplier_catalog(supplier, products_data)
+            changes = field_changes(before, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
+            if changes:
+                record_event(
+                    request, category='finance', action='supplier.updated', obj=supplier,
+                    description=f'Zmieniono dane dostawcy {supplier.name}.', changes=changes,
+                )
+        return Response(SupplierSerializer(supplier).data, status=status.HTTP_200_OK)
 
 
 def _parse_date_range(request, default_days=30):
@@ -145,6 +183,7 @@ def _serialize_report(report):
 
 
 class DailySummaryView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         date_param = request.query_params.get('date')
         try:
@@ -167,6 +206,7 @@ class DailySummaryView(APIView):
 
 
 class ExpenseListCreateView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         expenses = Expense.objects.filter(date__gte=start, date__lte=end).order_by('-date')
@@ -203,10 +243,19 @@ class ExpenseListCreateView(APIView):
             return Response({'error': 'Nieprawidłowa data.'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user if request.user.is_authenticated else None
-        expense = Expense.objects.create(
-            category=category, amount=amount_dec, description=description,
-            date=expense_date, created_by=user,
-        )
+        with transaction.atomic():
+            expense = Expense.objects.create(
+                category=category, amount=amount_dec, description=description,
+                date=expense_date, created_by=user,
+            )
+            record_event(
+                request, category='finance', action='expense.created', obj=expense,
+                object_label=description or expense.get_category_display(),
+                description=(
+                    f'Dodano wydatek „{expense.get_category_display()}”: {amount_dec:.2f} zł '
+                    f'z dnia {expense_date:%d.%m.%Y}.'
+                ),
+            )
         return Response({
             'expense_id': expense.expense_id,
             'category': expense.category,
@@ -218,6 +267,7 @@ class ExpenseListCreateView(APIView):
 
 
 class CategoryBreakdownView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         rows = (
@@ -234,6 +284,7 @@ class CategoryBreakdownView(APIView):
 
 
 class PeriodIncomesView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         sales = (
@@ -265,6 +316,7 @@ class PeriodIncomesView(APIView):
 
 
 class TopClientsView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request)
         sales = (
@@ -292,6 +344,7 @@ class TopClientsView(APIView):
 
 
 class ProfitTrendView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         start, end = _parse_date_range(request, default_days=6)
         trend = []
@@ -305,6 +358,7 @@ class ProfitTrendView(APIView):
 
 
 class FinancialReportListView(APIView):
+    permission_classes = [AdminOnly]
     def get(self, request):
         reports = DailyFinancialReport.objects.all().order_by('-report_date')
         return Response([_serialize_report(r) for r in reports])
@@ -317,26 +371,48 @@ class FinancialReportListView(APIView):
         net_profit = revenue - expenses - cogs
 
         user = request.user if request.user.is_authenticated else None
-        report, _created = DailyFinancialReport.objects.update_or_create(
-            report_date=today,
-            defaults={
-                'total_revenue': revenue,
-                'total_cogs': cogs,
-                'total_operating_expenses': expenses,
-                'net_profit': net_profit,
-                'is_finalized': True,
-                'generated_by': user,
-            },
-        )
+        with transaction.atomic():
+            existing = DailyFinancialReport.objects.filter(report_date=today).first()
+            before = snapshot(existing, REPORT_AUDIT_LABELS) if existing else {}
+            report, created = DailyFinancialReport.objects.update_or_create(
+                report_date=today,
+                defaults={
+                    'total_revenue': revenue,
+                    'total_cogs': cogs,
+                    'total_operating_expenses': expenses,
+                    'net_profit': net_profit,
+                    'is_finalized': True,
+                    'generated_by': user,
+                },
+            )
+            report.refresh_from_db()
+            record_event(
+                request, category='finance',
+                action='report.generated' if created else 'report.regenerated',
+                obj=report, object_label=f'Raport {today:%d.%m.%Y}',
+                description=(
+                    f'{"Wygenerowano" if created else "Ponownie wygenerowano"} raport finansowy '
+                    f'z dnia {today:%d.%m.%Y}.'
+                ),
+                changes=field_changes(before, snapshot(report, REPORT_AUDIT_LABELS), REPORT_AUDIT_LABELS),
+            )
         return Response(_serialize_report(report), status=status.HTTP_201_CREATED)
 
 
 class FinancialReportDetailView(APIView):
+    permission_classes = [AdminOnly]
     def delete(self, request, report_date):
         try:
             parsed_date = date_cls.fromisoformat(report_date)
         except ValueError:
             return Response({'error': 'Nieprawidłowy format daty.'}, status=status.HTTP_400_BAD_REQUEST)
         report = get_object_or_404(DailyFinancialReport, report_date=parsed_date)
-        report.delete()
+        with transaction.atomic():
+            record_event(
+                request, category='finance', action='report.deleted', obj=report,
+                object_label=f'Raport {parsed_date:%d.%m.%Y}',
+                description=f'Usunięto raport finansowy z dnia {parsed_date:%d.%m.%Y}.',
+                changes=field_changes(snapshot(report, REPORT_AUDIT_LABELS), {}, REPORT_AUDIT_LABELS),
+            )
+            report.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

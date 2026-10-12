@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
 import {
   fetchProducts,
@@ -26,7 +27,9 @@ interface DraftItem {
 }
 
 export default function ProductsPanel() {
+  const { currentRole } = useOutletContext<{ currentRole: 'admin' | 'baker' | 'driver' }>();
   const [activeTab, setActiveTab] = useState<'ceny' | 'receptury'>('ceny');
+  const visibleTab = currentRole === 'baker' ? 'receptury' : activeTab;
 
   const [products, setProducts] = useState<AppProduct[]>([]);
   const [ingredients, setIngredients] = useState<AppIngredient[]>([]);
@@ -183,19 +186,25 @@ export default function ProductsPanel() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Zarządzanie Produktami</h1>
-          <p className="text-xs text-gray-500 font-medium">Ustalanie cennika bazowego oraz zarządzanie recepturami technologicznymi.</p>
+          <p className="text-xs text-gray-500 font-medium">
+            {currentRole === 'baker'
+              ? 'Zarządzanie recepturami technologicznymi.'
+              : 'Ustalanie cennika bazowego oraz zarządzanie recepturami technologicznymi.'}
+          </p>
         </div>
 
         <div className="flex bg-bakery-inactive p-1 rounded border border-bakery-btnBorder shadow-sm">
-          <button
-            onClick={() => setActiveTab('ceny')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${activeTab === 'ceny' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
-          >
-            <div className="flex items-center gap-2"><Tag className="w-3.5 h-3.5" /> Cennik bazowy</div>
-          </button>
+          {currentRole !== 'baker' && (
+            <button
+              onClick={() => setActiveTab('ceny')}
+              className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${visibleTab === 'ceny' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
+            >
+              <div className="flex items-center gap-2"><Tag className="w-3.5 h-3.5" /> Cennik bazowy</div>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('receptury')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${activeTab === 'receptury' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${visibleTab === 'receptury' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
           >
             <div className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /> Receptury</div>
           </button>
@@ -204,7 +213,7 @@ export default function ProductsPanel() {
 
       <hr className="border-0 border-t border-bakery-border my-1" />
 
-      {activeTab === 'ceny' && (
+      {visibleTab === 'ceny' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
           <div className="lg:col-span-2 flex flex-col gap-4">
             <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
@@ -305,13 +314,15 @@ export default function ProductsPanel() {
         </div>
       )}
 
-      {activeTab === 'receptury' && (
+      {visibleTab === 'receptury' && (
         <div className="flex flex-col gap-4 w-full">
-          <div className="flex justify-start">
-            <button onClick={handleOpenAddRecipe} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs">
-              <Plus className="w-4 h-4 text-bakery-accent" /> Zdefiniuj nową recepturę
-            </button>
-          </div>
+          {currentRole !== 'baker' && (
+            <div className="flex justify-start">
+              <button onClick={handleOpenAddRecipe} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs">
+                <Plus className="w-4 h-4 text-bakery-accent" /> Zdefiniuj nową recepturę
+              </button>
+            </div>
+          )}
 
           <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm overflow-hidden w-full">
             <table className="w-full text-left border-collapse">
@@ -321,7 +332,7 @@ export default function ProductsPanel() {
                   <th className="py-3 px-4">Kategoria</th>
                   <th className="py-3 px-4">Liczba użytych surowców</th>
                   <th className="py-3 px-4">Skład szczegółowy receptury</th>
-                  <th className="py-3 px-4 text-center w-32">Akcje</th>
+                  {currentRole !== 'baker' && <th className="py-3 px-4 text-center w-32">Akcje</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-bakery-btnBorder text-sm">
@@ -339,16 +350,18 @@ export default function ProductsPanel() {
                         ))}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex gap-1.5 justify-center">
-                        <button onClick={() => handleOpenEditRecipe(recipe)} className="text-bakery-dark hover:text-white p-1 rounded bg-bakery-inactive hover:bg-bakery-dark border border-bakery-btnBorder text-[11px] font-bold transition-all shadow-2xs">
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDeleteRecipe(recipe.product_id)} className="text-red-700 hover:text-white p-1 rounded bg-red-50 hover:bg-red-700 border border-red-200 text-[11px] font-bold transition-all shadow-2xs">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    {currentRole !== 'baker' && (
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex gap-1.5 justify-center">
+                          <button onClick={() => handleOpenEditRecipe(recipe)} className="text-bakery-dark hover:text-white p-1 rounded bg-bakery-inactive hover:bg-bakery-dark border border-bakery-btnBorder text-[11px] font-bold transition-all shadow-2xs">
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteRecipe(recipe.product_id)} className="text-red-700 hover:text-white p-1 rounded bg-red-50 hover:bg-red-700 border border-red-200 text-[11px] font-bold transition-all shadow-2xs">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

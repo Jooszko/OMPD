@@ -4,11 +4,41 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
+from users.permissions import AdminOrBaker
 from products.models import Product
 from .models import DailyOrder, StandingOrder
+from audit.services import field_changes, record_event
+from clients.models import Client
 
 DAY_LABELS = {0: 'Pn', 1: 'Wt', 2: 'Śr', 3: 'Czw', 4: 'Pt', 5: 'Sb', 6: 'Nd'}
+STATUS_LABELS = dict(DailyOrder.STATUS_CHOICES)
+DAILY_EXTRA_LABELS = {'_status': 'Status'}
+STANDING_EXTRA_LABELS = {'_days': 'Dni tygodnia'}
+
+
+def _daily_order_state(order_date, client_id):
+    """{product: 'qty szt. × price zł', '_status': ...} for one client's order on one day."""
+    orders = list(DailyOrder.objects.filter(order_date=order_date, client_id=client_id).select_related('product'))
+    state = {o.product.name: f'{o.quantity} szt. × {o.price_at_sale} zł' for o in orders}
+    if orders:
+        state['_status'] = ', '.join(sorted({STATUS_LABELS[o.status] for o in orders}))
+    return state
+
+
+def _standing_order_state(client_id):
+    """{product: 'qty szt.', '_days': 'Pn, Śr'} for one client's standing order."""
+    orders = list(StandingOrder.objects.filter(client_id=client_id).select_related('product'))
+    state = {o.product.name: f'{o.quantity} szt.' for o in orders}
+    if orders:
+        days = sorted({o.day_of_week for o in orders})
+        state['_days'] = 'Codziennie' if len(days) == 7 else ', '.join(DAY_LABELS[d] for d in days)
+    return state
+
+
+def _order_changes(before, after, extra_labels):
+    """Changes with the extra fields (status / days) first, then products alphabetically."""
+    products = sorted(key for key in set(before) | set(after) if not key.startswith('_'))
+    return field_changes(before, after, {**extra_labels, **{name: name for name in products}})
 
 
 def _group_daily_orders(queryset):
@@ -51,6 +81,7 @@ def _group_daily_orders(queryset):
 
 
 class DailyOrdersView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         date_param = request.query_params.get('date')
         try:
@@ -79,23 +110,36 @@ class DailyOrdersView(APIView):
             order_date = date_cls.fromisoformat(order_date_str)
         except ValueError:
             return Response({'error': 'Błędny format daty.'}, status=status.HTTP_400_BAD_REQUEST)
+        client = get_object_or_404(Client, pk=client_id)
 
         with transaction.atomic():
-            DailyOrder.objects.filter(order_date=order_date, client_id=client_id).delete()
+            before = _daily_order_state(order_date, client.pk)
+            DailyOrder.objects.filter(order_date=order_date, client=client).delete()
             for item in items:
                 product = get_object_or_404(Product, pk=item['product_id'])
                 qty = int(item['qty'])
                 if qty > 0:
                     DailyOrder.objects.create(
-                        client_id=client_id,
+                        client=client,
                         product=product,
                         order_date=order_date,
                         quantity=qty,
                         price_at_sale=product.base_price,
                         status=order_status
                     )
+            changes = _order_changes(before, _daily_order_state(order_date, client.pk), DAILY_EXTRA_LABELS)
+            if changes:
+                record_event(
+                    request, category='orders',
+                    action='order.updated' if before else 'order.created',
+                    obj=client, object_label=f'{client.name}, {order_date:%d.%m.%Y}', changes=changes,
+                    description=(
+                        f'{"Zmieniono" if before else "Dodano"} zamówienie klienta {client.name} '
+                        f'na {order_date:%d.%m.%Y}.'
+                    ),
+                )
 
-        qs = DailyOrder.objects.filter(order_date=order_date, client_id=client_id).select_related('client', 'product')
+        qs = DailyOrder.objects.filter(order_date=order_date, client=client).select_related('client', 'product')
         return Response(_group_daily_orders(qs), status=status.HTTP_201_CREATED)
 
     def delete(self, request):
@@ -114,11 +158,23 @@ class DailyOrdersView(APIView):
         except ValueError:
             return Response({'error': 'Nieprawidłowe dane id.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        DailyOrder.objects.filter(order_date=target_date, client_id=client_id).delete()
+        with transaction.atomic():
+            before = _daily_order_state(target_date, client_id)
+            DailyOrder.objects.filter(order_date=target_date, client_id=client_id).delete()
+            if before:
+                client = Client.objects.filter(pk=client_id).first()
+                name = client.name if client else f'#{client_id}'
+                record_event(
+                    request, category='orders', action='order.deleted', obj=client,
+                    object_label=f'{name}, {target_date:%d.%m.%Y}',
+                    description=f'Usunięto zamówienie klienta {name} na {target_date:%d.%m.%Y}.',
+                    changes=_order_changes(before, {}, DAILY_EXTRA_LABELS),
+                )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class OrderHistoryView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         today = date_cls.today()
         qs = (
@@ -131,6 +187,7 @@ class OrderHistoryView(APIView):
 
 
 class StandingOrdersView(APIView):
+    permission_classes = [AdminOrBaker]
     def get(self, request):
         qs = (
             StandingOrder.objects
@@ -194,22 +251,32 @@ class StandingOrdersView(APIView):
                 {'error': 'Wybierz klienta, przynajmniej jeden dzień tygodnia i co najmniej jeden produkt.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        client = get_object_or_404(Client, pk=client_id)
 
         with transaction.atomic():
-            StandingOrder.objects.filter(client_id=client_id).delete()
+            before = _standing_order_state(client.pk)
+            StandingOrder.objects.filter(client=client).delete()
             for day in days:
                 for item in items:
                     product = get_object_or_404(Product, pk=item['product_id'])
                     qty = int(item['qty'])
                     if qty > 0:
                         StandingOrder.objects.create(
-                            client_id=client_id,
+                            client=client,
                             product=product,
                             day_of_week=int(day),
                             quantity=qty,
                             price_at_sale=product.base_price,
                             is_active=True
                         )
+            changes = _order_changes(before, _standing_order_state(client.pk), STANDING_EXTRA_LABELS)
+            if changes:
+                record_event(
+                    request, category='orders',
+                    action='standing_order.updated' if before else 'standing_order.created',
+                    obj=client, changes=changes,
+                    description=f'{"Zmieniono" if before else "Dodano"} zamówienie stałe klienta {client.name}.',
+                )
 
         return Response({'message': 'Harmonogram stały został zapisany.'}, status=status.HTTP_201_CREATED)
 
@@ -217,5 +284,14 @@ class StandingOrdersView(APIView):
         client_id = request.query_params.get('client_id')
         if not client_id:
             return Response({'error': 'Brak parametru client_id.'}, status=status.HTTP_400_BAD_REQUEST)
-        StandingOrder.objects.filter(client_id=client_id).delete()
+        client = get_object_or_404(Client, pk=client_id)
+        with transaction.atomic():
+            before = _standing_order_state(client.pk)
+            StandingOrder.objects.filter(client=client).delete()
+            if before:
+                record_event(
+                    request, category='orders', action='standing_order.deleted', obj=client,
+                    description=f'Usunięto zamówienie stałe klienta {client.name}.',
+                    changes=_order_changes(before, {}, STANDING_EXTRA_LABELS),
+                )
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
@@ -16,16 +16,18 @@ import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
 import ProductionPlanning from '../features/production/pages/ProductionPlanning';
 import ProductionKiosk from '../features/production/pages/ProductionKiosk';
 import ProductionSettings from '../features/production/pages/ProductionSettings';
-
-import { Login } from '../features/dashboard/pages/Login';
+import AuditLog from '../features/dashboard/pages/AuditLog';
+import Login from '../features/auth/pages/Login';
+import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
 
 const NotFoundPage = () => <div className="page-card"><h2>Błąd 404</h2><p>Nie ma takiej strony.</p></div>;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const location = useLocation();
   const token = getAuthToken();
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
   return children;
 };
@@ -34,7 +36,14 @@ export const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-
+      <Route
+        path="/set-password"
+        element={
+          <ProtectedRoute>
+            <SetPassword />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/"
         element={
@@ -55,6 +64,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="products" element={<Produkty />} />
         <Route path="finance" element={<Finance />} />
         <Route path="users" element={<Users />} />
+        <Route path="audit-log" element={<AuditLog />} />
         <Route path="clients" element={<Clients />} />
         <Route path="contractors" element={<Contractors />} />
         <Route path="notifications" element={<Notifications />} />

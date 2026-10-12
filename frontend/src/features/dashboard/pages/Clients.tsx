@@ -219,24 +219,26 @@ export default function ClientsPanel() {
             </div>
           </div>
 
-          <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
-            <button
-              onClick={handleOpenAdd}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
-            >
-              <UserPlus className="w-4 h-4 text-bakery-accent" /> Dodaj Odbiorcę
-            </button>
+          <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
+            <div className="flex flex-wrap justify-center min-[1016px]:justify-start items-center gap-2">
+              <button
+                onClick={handleOpenAdd}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
+              >
+                <UserPlus className="w-4 h-4 text-bakery-accent" /> Dodaj Odbiorcę
+              </button>
 
-            <button
-              onClick={handleOpenEdit}
-              disabled={!selectedClientId}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-            >
-              <Edit className="w-4 h-4" /> Edytuj dane / status
-            </button>
-
+              <button
+                onClick={handleOpenEdit}
+                disabled={!selectedClientId}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+              >
+                <Edit className="w-4 h-4" /> Edytuj dane / status
+              </button>
+            </div>
+ 
             {!selectedClientId && (
-              <span className="text-[10px] text-gray-500 font-semibold ml-2 italic">
+              <span className="text-[10px] text-gray-500 font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2 italic">
                 Zaznacz klienta z listy powyżej, aby dokonać korekty adresowej lub zmienić status aktywności.
               </span>
             )}

@@ -2,10 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/manrope";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  --font-display: 'Bricolage Grotesque Variable', sans-serif;
+  --font-auth: 'Manrope Variable', sans-serif;
   --color-bakery-main: #d3cdcd;
   --color-bakery-dark: #1a1a1a;
   --color-bakery-inactive: #e2dede;

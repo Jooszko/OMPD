@@ -495,33 +495,35 @@ export default function ZamowieniaPanel() {
           </div>
 
           {activeTab !== 'historia' && (
-            <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
-              <button
-                onClick={handleOpenAdd}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
-              >
-                <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj{' '}
-                {activeTab === 'dzisiejsze' ? 'jednorazowe' : 'stałe'}
-              </button>
+            <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
+              <div className="flex flex-col items-center min-[1016px]:flex-row gap-2">
+                <button
+                  onClick={handleOpenAdd}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
+                >
+                  <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj{' '}
+                  {activeTab === 'dzisiejsze' ? 'jednorazowe' : 'stałe'}
+                </button>
 
-              <button
-                onClick={handleOpenEdit}
-                disabled={!selectedOrderId}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-              >
-                <Edit className="w-4 h-4" /> Edytuj
-              </button>
+                <button
+                  onClick={handleOpenEdit}
+                  disabled={!selectedOrderId}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                >
+                  <Edit className="w-4 h-4" /> Edytuj
+                </button>
 
-              <button
-                onClick={handleDelete}
-                disabled={!selectedOrderId}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-red-50 border border-red-200 text-red-700 rounded shadow-2xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-              >
-                <Trash2 className="w-4 h-4" /> Usuń
-              </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={!selectedOrderId}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-red-50 border border-red-200 text-red-700 rounded shadow-2xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                >
+                  <Trash2 className="w-4 h-4" /> Usuń
+                </button>
+              </div>
 
               {!selectedOrderId && (
-                <span className="text-[10px] text-gray-500 font-semibold ml-2 italic">
+                <span className="text-[10px] text-gray-500 font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2 italic">
                   Zaznacz jedno zamówienie na tabeli, aby je edytować lub usunąć.
                 </span>
               )}
