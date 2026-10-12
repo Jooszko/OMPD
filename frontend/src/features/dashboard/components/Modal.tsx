@@ -11,6 +11,7 @@ export function Modal({
   icon,
   initialFocusSelector,
   closeDisabled = false,
+  size = 'md',
   onClose,
   children,
 }: {
@@ -19,6 +20,7 @@ export function Modal({
   icon?: ReactNode;
   initialFocusSelector?: string;
   closeDisabled?: boolean;
+  size?: 'md' | 'xl';
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -74,7 +76,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-4 flex flex-col gap-3 text-bakery-dark max-h-[90vh] overflow-y-auto"
+        className={`w-full ${size === 'xl' ? 'sm:max-w-3xl' : 'sm:max-w-md'} bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-4 flex flex-col gap-3 text-bakery-dark max-h-[90vh] overflow-y-auto`}
       >
         <div className="flex items-start justify-between gap-2">
           <div>
