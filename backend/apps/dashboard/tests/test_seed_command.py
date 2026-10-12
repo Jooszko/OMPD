@@ -4,6 +4,7 @@ from django.test import TestCase
 from clients.models import Client, Route
 from finance.models import DailyFinancialReport, Expense, Supplier, SupplierIngredient, SupplyOrder
 from orders.models import DailyOrder, StandingOrder
+from production.models import Dough, Mixer, ProductBakeSpec
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from users.models import Notification, User
 
@@ -19,6 +20,9 @@ class SeedDashboardCommandTests(TestCase):
         self.assertEqual(IngredientStock.objects.count(), 20)
         self.assertEqual(Product.objects.count(), 20)
         self.assertGreater(Recipe.objects.count(), 20)
+        self.assertEqual(Mixer.objects.count(), 2)
+        self.assertEqual(Dough.objects.count(), 4)
+        self.assertEqual(ProductBakeSpec.objects.count(), 9)
         self.assertEqual(Supplier.objects.count(), 10)
         self.assertEqual(SupplierIngredient.objects.count(), 20)
         self.assertEqual(SupplyOrder.objects.count(), 25)

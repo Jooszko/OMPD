@@ -8,6 +8,7 @@ from finance.models import (
     SupplyOrderItem,
 )
 from orders.models import DailyOrder, StandingOrder
+from production.models import Dough, Mixer, ProductionPlan
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from users.models import Notification, User
 
@@ -21,10 +22,13 @@ def clear_all():
     SupplyOrder.objects.all().delete()
     SupplierIngredient.objects.all().delete()
     Supplier.objects.all().delete()
+    ProductionPlan.objects.all().delete()
     DailyOrder.objects.all().delete()
     StandingOrder.objects.all().delete()
     Recipe.objects.all().delete()
     Product.objects.all().delete()
+    Dough.objects.all().delete()
+    Mixer.objects.all().delete()
     IngredientStock.objects.all().delete()
     Ingredient.objects.all().delete()
     Client.objects.all().delete()
