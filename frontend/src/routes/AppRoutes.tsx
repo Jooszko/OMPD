@@ -13,6 +13,9 @@ import Warehouse from '../features/dashboard/pages/Warehouse';
 import Logistics from '../features/dashboard/pages/Logistics';
 import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
+import ProductionPlanning from '../features/production/pages/ProductionPlanning';
+import ProductionKiosk from '../features/production/pages/ProductionKiosk';
+import ProductionSettings from '../features/production/pages/ProductionSettings';
 import AuditLog from '../features/dashboard/pages/AuditLog';
 import Login from '../features/auth/pages/Login';
 import SetPassword from '../features/auth/pages/SetPassword';
@@ -52,6 +55,9 @@ export const AppRoutes: React.FC = () => {
         <Route index element={<HomeDashboard />} />
         <Route path="orders" element={<ZamowieniaPanel />} />
 
+        <Route path="production" element={<ProductionPlanning />} />
+        <Route path="production/board" element={<ProductionKiosk />} />
+        <Route path="production/settings" element={<ProductionSettings />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="logistics" element={<Logistics />} />
         <Route path="delivery-stats" element={<DeliveryStats />} />

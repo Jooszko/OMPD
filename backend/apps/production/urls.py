@@ -1,0 +1,29 @@
+from django.urls import path
+
+from .views import (
+    BakeSpecDetailView,
+    BatchAdvanceStageView,
+    BatchStartStageView,
+    BatchWasteView,
+    DoughDetailView,
+    DoughListView,
+    MixerDetailView,
+    MixerListView,
+    ProductionBoardView,
+    ProductionPlanView,
+    ProductionSettingsView,
+)
+
+urlpatterns = [
+    path('plan/', ProductionPlanView.as_view(), name='production-plan'),
+    path('board/', ProductionBoardView.as_view(), name='production-board'),
+    path('batches/<int:pk>/start/', BatchStartStageView.as_view(), name='production-batch-start'),
+    path('batches/<int:pk>/advance/', BatchAdvanceStageView.as_view(), name='production-batch-advance'),
+    path('batches/<int:pk>/waste/', BatchWasteView.as_view(), name='production-batch-waste'),
+    path('settings/', ProductionSettingsView.as_view(), name='production-settings'),
+    path('mixers/', MixerListView.as_view(), name='production-mixer-list'),
+    path('mixers/<int:pk>/', MixerDetailView.as_view(), name='production-mixer-detail'),
+    path('doughs/', DoughListView.as_view(), name='production-dough-list'),
+    path('doughs/<int:pk>/', DoughDetailView.as_view(), name='production-dough-detail'),
+    path('bake-specs/<int:product_id>/', BakeSpecDetailView.as_view(), name='production-bake-spec'),
+]

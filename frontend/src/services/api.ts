@@ -1040,6 +1040,317 @@ export async function saveStandingOrder(payload: {
   return handleJsonResponse(response);
 }
 
+export type ProductionStage = 'mixing' | 'dividing' | 'proofing' | 'baking' | 'done';
+export type WasteReason = 'damaged' | 'misshaped' | 'overproofed' | 'burnt' | 'underbaked' | 'dropped' | 'other';
+
+export interface ProductionPerson {
+  user_id: number;
+  full_name: string;
+}
+
+export interface WeighItem {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+  amount: number;
+}
+
+export interface PlanPreviewBatch {
+  sequence: number;
+  dough_mass_kg: number;
+  outputs: { product_id: number; product_name: string; pieces: number }[];
+  ingredients: WeighItem[];
+}
+
+export interface PlanPreviewDough {
+  dough_id: number;
+  name: string;
+  loss_buffer_pct: number;
+  raw_mass_kg: number;
+  total_mass_kg: number;
+  mixer: { mixer_id: number; name: string; min_capacity_kg: number; max_capacity_kg: number } | null;
+  products: {
+    product_id: number;
+    product_name: string;
+    ordered_qty: number;
+    piece_weight_kg: number;
+    raw_mass_kg: number;
+    bake_temp_c: number;
+    bake_time_min: number;
+  }[];
+  batches: PlanPreviewBatch[];
+  warnings: string[];
+  notes: string[];
+}
+
+export interface PlanPreview {
+  delivery_date: string;
+  production_date: string;
+  doughs: PlanPreviewDough[];
+  unassigned_products: { product_id: number; product_name: string; ordered_qty: number }[];
+  ingredient_totals: (WeighItem & { current_stock: number; shortage: number })[];
+}
+
+export interface ProductionPlanSummary {
+  plan_id: number;
+  created_at: string;
+  created_by: ProductionPerson | null;
+  locked: boolean;
+}
+
+export interface PlanOrderChange {
+  product_id: number;
+  product_name: string;
+  planned_qty: number;
+  current_qty: number;
+  difference: number;
+}
+
+export interface ProductionPlanResponse {
+  preview: PlanPreview;
+  plan: ProductionPlanSummary | null;
+  /** Różnice między zatwierdzonym planem a bieżącymi zamówieniami; puste, gdy plan nie jest zapisany. */
+  order_changes: PlanOrderChange[];
+}
+
+export interface BatchOutput {
+  product_id: number;
+  product_name: string;
+  planned_pieces: number;
+  waste_pieces: number;
+  good_pieces: number;
+  piece_weight_kg: number;
+  bake_temp_c: number;
+  bake_time_min: number;
+}
+
+export interface BatchStageEntry {
+  stage: ProductionStage;
+  stage_label: string;
+  started_by: ProductionPerson | null;
+  started_at: string;
+  finished_by: ProductionPerson | null;
+  finished_at: string | null;
+}
+
+export interface BatchWasteEntry {
+  waste_id: number;
+  product_id: number;
+  product_name: string;
+  stage: ProductionStage;
+  stage_label: string;
+  quantity: number;
+  reason: WasteReason;
+  reason_label: string;
+  recorded_by: ProductionPerson | null;
+  created_at: string;
+}
+
+export interface ProductionBatch {
+  batch_id: number;
+  dough_id: number;
+  dough_name: string;
+  sequence: number;
+  batch_count: number;
+  dough_mass_kg: number;
+  mixer_name: string | null;
+  stage: ProductionStage;
+  stage_label: string;
+  next_stage: ProductionStage | null;
+  next_stage_label: string | null;
+  stage_started_at: string | null;
+  stage_worker: ProductionPerson | null;
+  completed_at: string | null;
+  mixing: { instructions: string; mixing_time_min: number; target_dough_temp_c: number };
+  proofing_time_min: number;
+  ingredients: WeighItem[];
+  outputs: BatchOutput[];
+  history: BatchStageEntry[];
+  waste: BatchWasteEntry[];
+}
+
+export interface CoverageRow {
+  product_id: number;
+  product_name: string;
+  ordered_qty: number;
+  planned_qty: number;
+  waste_qty: number;
+  expected_qty: number;
+  finished_qty: number;
+  shortfall: number;
+}
+
+export interface ProductionBoard {
+  delivery_date: string;
+  production_date: string;
+  plan: ProductionPlanSummary | null;
+  batches: ProductionBatch[];
+  coverage: CoverageRow[];
+  viewer: ProductionPerson & { role: AppUser['role'] };
+  waste_reasons: { value: WasteReason; label: string }[];
+}
+
+export interface BatchActionResult {
+  batch: ProductionBatch;
+  coverage: CoverageRow[];
+  shortfall?: number;
+}
+
+async function productionJson<T>(response: Response): Promise<T> {
+  if (response.ok) return response.json();
+  const data = await response.json().catch(() => ({}));
+  throw new ApiError(data.error ?? `Błąd serwera: ${response.status}`, response.status);
+}
+
+function productionDateQuery(deliveryDate?: string): string {
+  return deliveryDate ? `?delivery_date=${encodeURIComponent(deliveryDate)}` : '';
+}
+
+export async function fetchProductionPlan(deliveryDate?: string): Promise<ProductionPlanResponse> {
+  const response = await apiFetch(`${API_BASE}/production/plan/${productionDateQuery(deliveryDate)}`, {
+    headers: authHeaders(),
+  });
+  return productionJson(response);
+}
+
+export async function generateProductionPlan(deliveryDate: string): Promise<ProductionPlanResponse> {
+  const response = await apiFetch(`${API_BASE}/production/plan/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ delivery_date: deliveryDate }),
+  });
+  return productionJson(response);
+}
+
+export async function fetchProductionBoard(deliveryDate?: string): Promise<ProductionBoard> {
+  const response = await apiFetch(`${API_BASE}/production/board/${productionDateQuery(deliveryDate)}`, {
+    headers: authHeaders(),
+  });
+  return productionJson(response);
+}
+
+async function postBatchAction(batchId: number, action: string, payload: object): Promise<BatchActionResult> {
+  const response = await apiFetch(`${API_BASE}/production/batches/${batchId}/${action}/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return productionJson(response);
+}
+
+export function startBatchStage(batchId: number, stage: ProductionStage): Promise<BatchActionResult> {
+  return postBatchAction(batchId, 'start', { stage });
+}
+
+export function advanceBatchStage(batchId: number, stage: ProductionStage): Promise<BatchActionResult> {
+  return postBatchAction(batchId, 'advance', { stage });
+}
+
+export function recordBatchWaste(
+  batchId: number,
+  payload: { product_id: number; quantity: number; reason: WasteReason }
+): Promise<BatchActionResult> {
+  return postBatchAction(batchId, 'waste', payload);
+}
+
+// ---------------------------------------------------------------------------
+// Ustawienia produkcji: mieszałki, ciasta z recepturą, parametry wyrobów
+// ---------------------------------------------------------------------------
+
+/** Kwoty dziesiętne przychodzą z Django jako tekst, np. "120.000". */
+export interface ProductionMixer {
+  mixer_id: number;
+  name: string;
+  min_capacity_kg: string;
+  max_capacity_kg: string;
+  is_active: boolean;
+}
+
+export interface DoughRecipeItem {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+  amount_per_kg: string;
+}
+
+export interface ProductionDough {
+  dough_id: number;
+  name: string;
+  mixer_id: number | null;
+  loss_buffer_pct: string;
+  mixing_time_min: number;
+  target_dough_temp_c: string;
+  proofing_time_min: number;
+  mixing_instructions: string;
+  ingredients: DoughRecipeItem[];
+  products_count: number;
+}
+
+export interface BakeSpecValues {
+  dough_id: number;
+  piece_weight_kg: string;
+  bake_temp_c: number;
+  bake_time_min: number;
+}
+
+export interface ProductBakeSpecRow {
+  product_id: number;
+  product_name: string;
+  category: string;
+  spec: (BakeSpecValues & { dough_name: string }) | null;
+}
+
+export interface ProductionSettings {
+  mixers: ProductionMixer[];
+  doughs: ProductionDough[];
+  products: ProductBakeSpecRow[];
+  ingredients: { ingredient_id: number; name: string; unit: string }[];
+}
+
+export type MixerInput = Omit<ProductionMixer, 'mixer_id'>;
+export type DoughInput = Omit<ProductionDough, 'dough_id' | 'products_count' | 'ingredients'> & {
+  ingredients: { ingredient_id: number; amount_per_kg: string }[];
+};
+
+async function sendProductionSettings<T>(path: string, method: string, payload?: object): Promise<T> {
+  const response = await apiFetch(`${API_BASE}/production/${path}`, {
+    method,
+    headers: authHeaders(),
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  if (response.status === 204) return undefined as T;
+  return productionJson(response);
+}
+
+export async function fetchProductionSettings(): Promise<ProductionSettings> {
+  const response = await apiFetch(`${API_BASE}/production/settings/`, { headers: authHeaders() });
+  return productionJson(response);
+}
+
+export function saveMixer(payload: Partial<MixerInput>, mixerId: number | null): Promise<ProductionMixer> {
+  return mixerId === null
+    ? sendProductionSettings('mixers/', 'POST', payload)
+    : sendProductionSettings(`mixers/${mixerId}/`, 'PATCH', payload);
+}
+
+export function saveDough(payload: DoughInput, doughId: number | null): Promise<ProductionDough> {
+  return doughId === null
+    ? sendProductionSettings('doughs/', 'POST', payload)
+    : sendProductionSettings(`doughs/${doughId}/`, 'PATCH', payload);
+}
+
+export function deleteDough(doughId: number): Promise<void> {
+  return sendProductionSettings(`doughs/${doughId}/`, 'DELETE');
+}
+
+export function saveBakeSpec(productId: number, payload: BakeSpecValues): Promise<ProductBakeSpecRow> {
+  return sendProductionSettings(`bake-specs/${productId}/`, 'PUT', payload);
+}
+
+export function deleteBakeSpec(productId: number): Promise<void> {
+  return sendProductionSettings(`bake-specs/${productId}/`, 'DELETE');
+}
+
 export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics';
 
 export interface AuditChange {

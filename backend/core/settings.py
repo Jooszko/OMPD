@@ -19,6 +19,13 @@ ALLOWED_HOSTS = []
 # Falls back to the public OSRM demo server when unset.
 ORS_API_KEY = config('ORS_API_KEY', default='')
 
+# Production runs ahead of delivery: both shifts of production day D bake for delivery on D + lag.
+PRODUCTION_SHIFT_LAG_DAYS = config('PRODUCTION_SHIFT_LAG_DAYS', default=1, cast=int)
+# A production day runs from this local hour until the same hour next day (06:00–06:00), so the first
+# and second shift work on the same plan and the board does not switch at midnight.
+PRODUCTION_SHIFT_CUTOFF_HOUR = config('PRODUCTION_SHIFT_CUTOFF_HOUR', default=6, cast=int)
+PRODUCTION_TIMEZONE = config('PRODUCTION_TIMEZONE', default='Europe/Warsaw')
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -39,6 +46,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'finance.apps.FinanceConfig',
     'dashboard.apps.DashboardConfig',
+    'production.apps.ProductionConfig',
     'audit.apps.AuditConfig',
 ]
 

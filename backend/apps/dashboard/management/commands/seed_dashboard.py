@@ -8,6 +8,7 @@ from dashboard.seed.clients import create_clients, create_routes
 from dashboard.seed.dates import build_date_range
 from dashboard.seed.finance import create_expenses, create_financial_reports
 from dashboard.seed.orders import create_daily_orders, create_standing_orders
+from dashboard.seed.production import create_production_setup
 from dashboard.seed.products import create_ingredients, create_products
 from dashboard.seed.suppliers import (
     create_supplier_ingredients,
@@ -50,6 +51,11 @@ class Command(BaseCommand):
 
         products = create_products(ingredients)
         self.stdout.write(f'  Produkty: {len(products)}')
+
+        mixers, doughs, bake_specs = create_production_setup(ingredients, products)
+        self.stdout.write(
+            f'  Produkcja: {len(mixers)} mieszałki, {len(doughs)} ciasta, {len(bake_specs)} wyrobów przypisanych'
+        )
 
         suppliers = create_suppliers()
         self.stdout.write(f'  Dostawcy: {len(suppliers)}')

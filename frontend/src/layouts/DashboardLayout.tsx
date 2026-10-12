@@ -50,6 +50,9 @@ export const DashboardLayout: React.FC = () => {
   const menuItems = [
     { path: '/', label: 'Strona Główna', roles: ['admin', 'baker'] },
     { path: '/orders', label: 'Zamówienia', roles: ['admin', 'baker'] },
+    { path: '/production/board', label: 'Tablica produkcji', roles: ['admin', 'baker'] },
+    { path: '/production', label: 'Planowanie produkcji', roles: ['admin', 'baker'] },
+    { path: '/production/settings', label: 'Ustawienia produkcji', roles: ['admin'] },
     { path: '/warehouse', label: 'Magazyn', roles: ['admin', 'baker'] },
     { path: '/logistics', label: 'Logistyka', roles: ['admin', 'driver'] },
     { path: '/delivery-stats', label: 'Statystyki dostaw', roles: ['admin'] },
