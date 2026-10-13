@@ -19,6 +19,7 @@ ENDPOINTS = [
     ('/api/finance/reports/', {'admin'}),
     ('/api/finance/suppliers/', {'admin'}),
     ('/api/finance/top-clients/', {'admin'}),
+    ('/api/finance/overview/', {'admin'}),
 ]
 
 

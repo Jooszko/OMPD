@@ -5,85 +5,89 @@ from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from finance.models import DailyFinancialReport, Expense
 from orders.models import DailyOrder
 
-EXPENSE_PLAN = [
-    # (category, amount, description, day_offset_in_range)
-    ('rent', Decimal('12000.00'), 'Czynsz za halę produkcyjną i biuro', 4),
-    ('salary', Decimal('165000.00'), 'Wypłaty wynagrodzeń - załoga produkcyjna, piekarze, kierowcy', 9),
+FALLBACK_MONTHLY_REVENUE = Decimal('20000')
+
+MONTH_NAMES = [
+    'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
+    'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
 ]
 
-UTILITY_DESCRIPTIONS = [
-    'Faktura za energię elektryczną - piece piekarnicze',
-    'Faktura za gaz ziemny - piece i suszarnie',
-    'Faktura za wodę i ścieki',
-    'Opłata za wywóz odpadów produkcyjnych',
+MONTHLY_COSTS = [
+    ('rent', 'Czynsz za halę produkcyjną i biuro', 1, Decimal('0.080')),
+    ('salary', 'Wypłaty wynagrodzeń - piekarze i kierowcy', 10, Decimal('0.280')),
+    ('utility', 'Faktura za energię elektryczną - piece piekarnicze', 15, Decimal('0.035')),
+    ('utility', 'Faktura za gaz ziemny - piece', 18, Decimal('0.020')),
+    ('utility', 'Faktura za wodę i ścieki', 20, Decimal('0.008')),
+    ('utility', 'Opłata za wywóz odpadów produkcyjnych', 25, Decimal('0.005')),
 ]
 
-FUEL_DESCRIPTIONS = [
-    'Paliwo - Trasa Skoczów', 'Paliwo - Trasa Ustroń', 'Paliwo - Trasa Bielsko',
-    'Paliwo - Trasa Cieszyn', 'Paliwo - Trasa Wisła', 'Paliwo - Trasa Brenna',
-]
+ROUTES = ['Skoczów', 'Ustroń', 'Bielsko', 'Cieszyn', 'Wisła', 'Brenna']
+FUEL_EVERY_DAYS = 3
+FUEL_SHARE = Decimal('0.050')
 
 OTHER_DESCRIPTIONS = [
     'Serwis pieca konwekcyjnego', 'Zakup rękawic i odzieży ochronnej',
-    'Przegląd instalacji elektrycznej', 'Ubezpieczenie floty samochodowej',
     'Środki czystości - hala produkcyjna', 'Naprawa miksera przemysłowego',
     'Opłata za oprogramowanie księgowe', 'Wymiana filtrów w wentylacji',
-    'Przegląd techniczny pojazdów dostawczych', 'Zakup pojemników transportowych',
+    'Zakup pojemników transportowych',
 ]
+OTHER_EVERY_DAYS = 6
+OTHER_SHARE = Decimal('0.025')
+
+
+def _monthly_revenue(date_range):
+    total = (
+        DailyOrder.objects
+        .filter(order_date__range=(date_range[0], date_range[-1]))
+        .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
+        .aggregate(total=Sum(ExpressionWrapper(
+            F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2),
+        )))['total']
+    )
+    if not total:
+        return FALLBACK_MONTHLY_REVENUE
+    return total / len(date_range) * 30
+
+
+def _whole(amount, step=Decimal('1')):
+    return max(step, (amount / step).quantize(Decimal('1')) * step)
+
+
+def _add(category, expense_date, description, amount, admin_user):
+    _, created = Expense.objects.get_or_create(
+        category=category,
+        date=expense_date,
+        description=description,
+        defaults={'amount': amount, 'created_by': admin_user},
+    )
+    return int(created)
 
 
 def create_expenses(date_range, admin_user):
+    monthly = _monthly_revenue(date_range)
     created_count = 0
 
-    for category, amount, description, day_offset in EXPENSE_PLAN:
-        expense_date = date_range[day_offset]
-        _, created = Expense.objects.get_or_create(
-            category=category,
-            date=expense_date,
-            description=description,
-            defaults={'amount': amount, 'created_by': admin_user},
-        )
-        if created:
-            created_count += 1
+    for day in date_range:
+        month_label = f'{MONTH_NAMES[day.month - 1]} {day.year}'
+        for category, description, day_of_month, share in MONTHLY_COSTS:
+            if day.day == day_of_month:
+                step = Decimal('10') if category in ('rent', 'salary') else Decimal('1')
+                created_count += _add(
+                    category, day, f'{description} - {month_label}', _whole(monthly * share, step), admin_user,
+                )
 
-    for i, description in enumerate(UTILITY_DESCRIPTIONS * 2):
-        day_offset = (i * 4 + 2) % len(date_range)
-        expense_date = date_range[day_offset]
-        amount = Decimal(800 + (i * 137) % 1700)
-        _, created = Expense.objects.get_or_create(
-            category='utility',
-            date=expense_date,
-            description=f'{description} #{i + 1}',
-            defaults={'amount': amount, 'created_by': admin_user},
-        )
-        if created:
-            created_count += 1
+        ordinal = day.toordinal()
+        if ordinal % FUEL_EVERY_DAYS == 0:
+            route = ROUTES[(ordinal // FUEL_EVERY_DAYS) % len(ROUTES)]
+            variation = Decimal(85 + ordinal % 31) / 100
+            amount = _whole(monthly * FUEL_SHARE * FUEL_EVERY_DAYS / 30 * variation)
+            created_count += _add('fuel', day, f'Paliwo - Trasa {route}', amount, admin_user)
 
-    for i, description in enumerate(FUEL_DESCRIPTIONS * 2):
-        day_offset = (i * 3 + 1) % len(date_range)
-        expense_date = date_range[day_offset]
-        amount = Decimal(150 + (i * 23) % 250)
-        _, created = Expense.objects.get_or_create(
-            category='fuel',
-            date=expense_date,
-            description=f'{description} #{i + 1}',
-            defaults={'amount': amount, 'created_by': admin_user},
-        )
-        if created:
-            created_count += 1
-
-    for i, description in enumerate(OTHER_DESCRIPTIONS):
-        day_offset = (i * 3) % len(date_range)
-        expense_date = date_range[day_offset]
-        amount = Decimal(200 + (i * 61) % 900)
-        _, created = Expense.objects.get_or_create(
-            category='other',
-            date=expense_date,
-            description=description,
-            defaults={'amount': amount, 'created_by': admin_user},
-        )
-        if created:
-            created_count += 1
+        if ordinal % OTHER_EVERY_DAYS == 2:
+            description = OTHER_DESCRIPTIONS[(ordinal // OTHER_EVERY_DAYS) % len(OTHER_DESCRIPTIONS)]
+            variation = Decimal(60 + ordinal % 81) / 100
+            amount = _whole(monthly * OTHER_SHARE * OTHER_EVERY_DAYS / 30 * variation)
+            created_count += _add('other', day, description, amount, admin_user)
 
     return created_count
 

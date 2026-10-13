@@ -1407,3 +1407,55 @@ export async function fetchAuditFilterOptions(): Promise<AuditFilterOptions> {
   const response = await apiFetch(`${API_BASE}/audit/filters/`);
   return (await ensureOk(response)).json();
 }
+
+export interface FinanceTotals {
+  sales: string;
+  returns: string;
+  revenue: string;
+  cogs: string;
+  operating_expenses: string;
+  net_profit: string;
+}
+
+export interface FinanceOverviewDay {
+  date: string;
+  revenue: string;
+  cogs: string;
+  operating_expenses: string;
+  net_profit: string;
+  cumulative_profit: string;
+  expenses: { category: string; label: string; amount: string }[];
+}
+
+export interface FinanceCostRow {
+  key: string;
+  label: string;
+  group: 'cogs' | 'operating';
+  amount: string;
+  previous: string;
+}
+
+export interface FinanceTopClient {
+  client_id: number;
+  name: string;
+  revenue: string;
+  previous_revenue: string | null;
+  deliveries: number;
+}
+
+export interface FinanceOverview {
+  period: { start: string; end: string; previous_start: string; previous_end: string };
+  totals: FinanceTotals;
+  previous_totals: FinanceTotals;
+  daily: FinanceOverviewDay[];
+  cost_structure: FinanceCostRow[];
+  top_clients: FinanceTopClient[];
+  other_clients: { clients: number; revenue: string };
+  recent_expenses: AppExpense[];
+}
+
+export async function fetchFinanceOverview(start: string, end: string): Promise<FinanceOverview> {
+  const params = new URLSearchParams({ start, end });
+  const response = await apiFetch(`${API_BASE}/finance/overview/?${params}`);
+  return (await ensureOk(response)).json();
+}

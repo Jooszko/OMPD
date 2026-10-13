@@ -13,6 +13,7 @@ from products.models import Ingredient, Recipe
 from orders.models import DailyOrder, ProductReturn
 from django.db import transaction
 from audit.services import field_changes, record_event, snapshot
+from .overview import build_overview
 
 SUPPLIER_AUDIT_LABELS = {
     'name': 'Nazwa',
@@ -355,6 +356,32 @@ class ProfitTrendView(APIView):
             trend.append({'date': str(current), 'net_profit': str(revenue - expenses)})
             current += timedelta(days=1)
         return Response(trend)
+
+MAX_PERIOD_DAYS = 366
+
+
+def _parse_period(params, default_days=30):
+    """(start, end) from ?start=&end=, by default the last `default_days` days ending today."""
+    try:
+        end = date_cls.fromisoformat(params['end']) if params.get('end') else date_cls.today()
+        start = date_cls.fromisoformat(params['start']) if params.get('start') else end - timedelta(days=default_days - 1)
+    except ValueError:
+        return None, 'Nieprawidłowy format daty (RRRR-MM-DD).'
+    if start > end:
+        return None, 'Data początkowa nie może być późniejsza niż końcowa.'
+    if (end - start).days >= MAX_PERIOD_DAYS:
+        return None, f'Okres może obejmować najwyżej {MAX_PERIOD_DAYS} dni.'
+    return (start, end), None
+
+
+class FinanceOverviewView(APIView):
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        period, error = _parse_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_overview(*period))
 
 
 class FinancialReportListView(APIView):
