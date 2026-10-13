@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from common.models import TimeStampedModel
 
@@ -72,10 +73,33 @@ class Expense(TimeStampedModel):
     description = models.TextField(blank=True)
     date = models.DateField()
     created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='expenses')
+    recurring = models.ForeignKey(
+        'RecurringExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses'
+    )
 
     def __str__(self):
         return f"{self.get_category_display()} - {self.amount} PLN ({self.date})"
     
+
+class RecurringExpense(TimeStampedModel):
+    """Template of a monthly cost (rent, salaries) that adds an Expense on its day of the month."""
+
+    recurring_id = models.AutoField(primary_key=True)
+    category = models.CharField(max_length=20, choices=Expense.CATEGORY_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True, default='')
+    day_of_month = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text='31 oznacza ostatni dzień miesiąca, także w krótszych miesiącach.',
+    )
+    is_active = models.BooleanField(default=True)
+    last_generated_on = models.DateField(
+        null=True, blank=True, help_text='Data ostatniego dodanego wydatku; wcześniejsze terminy są pomijane.'
+    )
+    created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='recurring_expenses')
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.amount} PLN co miesiąc ({self.day_of_month}.)"
 
 class DailyFinancialReport(TimeStampedModel):
     report_date = models.DateField(primary_key=True)

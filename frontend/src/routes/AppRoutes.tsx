@@ -19,6 +19,7 @@ import ProductionSettings from '../features/production/pages/ProductionSettings'
 import AuditLog from '../features/dashboard/pages/AuditLog';
 import FinancePage from '../features/finance/pages/FinancePage';
 import OverviewTab from '../features/finance/pages/OverviewTab';
+import ExpensesTab from '../features/finance/pages/ExpensesTab';
 import Login from '../features/auth/pages/Login';
 import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
@@ -66,7 +67,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="products" element={<Produkty />} />
         <Route path="finance" element={<FinancePage />}>
           <Route index element={<OverviewTab />} />
-          <Route path="expenses" element={<Finance />} />
+          <Route path="expenses" element={<ExpensesTab />} />
           <Route path="reports" element={<Finance />} />
         </Route>
         <Route path="users" element={<Users />} />

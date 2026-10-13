@@ -10,7 +10,7 @@ const TABS = [
   { to: '/finance/reports', label: 'Raporty', end: false },
 ];
 
-const PERIOD_TABS = ['/finance'];
+const PERIOD_TABS = ['/finance', '/finance/expenses'];
 
 export default function FinancePage() {
   const [period, setPeriod] = useState<FinancePeriod>(() => presetPeriod('30'));

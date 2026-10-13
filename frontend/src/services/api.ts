@@ -499,6 +499,8 @@ export interface AppExpense {
   amount: string;
   description: string;
   date: string;
+  created_by?: string | null;
+  recurring_id?: number | null;
 }
 
 export interface CategoryBreakdownRow {
@@ -1458,4 +1460,68 @@ export async function fetchFinanceOverview(start: string, end: string): Promise<
   const params = new URLSearchParams({ start, end });
   const response = await apiFetch(`${API_BASE}/finance/overview/?${params}`);
   return (await ensureOk(response)).json();
+}
+export interface RecurringExpense {
+  recurring_id: number;
+  category: string;
+  category_label: string;
+  amount: string;
+  description: string;
+  day_of_month: number;
+  is_active: boolean;
+  next_date: string | null;
+  previous_date: string | null;
+  days_until_next: number | null;
+}
+
+export interface RecurringExpenseList {
+  monthly_total: string;
+  items: RecurringExpense[];
+}
+
+export interface ExpensePayload {
+  category: string;
+  amount: string;
+  description: string;
+  date: string;
+}
+
+async function sendJson(url: string, method: 'POST' | 'PATCH', body: unknown): Promise<Response> {
+  return ensureOk(
+    await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  );
+}
+
+export async function fetchPeriodExpenses(start: string, end: string): Promise<AppExpense[]> {
+  const params = new URLSearchParams({ start, end });
+  return (await ensureOk(await apiFetch(`${API_BASE}/finance/expenses/?${params}`))).json();
+}
+
+export async function addExpense(
+  payload: ExpensePayload & { repeat_monthly?: boolean; day_of_month?: number }
+): Promise<AppExpense> {
+  return (await sendJson(`${API_BASE}/finance/expenses/`, 'POST', payload)).json();
+}
+
+export async function updateExpense(expenseId: number, payload: Partial<ExpensePayload>): Promise<AppExpense> {
+  return (await sendJson(`${API_BASE}/finance/expenses/${expenseId}/`, 'PATCH', payload)).json();
+}
+
+export async function deleteExpense(expenseId: number): Promise<void> {
+  await ensureOk(await apiFetch(`${API_BASE}/finance/expenses/${expenseId}/`, { method: 'DELETE' }));
+}
+
+export async function fetchRecurringExpenses(): Promise<RecurringExpenseList> {
+  return (await ensureOk(await apiFetch(`${API_BASE}/finance/recurring-expenses/`))).json();
+}
+
+export async function updateRecurringExpense(
+  recurringId: number,
+  payload: Partial<Omit<ExpensePayload, 'date'>> & { day_of_month?: number; is_active?: boolean }
+): Promise<RecurringExpense> {
+  return (await sendJson(`${API_BASE}/finance/recurring-expenses/${recurringId}/`, 'PATCH', payload)).json();
+}
+
+export async function deleteRecurringExpense(recurringId: number): Promise<void> {
+  await ensureOk(await apiFetch(`${API_BASE}/finance/recurring-expenses/${recurringId}/`, { method: 'DELETE' }));
 }
