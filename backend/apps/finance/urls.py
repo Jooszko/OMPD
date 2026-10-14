@@ -14,12 +14,16 @@ from .views import (
     FinancialReportListView,
     FinancialReportDetailView,
     FinanceOverviewView,
+    ProfitabilityView,
+    SupplierIngredientPriceView,
 )
 
 urlpatterns = [
     path('suppliers/', SupplierListView.as_view(), name='supplier-list'),
     path('suppliers/<int:pk>/', SupplierDetailView.as_view(), name='supplier-detail'),
     path('overview/', FinanceOverviewView.as_view(), name='finance-overview'),
+    path('profitability/', ProfitabilityView.as_view(), name='finance-profitability'),
+    path('supplier-ingredients/<int:pk>/', SupplierIngredientPriceView.as_view(), name='finance-supplier-ingredient-price'),
     path('daily-summary/', DailySummaryView.as_view(), name='finance-daily-summary'),
     path('expenses/', ExpenseListCreateView.as_view(), name='finance-expenses'),
     path('expenses/<int:pk>/', ExpenseDetailView.as_view(), name='finance-expense-detail'),

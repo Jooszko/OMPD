@@ -7,10 +7,11 @@ import { periodLabel, presetPeriod, type FinancePeriod } from '../lib/period';
 const TABS = [
   { to: '/finance', label: 'Przegląd', end: true },
   { to: '/finance/expenses', label: 'Wydatki', end: false },
+  { to: '/finance/profitability', label: 'Rentowność produktów', end: false },
   { to: '/finance/reports', label: 'Raporty', end: false },
 ];
 
-const PERIOD_TABS = ['/finance', '/finance/expenses'];
+const PERIOD_TABS = ['/finance', '/finance/expenses', '/finance/profitability'];
 
 export default function FinancePage() {
   const [period, setPeriod] = useState<FinancePeriod>(() => presetPeriod('30'));

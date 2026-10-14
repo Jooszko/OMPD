@@ -32,6 +32,7 @@ ACTIONS = {
     'finance': {
         'supplier.created': 'Dodanie dostawcy',
         'supplier.updated': 'Zmiana danych dostawcy',
+        'supplier.price_changed': 'Zmiana ceny surowca',
         'expense.created': 'Nowy wydatek',
         'expense.updated': 'Zmiana wydatku',
         'expense.deleted': 'Usunięcie wydatku',

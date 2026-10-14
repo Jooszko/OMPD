@@ -1525,3 +1525,42 @@ export async function updateRecurringExpense(
 export async function deleteRecurringExpense(recurringId: number): Promise<void> {
   await ensureOk(await apiFetch(`${API_BASE}/finance/recurring-expenses/${recurringId}/`, { method: 'DELETE' }));
 }
+
+export interface ProfitabilityProduct {
+  product_id: number;
+  name: string;
+  category_label: string;
+  price: string;
+  unit_cost: string | null;
+  unit_margin: string | null;
+  margin_pct: number | null;
+  sold: number;
+  revenue: string;
+  period_margin: string | null;
+  has_recipe: boolean;
+  missing_prices: string[];
+}
+
+export interface MissingIngredientPrice {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+  products: string[];
+  suppliers: { supplier_ingredient_id: number; supplier: string }[];
+}
+
+export interface Profitability {
+  period: { start: string; end: string };
+  average_margin_pct: number | null;
+  products: ProfitabilityProduct[];
+  missing_prices: MissingIngredientPrice[];
+}
+
+export async function fetchProfitability(start: string, end: string): Promise<Profitability> {
+  const params = new URLSearchParams({ start, end });
+  return (await ensureOk(await apiFetch(`${API_BASE}/finance/profitability/?${params}`))).json();
+}
+
+export async function setIngredientPrice(supplierIngredientId: number, price: string): Promise<void> {
+  await sendJson(`${API_BASE}/finance/supplier-ingredients/${supplierIngredientId}/`, 'PATCH', { last_price: price });
+}

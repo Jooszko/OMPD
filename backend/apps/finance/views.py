@@ -14,6 +14,7 @@ from orders.models import DailyOrder, ProductReturn
 from django.db import transaction
 from audit.services import field_changes, record_event, snapshot
 from .overview import build_overview
+from .profitability import build_profitability, parse_price, price_label
 from .expenses import EXPENSE_AUDIT_LABELS, expense_label, expense_state, parse_expense, serialize_expense
 from .recurring import (
     RECURRING_AUDIT_LABELS,
@@ -101,7 +102,8 @@ class SupplierDetailView(APIView):
         with transaction.atomic():
             before = _supplier_state(supplier)
             serializer.save()
-            SupplierIngredient.objects.filter(supplier=supplier).delete()
+            kept = [p.get('product_id') for p in products_data if str(p.get('product_id')).isdigit()]
+            SupplierIngredient.objects.filter(supplier=supplier).exclude(ingredient_id__in=kept).delete()
             _save_supplier_catalog(supplier, products_data)
             changes = field_changes(before, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
             if changes:
@@ -485,6 +487,43 @@ class FinanceOverviewView(APIView):
         materialize_due_expenses()
         return Response(build_overview(*period))
 
+class ProfitabilityView(APIView):
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        period, error = _parse_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_profitability(*period))
+
+
+class SupplierIngredientPriceView(APIView):
+    permission_classes = [AdminOnly]
+
+    def patch(self, request, pk):
+        item = get_object_or_404(SupplierIngredient.objects.select_related('supplier', 'ingredient'), pk=pk)
+        price, error = parse_price(request.data.get('last_price'))
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        unit = item.ingredient.unit
+        before = price_label(item.last_price, unit)
+        with transaction.atomic():
+            item.last_price = price
+            item.save(update_fields=['last_price', 'updated_at'])
+            if before != price_label(price, unit):
+                record_event(
+                    request, category='finance', action='supplier.price_changed', obj=item.supplier,
+                    object_label=f'{item.supplier.name} – {item.ingredient.name}',
+                    description=f'Zmieniono cenę surowca „{item.ingredient.name}” u dostawcy {item.supplier.name}.',
+                    changes=[{'field': 'last_price', 'label': 'Cena', 'old': before, 'new': price_label(price, unit)}],
+                )
+        return Response({
+            'supplier_ingredient_id': item.pk,
+            'supplier': item.supplier.name,
+            'ingredient': item.ingredient.name,
+            'last_price': str(item.last_price),
+        })
 
 class FinancialReportListView(APIView):
     permission_classes = [AdminOnly]
