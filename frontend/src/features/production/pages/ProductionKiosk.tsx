@@ -13,7 +13,7 @@ import {
   type ProductionStage,
   type WasteReason,
 } from '../../../services/api';
-import { formatDayLabel, shiftIsoDate } from '../../dashboard/lib/dateFormat';
+import { formatDayLabel, shiftIsoDate, toIsoDate } from '../../dashboard/lib/dateFormat';
 import { BatchTile } from '../components/BatchTile';
 import { BatchDetailDialog } from '../components/BatchDetailDialog';
 import { CoveragePanel } from '../components/CoveragePanel';
@@ -61,6 +61,7 @@ export default function ProductionKiosk() {
   const [openBatchId, setOpenBatchId] = useState<number | null>(null);
   const [wasteBatchId, setWasteBatchId] = useState<number | null>(null);
   const now = useNow(CLOCK_MS);
+  const currentDeliveryDate = shiftIsoDate(toIsoDate(new Date(now)), 1);
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen();
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -173,7 +174,7 @@ export default function ProductionKiosk() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {deliveryDate && (
+          {deliveryDate && deliveryDate !== currentDeliveryDate && (
             <button
               type="button"
               onClick={() => setDeliveryDate(undefined)}
