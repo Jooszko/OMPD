@@ -125,7 +125,7 @@ export const DashboardLayout: React.FC = () => {
             <hr className="border-0 border-t border-bakery-border my-1 shrink-0" />
 
             {visibleMenuItems.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
               
               return (
                 <Link

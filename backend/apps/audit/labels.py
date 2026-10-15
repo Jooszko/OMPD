@@ -32,10 +32,18 @@ ACTIONS = {
     'finance': {
         'supplier.created': 'Dodanie dostawcy',
         'supplier.updated': 'Zmiana danych dostawcy',
+        'supplier.price_changed': 'Zmiana ceny surowca',
         'expense.created': 'Nowy wydatek',
+        'expense.updated': 'Zmiana wydatku',
+        'expense.deleted': 'Usunięcie wydatku',
+        'recurring.created': 'Nowy wydatek cykliczny',
+        'recurring.updated': 'Zmiana wydatku cyklicznego',
+        'recurring.deleted': 'Usunięcie wydatku cyklicznego',
         'report.generated': 'Wygenerowanie raportu',
         'report.regenerated': 'Ponowne wygenerowanie raportu',
         'report.deleted': 'Usunięcie raportu',
+        'report.closed': 'Zamknięcie dnia',
+        'report.reopened': 'Ponowne otwarcie dnia',
     },
     'logistics': {
         'stop.delivered': 'Dostarczenie przystanku',

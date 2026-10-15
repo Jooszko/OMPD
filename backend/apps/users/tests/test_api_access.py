@@ -14,11 +14,13 @@ ENDPOINTS = [
     ('/api/products/recipes/', {'admin', 'baker'}),
     ('/api/clients/', {'admin', 'baker'}),
     ('/api/clients/routes/', {'admin'}),
-    ('/api/finance/daily-summary/', {'admin'}),
     ('/api/finance/expenses/', {'admin'}),
-    ('/api/finance/reports/', {'admin'}),
+    ('/api/finance/recurring-expenses/', {'admin'}),
     ('/api/finance/suppliers/', {'admin'}),
-    ('/api/finance/top-clients/', {'admin'}),
+    ('/api/finance/overview/', {'admin'}),
+    ('/api/finance/profitability/', {'admin'}),
+    ('/api/finance/statement/', {'admin'}),
+    ('/api/finance/closings/', {'admin'}),
 ]
 
 

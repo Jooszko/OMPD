@@ -5,7 +5,6 @@ import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 
 import ZamowieniaPanel from '../features/dashboard/pages/Orders';
 import Produkty from '../features/dashboard/pages/Products';
-import Finance from '../features/dashboard/pages/Finance';
 import Users from '../features/dashboard/pages/Users';
 import Clients from '../features/dashboard/pages/Clients';
 import Contractors from '../features/dashboard/pages/Contractors';
@@ -17,6 +16,12 @@ import ProductionPlanning from '../features/production/pages/ProductionPlanning'
 import ProductionKiosk from '../features/production/pages/ProductionKiosk';
 import ProductionSettings from '../features/production/pages/ProductionSettings';
 import AuditLog from '../features/dashboard/pages/AuditLog';
+import FinancePage from '../features/finance/pages/FinancePage';
+import OverviewTab from '../features/finance/pages/OverviewTab';
+import ExpensesTab from '../features/finance/pages/ExpensesTab';
+import ProfitabilityTab from '../features/finance/pages/ProfitabilityTab';
+import ReportsTab from '../features/finance/pages/ReportsTab';
+import AccountantTab from '../features/finance/pages/AccountantTab';
 import Login from '../features/auth/pages/Login';
 import SetPassword from '../features/auth/pages/SetPassword';
 import { getAuthToken } from '../services/api';
@@ -62,7 +67,13 @@ export const AppRoutes: React.FC = () => {
         <Route path="logistics" element={<Logistics />} />
         <Route path="delivery-stats" element={<DeliveryStats />} />
         <Route path="products" element={<Produkty />} />
-        <Route path="finance" element={<Finance />} />
+        <Route path="finance" element={<FinancePage />}>
+          <Route index element={<OverviewTab />} />
+          <Route path="expenses" element={<ExpensesTab />} />
+          <Route path="profitability" element={<ProfitabilityTab />} />
+          <Route path="reports" element={<ReportsTab />} />
+          <Route path="accountant" element={<AccountantTab />} />
+        </Route>
         <Route path="users" element={<Users />} />
         <Route path="audit-log" element={<AuditLog />} />
         <Route path="clients" element={<Clients />} />

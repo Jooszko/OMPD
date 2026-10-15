@@ -1,18 +1,32 @@
 from datetime import date as date_cls, timedelta
-from decimal import Decimal, InvalidOperation
-
-from django.db.models import Sum, Avg, F, DecimalField, ExpressionWrapper
+from decimal import Decimal
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
-from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport
+from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport, RecurringExpense
 from .serializers import SupplierSerializer
-from products.models import Ingredient, Recipe
-from orders.models import DailyOrder, ProductReturn
+from products.models import Ingredient
 from django.db import transaction
 from audit.services import field_changes, record_event, snapshot
+from .overview import build_overview
+from .profitability import build_profitability, parse_price, price_label
+from .statement import PERIOD_KINDS, build_statement, period_bounds
+from .closings import build_closings, close_day
+from .exports import EXPORTS, csv_response, period_slug
+from .expenses import EXPENSE_AUDIT_LABELS, expense_label, expense_state, parse_expense, serialize_expense
+from .recurring import (
+    RECURRING_AUDIT_LABELS,
+    covered_until,
+    day_label,
+    materialize_due_expenses,
+    parse_day_of_month,
+    parse_recurring_changes,
+    recurring_label,
+    recurring_state,
+    serialize_recurring,
+)
 
 SUPPLIER_AUDIT_LABELS = {
     'name': 'Nazwa',
@@ -88,7 +102,8 @@ class SupplierDetailView(APIView):
         with transaction.atomic():
             before = _supplier_state(supplier)
             serializer.save()
-            SupplierIngredient.objects.filter(supplier=supplier).delete()
+            kept = [p.get('product_id') for p in products_data if str(p.get('product_id')).isdigit()]
+            SupplierIngredient.objects.filter(supplier=supplier).exclude(ingredient_id__in=kept).delete()
             _save_supplier_catalog(supplier, products_data)
             changes = field_changes(before, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
             if changes:
@@ -98,321 +113,325 @@ class SupplierDetailView(APIView):
                 )
         return Response(SupplierSerializer(supplier).data, status=status.HTTP_200_OK)
 
-
-def _parse_date_range(request, default_days=30):
-    today = date_cls.today()
-    start_param = request.query_params.get('start')
-    end_param = request.query_params.get('end')
-    try:
-        start = date_cls.fromisoformat(start_param) if start_param else today - timedelta(days=default_days)
-        end = date_cls.fromisoformat(end_param) if end_param else today
-    except ValueError:
-        start, end = today - timedelta(days=default_days), today
-    return start, end
-
-
-def _sales_for_date(target_date):
-    result = (
-        DailyOrder.objects
-        .filter(order_date=target_date)
-        .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
-        .aggregate(total=Sum(
-            ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
-        ))
-    )
-    return result['total'] or Decimal('0')
-
-
-def _returns_for_date(target_date):
-    result = ProductReturn.objects.filter(return_date=target_date).aggregate(total=Sum(
-        ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
-    ))
-    return result['total'] or Decimal('0')
-
-
-def _revenue_for_date(target_date):
-    return _sales_for_date(target_date) - _returns_for_date(target_date)
-
-
-def _expenses_for_date(target_date):
-    return Expense.objects.filter(date=target_date).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-
-
-def _cogs_for_date(target_date):
-    ingredient_prices = dict(
-        SupplierIngredient.objects
-        .exclude(last_price__isnull=True)
-        .values('ingredient_id')
-        .annotate(avg_price=Avg('last_price'))
-        .values_list('ingredient_id', 'avg_price')
-    )
-
-    usage = (
-        Recipe.objects
-        .filter(
-            product__daily_orders__order_date=target_date,
-            product__daily_orders__status__in=['planned', 'in_production', 'in_delivery', 'delivered', 'failed'],
-        )
-        .values('ingredient_id')
-        .annotate(
-            total_amount=Sum(
-                ExpressionWrapper(
-                    F('amount') * F('product__daily_orders__quantity'),
-                    output_field=DecimalField(max_digits=10, decimal_places=3),
-                )
-            )
-        )
-    )
-
-    cogs = Decimal('0')
-    for row in usage:
-        price = ingredient_prices.get(row['ingredient_id']) or Decimal('0')
-        cogs += row['total_amount'] * price
-    return cogs
-
-
-def _serialize_report(report):
-    return {
-        'report_date': str(report.report_date),
-        'total_revenue': str(report.total_revenue),
-        'total_cogs': str(report.total_cogs),
-        'total_operating_expenses': str(report.total_operating_expenses),
-        'net_profit': str(report.net_profit),
-        'is_finalized': report.is_finalized,
-    }
-
-
-class DailySummaryView(APIView):
+class ExpenseListCreateView(APIView):
     permission_classes = [AdminOnly]
-    def get(self, request):
-        date_param = request.query_params.get('date')
-        try:
-            target_date = date_cls.fromisoformat(date_param) if date_param else date_cls.today()
-        except ValueError:
-            return Response({'error': 'Nieprawidłowy format daty.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        sales = _sales_for_date(target_date)
-        returns = _returns_for_date(target_date)
-        revenue = sales - returns
-        expenses = _expenses_for_date(target_date)
+    def get(self, request):
+        period, error = _parse_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        materialize_due_expenses()
+        expenses = (
+            Expense.objects
+            .filter(date__range=period)
+            .select_related('created_by')
+            .order_by('-date', '-expense_id')
+        )
+        return Response([serialize_expense(expense) for expense in expenses])
+
+    def post(self, request):
+        fields, error = parse_expense(request.data)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        repeat = request.data.get('repeat_monthly') is True
+        if repeat:
+            day, error = parse_day_of_month(request.data.get('day_of_month', fields['date'].day))
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            template = None
+            if repeat:
+                template = RecurringExpense.objects.create(
+                    category=fields['category'], amount=fields['amount'], description=fields['description'],
+                    day_of_month=day, last_generated_on=covered_until(day, fields['date']), created_by=request.user,
+                )
+            expense = Expense.objects.create(**fields, created_by=request.user, recurring=template)
+            record_event(
+                request, category='finance', action='expense.created', obj=expense,
+                object_label=expense_label(expense),
+                description=(
+                    f'Dodano wydatek „{expense.get_category_display()}”: {expense.amount:.2f} zł '
+                    f'z dnia {expense.date:%d.%m.%Y}.'
+                ),
+            )
+            if template:
+                record_event(
+                    request, category='finance', action='recurring.created', obj=template,
+                    object_label=recurring_label(template),
+                    description=(
+                        f'Ustawiono wydatek cykliczny „{template.get_category_display()}”: {template.amount:.2f} zł, '
+                        f'{day_label(template.day_of_month)}.'
+                    ),
+                )
+        return Response(serialize_expense(expense), status=status.HTTP_201_CREATED)
+
+class ExpenseDetailView(APIView):
+    permission_classes = [AdminOnly]
+
+    def patch(self, request, pk):
+        expense = get_object_or_404(Expense.objects.select_related('created_by'), pk=pk)
+        fields, error = parse_expense(request.data, partial=True)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        before = expense_state(expense)
+        with transaction.atomic():
+            for field, value in fields.items():
+                setattr(expense, field, value)
+            expense.save()
+            changes = field_changes(before, expense_state(expense), EXPENSE_AUDIT_LABELS)
+            if changes:
+                record_event(
+                    request, category='finance', action='expense.updated', obj=expense,
+                    object_label=expense_label(expense),
+                    description=f'Zmieniono wydatek „{expense.get_category_display()}” z dnia {expense.date:%d.%m.%Y}.',
+                    changes=changes,
+                )
+        return Response(serialize_expense(expense))
+
+    def delete(self, request, pk):
+        expense = get_object_or_404(Expense, pk=pk)
+        with transaction.atomic():
+            record_event(
+                request, category='finance', action='expense.deleted', obj=expense,
+                object_label=expense_label(expense),
+                description=(
+                    f'Usunięto wydatek „{expense.get_category_display()}”: {expense.amount:.2f} zł '
+                    f'z dnia {expense.date:%d.%m.%Y}.'
+                ),
+                changes=field_changes(expense_state(expense), {}, EXPENSE_AUDIT_LABELS),
+            )
+            expense.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class RecurringExpenseListView(APIView):
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        materialize_due_expenses()
+        today = date_cls.today()
+        templates = RecurringExpense.objects.order_by('-is_active', 'day_of_month', 'recurring_id')
         return Response({
-            'date': str(target_date),
-            'sales': str(sales),
-            'returns': str(returns),
-            'revenue': str(revenue),
-            'expenses': str(expenses),
-            'balance': str(revenue - expenses),
+            'monthly_total': str(sum((t.amount for t in templates if t.is_active), Decimal('0.00'))),
+            'items': [serialize_recurring(template, today) for template in templates],
         })
 
 
-class ExpenseListCreateView(APIView):
+class RecurringExpenseDetailView(APIView):
     permission_classes = [AdminOnly]
-    def get(self, request):
-        start, end = _parse_date_range(request)
-        expenses = Expense.objects.filter(date__gte=start, date__lte=end).order_by('-date')
-        return Response([
-            {
-                'expense_id': e.expense_id,
-                'category': e.category,
-                'category_label': e.get_category_display(),
-                'amount': str(e.amount),
-                'description': e.description,
-                'date': str(e.date),
-            }
-            for e in expenses
-        ])
 
-    def post(self, request):
-        category = request.data.get('category')
-        amount = request.data.get('amount')
-        description = request.data.get('description', '')
-        date_str = request.data.get('date')
+    def patch(self, request, pk):
+        template = get_object_or_404(RecurringExpense, pk=pk)
+        fields, error = parse_recurring_changes(request.data)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
 
-        valid_categories = dict(Expense.CATEGORY_CHOICES)
-        if category not in valid_categories:
-            return Response({'error': 'Nieprawidłowa kategoria kosztu.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            amount_dec = Decimal(str(amount))
-            if amount_dec <= 0:
-                raise InvalidOperation
-        except (InvalidOperation, TypeError):
-            return Response({'error': 'Nieprawidłowa kwota.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            expense_date = date_cls.fromisoformat(date_str)
-        except (ValueError, TypeError):
-            return Response({'error': 'Nieprawidłowa data.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = request.user if request.user.is_authenticated else None
+        before = recurring_state(template)
+        resumed = fields.get('is_active') is True and not template.is_active
         with transaction.atomic():
-            expense = Expense.objects.create(
-                category=category, amount=amount_dec, description=description,
-                date=expense_date, created_by=user,
-            )
+            for field, value in fields.items():
+                setattr(template, field, value)
+            if 'day_of_month' in fields and template.last_generated_on:
+                template.last_generated_on = covered_until(template.day_of_month, template.last_generated_on)
+            if resumed:
+                today = date_cls.today()
+                template.last_generated_on = max(template.last_generated_on or today, today)
+            template.save()
+            changes = field_changes(before, recurring_state(template), RECURRING_AUDIT_LABELS)
+            if changes:
+                record_event(
+                    request, category='finance', action='recurring.updated', obj=template,
+                    object_label=recurring_label(template),
+                    description=f'Zmieniono wydatek cykliczny „{template.get_category_display()}”.',
+                    changes=changes,
+                )
+        return Response(serialize_recurring(template, date_cls.today()))
+
+    def delete(self, request, pk):
+        template = get_object_or_404(RecurringExpense, pk=pk)
+        with transaction.atomic():
             record_event(
-                request, category='finance', action='expense.created', obj=expense,
-                object_label=description or expense.get_category_display(),
+                request, category='finance', action='recurring.deleted', obj=template,
+                object_label=recurring_label(template),
                 description=(
-                    f'Dodano wydatek „{expense.get_category_display()}”: {amount_dec:.2f} zł '
-                    f'z dnia {expense_date:%d.%m.%Y}.'
+                    f'Usunięto wydatek cykliczny „{template.get_category_display()}”. '
+                    'Dodane wcześniej wydatki zostają.'
                 ),
+                changes=field_changes(recurring_state(template), {}, RECURRING_AUDIT_LABELS),
             )
+            template.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+MAX_PERIOD_DAYS = 366
+
+
+def _parse_period(params, default_days=30):
+    """(start, end) from ?start=&end=, by default the last `default_days` days ending today."""
+    try:
+        end = date_cls.fromisoformat(params['end']) if params.get('end') else date_cls.today()
+        start = date_cls.fromisoformat(params['start']) if params.get('start') else end - timedelta(days=default_days - 1)
+    except ValueError:
+        return None, 'Nieprawidłowy format daty (RRRR-MM-DD).'
+    if start > end:
+        return None, 'Data początkowa nie może być późniejsza niż końcowa.'
+    if (end - start).days >= MAX_PERIOD_DAYS:
+        return None, f'Okres może obejmować najwyżej {MAX_PERIOD_DAYS} dni.'
+    return (start, end), None
+
+
+class FinanceOverviewView(APIView):
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        period, error = _parse_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        materialize_due_expenses()
+        return Response(build_overview(*period))
+
+class ProfitabilityView(APIView):
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        period, error = _parse_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_profitability(*period))
+
+
+class SupplierIngredientPriceView(APIView):
+    permission_classes = [AdminOnly]
+
+    def patch(self, request, pk):
+        item = get_object_or_404(SupplierIngredient.objects.select_related('supplier', 'ingredient'), pk=pk)
+        price, error = parse_price(request.data.get('last_price'))
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        unit = item.ingredient.unit
+        before = price_label(item.last_price, unit)
+        with transaction.atomic():
+            item.last_price = price
+            item.save(update_fields=['last_price', 'updated_at'])
+            if before != price_label(price, unit):
+                record_event(
+                    request, category='finance', action='supplier.price_changed', obj=item.supplier,
+                    object_label=f'{item.supplier.name} – {item.ingredient.name}',
+                    description=f'Zmieniono cenę surowca „{item.ingredient.name}” u dostawcy {item.supplier.name}.',
+                    changes=[{'field': 'last_price', 'label': 'Cena', 'old': before, 'new': price_label(price, unit)}],
+                )
         return Response({
-            'expense_id': expense.expense_id,
-            'category': expense.category,
-            'category_label': expense.get_category_display(),
-            'amount': str(expense.amount),
-            'description': expense.description,
-            'date': str(expense.date),
-        }, status=status.HTTP_201_CREATED)
+            'supplier_ingredient_id': item.pk,
+            'supplier': item.supplier.name,
+            'ingredient': item.ingredient.name,
+            'last_price': str(item.last_price),
+        })
+def _statement_period(params):
+    kind = params.get('period', 'month')
+    if kind not in PERIOD_KINDS:
+        return None, 'Nieznany rodzaj okresu.'
+    try:
+        anchor = date_cls.fromisoformat(params['date']) if params.get('date') else date_cls.today()
+    except ValueError:
+        return None, 'Nieprawidłowy format daty (RRRR-MM-DD).'
+    if period_bounds(kind, anchor)[0] > date_cls.today():
+        return None, 'Ten okres jeszcze się nie zaczął.'
+    return (kind, anchor), None
 
 
-class CategoryBreakdownView(APIView):
+class StatementView(APIView):
     permission_classes = [AdminOnly]
+
     def get(self, request):
-        start, end = _parse_date_range(request)
-        rows = (
-            Expense.objects.filter(date__gte=start, date__lte=end)
-            .values('category')
-            .annotate(total=Sum('amount'))
-            .order_by('-total')
-        )
-        labels = dict(Expense.CATEGORY_CHOICES)
-        return Response([
-            {'category': r['category'], 'category_label': labels.get(r['category'], r['category']), 'total': str(r['total'])}
-            for r in rows
-        ])
+        period, error = _statement_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        materialize_due_expenses()
+        return Response(build_statement(*period))
 
 
-class PeriodIncomesView(APIView):
+class FinanceExportView(APIView):
     permission_classes = [AdminOnly]
-    def get(self, request):
-        start, end = _parse_date_range(request)
-        sales = (
-            DailyOrder.objects
-            .filter(order_date__gte=start, order_date__lte=end)
-            .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
-            .values('client__name', 'order_date')
-            .annotate(amount=Sum(
-                ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
-            ))
-        )
-        returns = (
-            ProductReturn.objects
-            .filter(return_date__gte=start, return_date__lte=end)
-            .values('client__name', 'return_date')
-            .annotate(amount=Sum(
-                ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
-            ))
-        )
-        rows = [
-            {'client_name': r['client__name'], 'amount': str(r['amount']), 'date': str(r['order_date']), 'kind': 'sale'}
-            for r in sales
-        ] + [
-            {'client_name': r['client__name'], 'amount': str(-r['amount']), 'date': str(r['return_date']), 'kind': 'return'}
-            for r in returns
-        ]
-        rows.sort(key=lambda row: row['date'], reverse=True)
-        return Response(rows)
+
+    def get(self, request, kind):
+        if kind not in EXPORTS:
+            return Response({'error': 'Nieznany rodzaj eksportu.'}, status=status.HTTP_404_NOT_FOUND)
+        period, error = _statement_period(request.query_params)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        period_kind, anchor = period
+        start, end = period_bounds(period_kind, anchor)
+        materialize_due_expenses()
+        name, build = EXPORTS[kind]
+        header, rows = build(period_kind, anchor, start, min(end, date_cls.today()))
+        return csv_response(f'{name}-{period_slug(period_kind, start)}.csv', header, rows)
+    
+MAX_CLOSING_DAYS = 92
 
 
-class TopClientsView(APIView):
+def _report_amounts(report):
+    return snapshot(report, REPORT_AUDIT_LABELS)
+
+
+class ClosingListView(APIView):
     permission_classes = [AdminOnly]
+
     def get(self, request):
-        start, end = _parse_date_range(request)
-        sales = (
-            DailyOrder.objects
-            .filter(order_date__gte=start, order_date__lte=end)
-            .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
-            .values('client__name')
-            .annotate(total=Sum(
-                ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=DecimalField(max_digits=12, decimal_places=2))
-            ))
-            .values_list('client__name', 'total')
-        )
-        returns = dict(
-            ProductReturn.objects
-            .filter(return_date__gte=start, return_date__lte=end)
-            .values('client__name')
-            .annotate(total=Sum(
-                ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=12, decimal_places=2))
-            ))
-            .values_list('client__name', 'total')
-        )
-        totals = [(name, total - returns.get(name, Decimal('0'))) for name, total in sales]
-        totals.sort(key=lambda row: row[1], reverse=True)
-        return Response([{'client_name': name, 'total': str(total)} for name, total in totals[:5]])
-
-
-class ProfitTrendView(APIView):
-    permission_classes = [AdminOnly]
-    def get(self, request):
-        start, end = _parse_date_range(request, default_days=6)
-        trend = []
-        current = start
-        while current <= end:
-            revenue = _revenue_for_date(current)
-            expenses = _expenses_for_date(current)
-            trend.append({'date': str(current), 'net_profit': str(revenue - expenses)})
-            current += timedelta(days=1)
-        return Response(trend)
-
-
-class FinancialReportListView(APIView):
-    permission_classes = [AdminOnly]
-    def get(self, request):
-        reports = DailyFinancialReport.objects.all().order_by('-report_date')
-        return Response([_serialize_report(r) for r in reports])
+        period, error = _parse_period(request.query_params, default_days=14)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        start, end = period
+        if end > date_cls.today():
+            return Response({'error': 'Nie można pokazać dni z przyszłości.'}, status=status.HTTP_400_BAD_REQUEST)
+        if (end - start).days >= MAX_CLOSING_DAYS:
+            return Response(
+                {'error': f'Zamknięcia można przeglądać najwyżej za {MAX_CLOSING_DAYS} dni naraz.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        materialize_due_expenses()
+        return Response(build_closings(start, end))
 
     def post(self, request):
-        today = date_cls.today()
-        revenue = _revenue_for_date(today)
-        expenses = _expenses_for_date(today)
-        cogs = _cogs_for_date(today)
-        net_profit = revenue - expenses - cogs
-
-        user = request.user if request.user.is_authenticated else None
-        with transaction.atomic():
-            existing = DailyFinancialReport.objects.filter(report_date=today).first()
-            before = snapshot(existing, REPORT_AUDIT_LABELS) if existing else {}
-            report, created = DailyFinancialReport.objects.update_or_create(
-                report_date=today,
-                defaults={
-                    'total_revenue': revenue,
-                    'total_cogs': cogs,
-                    'total_operating_expenses': expenses,
-                    'net_profit': net_profit,
-                    'is_finalized': True,
-                    'generated_by': user,
-                },
-            )
-            report.refresh_from_db()
-            record_event(
-                request, category='finance',
-                action='report.generated' if created else 'report.regenerated',
-                obj=report, object_label=f'Raport {today:%d.%m.%Y}',
-                description=(
-                    f'{"Wygenerowano" if created else "Ponownie wygenerowano"} raport finansowy '
-                    f'z dnia {today:%d.%m.%Y}.'
-                ),
-                changes=field_changes(before, snapshot(report, REPORT_AUDIT_LABELS), REPORT_AUDIT_LABELS),
-            )
-        return Response(_serialize_report(report), status=status.HTTP_201_CREATED)
-
-
-class FinancialReportDetailView(APIView):
-    permission_classes = [AdminOnly]
-    def delete(self, request, report_date):
         try:
-            parsed_date = date_cls.fromisoformat(report_date)
+            day = date_cls.fromisoformat(str(request.data.get('date')))
         except ValueError:
-            return Response({'error': 'Nieprawidłowy format daty.'}, status=status.HTTP_400_BAD_REQUEST)
-        report = get_object_or_404(DailyFinancialReport, report_date=parsed_date)
+            return Response({'error': 'Nieprawidłowa data.'}, status=status.HTTP_400_BAD_REQUEST)
+        if day > date_cls.today():
+            return Response({'error': 'Nie można zamknąć dnia, który jeszcze nie minął.'}, status=status.HTTP_400_BAD_REQUEST)
+        if DailyFinancialReport.objects.filter(report_date=day).exists():
+            return Response({'error': 'Ten dzień jest już zamknięty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        materialize_due_expenses()
+        with transaction.atomic():
+            report = close_day(day, request.user)
+            record_event(
+                request, category='finance', action='report.closed', obj=report,
+                object_label=f'Dzień {day:%d.%m.%Y}',
+                description=f'Zamknięto dzień {day:%d.%m.%Y} – kwoty zapisano na stałe.',
+                changes=field_changes({}, _report_amounts(report), REPORT_AUDIT_LABELS),
+            )
+        return Response(build_closings(day, day)[0], status=status.HTTP_201_CREATED)
+
+
+class ClosingDetailView(APIView):
+    permission_classes = [AdminOnly]
+
+    def delete(self, request, day):
+        try:
+            parsed_day = date_cls.fromisoformat(day)
+        except ValueError:
+            return Response({'error': 'Nieprawidłowa data.'}, status=status.HTTP_400_BAD_REQUEST)
+        report = get_object_or_404(DailyFinancialReport, report_date=parsed_day)
         with transaction.atomic():
             record_event(
-                request, category='finance', action='report.deleted', obj=report,
-                object_label=f'Raport {parsed_date:%d.%m.%Y}',
-                description=f'Usunięto raport finansowy z dnia {parsed_date:%d.%m.%Y}.',
-                changes=field_changes(snapshot(report, REPORT_AUDIT_LABELS), {}, REPORT_AUDIT_LABELS),
+                request, category='finance', action='report.reopened', obj=report,
+                object_label=f'Dzień {parsed_day:%d.%m.%Y}',
+                description=(
+                    f'Ponownie otwarto dzień {parsed_day:%d.%m.%Y}. Kwoty z zamknięcia zostają w tym wpisie, '
+                    'a dzień znowu liczy się na bieżąco.'
+                ),
+                changes=field_changes(_report_amounts(report), {}, REPORT_AUDIT_LABELS),
             )
             report.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

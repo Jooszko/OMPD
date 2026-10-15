@@ -17,6 +17,7 @@
   --color-bakery-btnBorder: #c5c1c1;
   --color-bakery-accent: #f49f1c;
   --color-bakery-rowBg: #ebe7e7;
+  --color-bakery-card: #faf8f7;
 }
 
 html, body {
@@ -140,5 +141,26 @@ html, body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+.print-root {
+  display: none;
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+
+  .print-root {
+    display: block;
+    padding: 16mm;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  @page {
+    margin: 0;
   }
 }
