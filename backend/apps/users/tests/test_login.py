@@ -31,6 +31,18 @@ class LoginViewTests(TestCase):
         self.assertIn('refresh', response.data)
         self.assertEqual(response.data['role'], 'driver')
 
+    def test_successful_login_records_last_login(self):
+        self.login(PASSWORD)
+
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.last_login)
+
+    def test_failed_login_does_not_touch_last_login(self):
+        self.login('zle-haslo')
+
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.last_login)
+
     def test_wrong_password_returns_clear_error(self):
         response = self.login('zle-haslo')
 

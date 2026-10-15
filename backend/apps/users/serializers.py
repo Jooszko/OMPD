@@ -44,6 +44,16 @@ class UserSerializer(serializers.ModelSerializer):
         if password or (was_active and not user.is_active):
             revoke_refresh_tokens(user)
         return user
+class StaffUserSerializer(UserSerializer):
+    """Account data for the admin's staff list: adds account dates and the driver's active routes."""
+    routes = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ['last_login', 'date_joined', 'routes']
+        read_only_fields = UserSerializer.Meta.read_only_fields + ['last_login', 'date_joined']
+
+    def get_routes(self, user):
+        return sorted(route.route_name for route in user.routes.all() if route.is_active)
 
 class NotificationSerializer(serializers.ModelSerializer):
     sender_id = serializers.IntegerField(source='sender.user_id', read_only=True, allow_null=True, default=None)

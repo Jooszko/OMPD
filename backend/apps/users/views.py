@@ -4,13 +4,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import User, Notification
-from .serializers import UserSerializer, NotificationSerializer
+from .serializers import UserSerializer, NotificationSerializer, StaffUserSerializer
 from .permissions import IsAdminRole, IsAdminRoleOrReadOnly
 from django.core.cache import cache
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import password_validation
+from django.contrib.auth.models import update_last_login
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .tokens import revoke_refresh_tokens
@@ -28,9 +29,10 @@ class UserListCreateView(APIView):
     permission_classes = [IsAdminRoleOrReadOnly]
 
     def get(self, request):
-        users = User.objects.all()
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        users = User.objects.order_by('full_name')
+        if request.user.role == 'admin':
+            return Response(StaffUserSerializer(users.prefetch_related('routes'), many=True).data)
+        return Response(UserSerializer(users, many=True).data)
 
     def post(self, request):
         serializer = UserSerializer(data=request.data)
@@ -100,7 +102,7 @@ class UserDetailView(APIView):
                         'Pracownik zmieni je przy następnym logowaniu.'
                     ),
                 )
-        return Response(UserSerializer(saved).data, status=status.HTTP_200_OK)
+        return Response(StaffUserSerializer(saved).data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk):
         user = get_object_or_404(User, pk=pk)
@@ -236,6 +238,7 @@ class LoginView(TokenObtainPairView):
 
         cache.delete(failures_key)
         user = serializer.user
+        update_last_login(None, user)
         record_event(
             request, category='accounts', action='login.succeeded', obj=user, object_label=user.full_name,
             actor=user, description=f'Zalogowano: {user.full_name}.',
