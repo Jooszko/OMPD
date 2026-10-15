@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProfitabilityProduct } from '../../../services/api';
-import { groupByMargin, lowestMargin, marginLevel, profitRanking } from './profitability';
+import { groupByMargin, lowestMargin, marginBand, marginLevel, profitRanking } from './profitability';
 
 function product(name: string, fields: Partial<ProfitabilityProduct> = {}): ProfitabilityProduct {
   return {
@@ -19,6 +19,12 @@ function product(name: string, fields: Partial<ProfitabilityProduct> = {}): Prof
     ...fields,
   };
 }
+
+describe('marginBand', () => {
+  it('uses the same thresholds as the margin groups', () => {
+    expect([80, 50, 49.9, 25, 24.9, -5].map(marginBand)).toEqual(['high', 'high', 'medium', 'medium', 'low', 'low']);
+  });
+});
 
 describe('marginLevel', () => {
   it.each<[Partial<ProfitabilityProduct>, string]>([

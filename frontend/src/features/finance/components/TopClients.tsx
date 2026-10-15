@@ -9,6 +9,20 @@ function clientChange(client: FinanceTopClient): Change {
   return changeVsPrevious(client.revenue, client.previous_revenue, 'income');
 }
 
+function ShareBar({ value, leader, share }: { value: string; leader: number; share: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span aria-hidden className="flex-1 h-2 rounded bg-bakery-rowBg">
+        <span
+          className="block h-full rounded bg-[#2a78d6]"
+          style={{ width: `${Math.max(0, (Number(value) / leader) * 100)}%` }}
+        />
+      </span>
+      <span className="w-11 text-right text-[13px] font-bold text-[#4a4543] tabular-nums">{share}</span>
+    </div>
+  );
+}
+
 export function TopClients({
   clients,
   others,
@@ -32,7 +46,8 @@ export function TopClients({
         </div>
         {clients.length > 0 && (
           <span className="text-[13px] font-bold text-[#4a4543] tabular-nums">
-            {clients.length} {clients.length === 1 ? 'klient' : 'klientów'} = {formatShare(topRevenue, revenue)} przychodu
+            {clients.length} {clients.length === 1 ? 'klient' : 'klientów'} = {formatShare(topRevenue, revenue)}{' '}
+            przychodu
           </span>
         )}
       </div>
@@ -40,65 +55,99 @@ export function TopClients({
       {clients.length === 0 ? (
         <p className="m-0 text-sm font-semibold text-[#5f5a58] italic">Brak sprzedaży w tym okresie.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-left">
-            <thead>
-              <tr>
-                <th scope="col" className={`${TH_CLASS} pl-0 w-7`}>#</th>
-                <th scope="col" className={TH_CLASS}>Klient</th>
-                <th scope="col" className={`${TH_CLASS} w-[34%]`}>Udział w przychodzie</th>
-                <th scope="col" className={`${TH_CLASS} text-right`}>Przychód</th>
-                <th scope="col" className={`${TH_CLASS} text-right`}>Dostawy</th>
-                <th scope="col" className={`${TH_CLASS} pr-0 text-right`}>Zmiana</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((client, index) => (
-                <tr key={client.client_id} className="border-t border-[#e6e1df]">
-                  <td className="py-3.5 pr-2 text-[13px] font-extrabold text-[#5f5a58] tabular-nums">{index + 1}</td>
-                  <th scope="row" className="py-3.5 px-2 text-sm font-extrabold">
-                    {client.name}
+        <>
+          <ol className="sm:hidden m-0 p-0 list-none flex flex-col">
+            {clients.map((client, index) => (
+              <li key={client.client_id} className="py-3 border-t border-[#e6e1df] flex flex-col gap-1.5">
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-extrabold">
+                    <span className="text-[#5f5a58] tabular-nums">{index + 1}.</span> {client.name}
+                  </span>
+                  <span className="text-sm font-extrabold tabular-nums whitespace-nowrap">
+                    {formatMoney(client.revenue)}
+                  </span>
+                </span>
+                <ShareBar value={client.revenue} leader={leader} share={formatShare(client.revenue, revenue)} />
+                <span className="flex items-center justify-between gap-2 text-xs font-semibold text-[#4a4543] tabular-nums">
+                  Dostawy: {client.deliveries}
+                  <ChangeBadge change={clientChange(client)} />
+                </span>
+              </li>
+            ))}
+            {others.clients > 0 && (
+              <li className="py-3 border-t border-bakery-btnBorder flex items-baseline justify-between gap-3 text-[13px] font-bold text-[#4a4543] tabular-nums">
+                <span>
+                  Pozostali ({others.clients}) · {formatShare(others.revenue, revenue)}
+                </span>
+                <span className="text-sm whitespace-nowrap">{formatMoney(others.revenue)}</span>
+              </li>
+            )}
+          </ol>
+
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-left">
+              <thead>
+                <tr>
+                  <th scope="col" className={`${TH_CLASS} pl-0 w-7`}>
+                    #
                   </th>
-                  <td className="py-3.5 px-2">
-                    <div className="flex items-center gap-2.5">
-                      <span aria-hidden className="flex-1 h-2 rounded bg-bakery-rowBg">
-                        <span
-                          className="block h-full rounded bg-[#2a78d6]"
-                          style={{ width: `${Math.max(0, (Number(client.revenue) / leader) * 100)}%` }}
-                        />
-                      </span>
-                      <span className="w-11 text-right text-[13px] font-bold text-[#4a4543] tabular-nums">
-                        {formatShare(client.revenue, revenue)}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-2 text-right text-sm font-extrabold tabular-nums">{formatMoney(client.revenue)}</td>
-                  <td className="py-3.5 px-2 text-right text-[13px] font-semibold text-[#4a4543] tabular-nums">
-                    {client.deliveries}
-                  </td>
-                  <td className="py-3.5 pl-2 text-right">
-                    <ChangeBadge change={clientChange(client)} />
-                  </td>
-                </tr>
-              ))}
-              {others.clients > 0 && (
-                <tr className="border-t border-bakery-btnBorder">
-                  <td />
-                  <th scope="row" className="py-3.5 px-2 text-[13px] font-bold text-[#4a4543]">
-                    Pozostali ({others.clients})
+                  <th scope="col" className={TH_CLASS}>
+                    Klient
                   </th>
-                  <td className="py-3.5 px-2 text-[13px] font-bold text-[#4a4543] tabular-nums">
-                    {formatShare(others.revenue, revenue)}
-                  </td>
-                  <td className="py-3.5 px-2 text-right text-sm font-bold text-[#4a4543] tabular-nums">
-                    {formatMoney(others.revenue)}
-                  </td>
-                  <td colSpan={2} />
+                  <th scope="col" className={`${TH_CLASS} w-[34%]`}>
+                    Udział w przychodzie
+                  </th>
+                  <th scope="col" className={`${TH_CLASS} text-right`}>
+                    Przychód
+                  </th>
+                  <th scope="col" className={`${TH_CLASS} text-right`}>
+                    Dostawy
+                  </th>
+                  <th scope="col" className={`${TH_CLASS} pr-0 text-right`}>
+                    Zmiana
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {clients.map((client, index) => (
+                  <tr key={client.client_id} className="border-t border-[#e6e1df]">
+                    <td className="py-3.5 pr-2 text-[13px] font-extrabold text-[#5f5a58] tabular-nums">{index + 1}</td>
+                    <th scope="row" className="py-3.5 px-2 text-sm font-extrabold">
+                      {client.name}
+                    </th>
+                    <td className="py-3.5 px-2">
+                      <ShareBar value={client.revenue} leader={leader} share={formatShare(client.revenue, revenue)} />
+                    </td>
+                    <td className="py-3.5 px-2 text-right text-sm font-extrabold tabular-nums">
+                      {formatMoney(client.revenue)}
+                    </td>
+                    <td className="py-3.5 px-2 text-right text-[13px] font-semibold text-[#4a4543] tabular-nums">
+                      {client.deliveries}
+                    </td>
+                    <td className="py-3.5 pl-2 text-right">
+                      <ChangeBadge change={clientChange(client)} />
+                    </td>
+                  </tr>
+                ))}
+                {others.clients > 0 && (
+                  <tr className="border-t border-bakery-btnBorder">
+                    <td />
+                    <th scope="row" className="py-3.5 px-2 text-[13px] font-bold text-[#4a4543]">
+                      Pozostali ({others.clients})
+                    </th>
+                    <td className="py-3.5 px-2 text-[13px] font-bold text-[#4a4543] tabular-nums">
+                      {formatShare(others.revenue, revenue)}
+                    </td>
+                    <td className="py-3.5 px-2 text-right text-sm font-bold text-[#4a4543] tabular-nums">
+                      {formatMoney(others.revenue)}
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );

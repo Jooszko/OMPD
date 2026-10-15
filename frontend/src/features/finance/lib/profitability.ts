@@ -17,12 +17,18 @@ const GROUPS: Omit<MarginGroup, 'items'>[] = [
   { level: 'no_recipe', title: 'Bez receptury', hint: 'dodaj recepturę w zakładce Produkty, aby policzyć koszt' },
 ];
 
+export type MarginBand = 'high' | 'medium' | 'low';
+
+export function marginBand(pct: number): MarginBand {
+  if (pct >= 50) return 'high';
+  if (pct >= 25) return 'medium';
+  return 'low';
+}
+
 export function marginLevel(product: ProfitabilityProduct): MarginLevel {
   if (!product.has_recipe || product.margin_pct === null) return 'no_recipe';
   if (product.missing_prices.length > 0) return 'incomplete';
-  if (product.margin_pct >= 50) return 'high';
-  if (product.margin_pct >= 25) return 'medium';
-  return 'low';
+  return marginBand(product.margin_pct);
 }
 
 function byPeriodMargin(a: ProfitabilityProduct, b: ProfitabilityProduct): number {

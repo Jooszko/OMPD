@@ -17,9 +17,9 @@ function groupByDate(expenses: AppExpense[]): { date: string; items: AppExpense[
 export function RecentExpenses({ expenses }: { expenses: AppExpense[] }) {
   return (
     <section className="flex-[1_1_340px] min-w-0 bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm p-5 sm:p-6 flex flex-col gap-3.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="m-0 text-lg font-extrabold">Ostatnie wydatki</h2>
-        <Link to="/finance/expenses" className="text-[13px] font-extrabold text-bakery-dark">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="m-0 text-lg font-extrabold whitespace-nowrap">Ostatnie wydatki</h2>
+        <Link to="/finance/expenses" className="text-[13px] font-extrabold text-bakery-dark whitespace-nowrap">
           Wszystkie wydatki →
         </Link>
       </div>
@@ -47,7 +47,9 @@ export function RecentExpenses({ expenses }: { expenses: AppExpense[] }) {
                     <span className="w-3 h-3 rounded" style={{ background: colors.color }} />
                   </span>
                   <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                    <span className="text-sm font-extrabold truncate">{expense.description || expense.category_label}</span>
+                    <span className="text-sm font-extrabold truncate">
+                      {expense.description || expense.category_label}
+                    </span>
                     <span className="text-xs font-semibold text-[#5f5a58]">{expense.category_label}</span>
                   </span>
                   <span className="text-sm font-extrabold tabular-nums whitespace-nowrap">

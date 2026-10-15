@@ -483,15 +483,6 @@ export async function markAllNotificationsRead(): Promise<void> {
   await handleJsonResponse(response);
 }
 
-export interface DailySummary {
-  date: string;
-  sales: string;
-  returns: string;
-  revenue: string;
-  expenses: string;
-  balance: string;
-}
-
 export interface AppExpense {
   expense_id: number;
   category: string;
@@ -501,122 +492,6 @@ export interface AppExpense {
   date: string;
   created_by?: string | null;
   recurring_id?: number | null;
-}
-
-export interface CategoryBreakdownRow {
-  category: string;
-  category_label: string;
-  total: string;
-}
-
-export interface PeriodIncomeRow {
-  client_name: string;
-  amount: string;
-  date: string;
-  kind: 'sale' | 'return';
-}
-
-export interface TopClientRow {
-  client_name: string;
-  total: string;
-}
-
-export interface ProfitTrendRow {
-  date: string;
-  net_profit: string;
-}
-
-export interface FinancialReport {
-  report_date: string;
-  total_revenue: string;
-  total_cogs: string;
-  total_operating_expenses: string;
-  net_profit: string;
-  is_finalized: boolean;
-}
-
-function withDateRange(base: string, start?: string, end?: string): string {
-  const params = new URLSearchParams();
-  if (start) params.set('start', start);
-  if (end) params.set('end', end);
-  const qs = params.toString();
-  return qs ? `${base}?${qs}` : base;
-}
-
-export async function fetchDailySummary(dateStr?: string): Promise<DailySummary> {
-  const url = dateStr ? `${API_BASE}/finance/daily-summary/?date=${dateStr}` : `${API_BASE}/finance/daily-summary/`;
-  const response = await apiFetch(url, { headers: authHeaders() });
-  return handleJsonResponse(response);
-}
-
-export async function fetchExpenses(start?: string, end?: string): Promise<AppExpense[]> {
-  const response = await apiFetch(withDateRange(`${API_BASE}/finance/expenses/`, start, end), {
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function createExpense(payload: {
-  category: string;
-  amount: number;
-  description: string;
-  date: string;
-}): Promise<AppExpense> {
-  const response = await apiFetch(`${API_BASE}/finance/expenses/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function fetchCategoryBreakdown(start?: string, end?: string): Promise<CategoryBreakdownRow[]> {
-  const response = await apiFetch(withDateRange(`${API_BASE}/finance/category-breakdown/`, start, end), {
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function fetchPeriodIncomes(start?: string, end?: string): Promise<PeriodIncomeRow[]> {
-  const response = await apiFetch(withDateRange(`${API_BASE}/finance/period-incomes/`, start, end), {
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function fetchTopClients(start?: string, end?: string): Promise<TopClientRow[]> {
-  const response = await apiFetch(withDateRange(`${API_BASE}/finance/top-clients/`, start, end), {
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function fetchProfitTrend(start?: string, end?: string): Promise<ProfitTrendRow[]> {
-  const response = await apiFetch(withDateRange(`${API_BASE}/finance/profit-trend/`, start, end), {
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function fetchFinancialReports(): Promise<FinancialReport[]> {
-  const response = await apiFetch(`${API_BASE}/finance/reports/`, { headers: authHeaders() });
-  return handleJsonResponse(response);
-}
-
-export async function generateFinancialReport(): Promise<FinancialReport> {
-  const response = await apiFetch(`${API_BASE}/finance/reports/`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  return handleJsonResponse(response);
-}
-
-export async function deleteFinancialReport(reportDate: string): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/finance/reports/${reportDate}/`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  await handleJsonResponse(response);
 }
 
 export type FailureReason = 'closed' | 'refused' | 'no_access' | 'other';
@@ -1563,4 +1438,78 @@ export async function fetchProfitability(start: string, end: string): Promise<Pr
 
 export async function setIngredientPrice(supplierIngredientId: number, price: string): Promise<void> {
   await sendJson(`${API_BASE}/finance/supplier-ingredients/${supplierIngredientId}/`, 'PATCH', { last_price: price });
+}
+
+export type ReportPeriodKind = 'month' | 'quarter' | 'year';
+
+export interface StatementLine {
+  key: string;
+  label: string;
+  level: 'item' | 'sub' | 'sum' | 'total';
+  amount: string;
+  previous: string;
+}
+
+export interface StatementTotals {
+  revenue: string;
+  cogs: string;
+  operating_expenses: string;
+  net_profit: string;
+}
+
+export interface Statement {
+  period: {
+    kind: ReportPeriodKind;
+    start: string;
+    end: string;
+    label: string;
+    previous_label: string;
+    is_complete: boolean;
+  };
+  totals: StatementTotals;
+  previous_totals: StatementTotals;
+  gross_margin: string;
+  previous_gross_margin: string;
+  gross_margin_pct: number | null;
+  net_margin_pct: number | null;
+  lines: StatementLine[];
+  trend: { label: string; start: string; revenue: string; costs: string; net_profit: string }[];
+  days: { date: string; net_profit: string }[];
+}
+
+export interface ClosingDay extends StatementTotals {
+  date: string;
+  closed: (StatementTotals & { closed_by: string | null; closed_at: string }) | null;
+  drift: string | null;
+}
+
+export async function fetchStatement(period: ReportPeriodKind, date: string): Promise<Statement> {
+  const params = new URLSearchParams({ period, date });
+  return (await ensureOk(await apiFetch(`${API_BASE}/finance/statement/?${params}`))).json();
+}
+
+export async function fetchClosings(): Promise<ClosingDay[]> {
+  return (await ensureOk(await apiFetch(`${API_BASE}/finance/closings/`))).json();
+}
+
+export async function closeDay(date: string): Promise<ClosingDay> {
+  return (await sendJson(`${API_BASE}/finance/closings/`, 'POST', { date })).json();
+}
+
+export async function reopenDay(date: string): Promise<void> {
+  await ensureOk(await apiFetch(`${API_BASE}/finance/closings/${date}/`, { method: 'DELETE' }));
+}
+
+export async function downloadFinanceExport(kind: string, period: ReportPeriodKind, date: string): Promise<void> {
+  const params = new URLSearchParams({ period, date });
+  const response = await ensureOk(await apiFetch(`${API_BASE}/finance/exports/${kind}/?${params}`));
+  const fileName = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? `${kind}.csv`;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

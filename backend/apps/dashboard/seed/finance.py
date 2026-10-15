@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
-
+from finance.closings import live_day
 from finance.models import DailyFinancialReport, Expense
 from orders.models import DailyOrder
 
@@ -93,42 +93,20 @@ def create_expenses(date_range, admin_user):
 
 
 def create_financial_reports(date_range):
+    """Closes every past day of the seed range with its real numbers; today stays open."""
     created_count = 0
-    today = date_range[-1]
-
-    for report_date in date_range:
-        orders_qs = DailyOrder.objects.filter(order_date=report_date).exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
-        revenue = orders_qs.aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F('quantity') * F('price_at_sale'),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                )
-            )
-        )['total'] or Decimal('0.00')
-
-        cogs_ratio = Decimal('0.26') + (Decimal(report_date.toordinal() % 7) * Decimal('0.01'))
-        cogs = (revenue * cogs_ratio).quantize(Decimal('0.01'))
-
-        expenses_total = Expense.objects.filter(date=report_date).aggregate(
-            total=Sum('amount')
-        )['total'] or Decimal('0.00')
-
-        net_profit = revenue - cogs - expenses_total
-        is_finalized = report_date != today
-
+    for report_date in date_range[:-1]:
+        result = live_day(report_date)
         _, created = DailyFinancialReport.objects.get_or_create(
             report_date=report_date,
             defaults={
-                'total_revenue': revenue,
-                'total_cogs': cogs,
-                'total_operating_expenses': expenses_total,
-                'net_profit': net_profit,
-                'is_finalized': is_finalized,
+                'total_revenue': result['revenue'],
+                'total_cogs': result['cogs'],
+                'total_operating_expenses': result['operating_expenses'],
+                'net_profit': result['net_profit'],
+                'is_finalized': True,
                 'generated_by': None,
             },
         )
-        if created:
-            created_count += 1
-
+        created_count += int(created)
     return created_count

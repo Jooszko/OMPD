@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { toIsoDate } from '../../dashboard/lib/dateFormat';
 import { PERIOD_PRESETS, presetPeriod, type FinancePeriod } from '../lib/period';
 
-const SEGMENT_CLASS = 'h-9 px-3.5 rounded-[9px] text-[13px] font-bold transition';
+const SEGMENT_CLASS =
+  'h-9 flex-1 sm:flex-none px-2 sm:px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap transition';
 const DATE_CLASS =
   'h-9 px-2.5 text-[13px] font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent';
 
@@ -20,8 +21,12 @@ export function PeriodPicker({ value, onChange }: { value: FinancePeriod; onChan
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div role="group" aria-label="Okres" className="flex gap-0.5 p-[3px] bg-bakery-card border border-bakery-btnBorder rounded-xl">
+    <div className="w-full sm:w-auto flex flex-wrap items-center gap-2">
+      <div
+        role="group"
+        aria-label="Okres"
+        className="w-full sm:w-auto flex gap-0.5 p-[3px] bg-bakery-card border border-bakery-btnBorder rounded-xl"
+      >
         {PERIOD_PRESETS.map((preset) => (
           <button
             key={preset.id}

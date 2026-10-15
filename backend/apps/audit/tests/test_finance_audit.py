@@ -1,5 +1,3 @@
-from datetime import date
-
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -59,28 +57,3 @@ class FinanceAuditTests(TestCase):
         self.assertEqual(entry.actor, self.admin)
         self.assertIn('Paliwo', entry.description)
         self.assertIn('250.00 zł', entry.description)
-
-    def test_regenerating_report_shows_which_totals_changed(self):
-        self.api.post('/api/finance/reports/')
-        self.api.post(
-            '/api/finance/expenses/',
-            {'category': 'fuel', 'amount': '100', 'date': str(date.today())},
-            format='json',
-        )
-        self.api.post('/api/finance/reports/')
-
-        first = AuditEntry.objects.get(action='report.generated')
-        second = AuditEntry.objects.get(action='report.regenerated')
-        self.assertIn(('Koszty operacyjne', None, '0.00'), change_rows(first))
-        self.assertEqual(
-            change_rows(second),
-            [('Koszty operacyjne', '0.00', '100.00'), ('Zysk netto', '0.00', '-100.00')],
-        )
-
-    def test_deleted_report_keeps_its_totals_in_the_log(self):
-        self.api.post('/api/finance/reports/')
-
-        self.api.delete(f'/api/finance/reports/{date.today()}/')
-
-        entry = AuditEntry.objects.get(action='report.deleted')
-        self.assertIn(('Zysk netto', '0.00', None), change_rows(entry))

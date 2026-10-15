@@ -64,15 +64,14 @@ class SeedFinanceTests(TestCase):
 
         created_count = create_financial_reports(self.date_range)
 
-        self.assertEqual(created_count, len(self.date_range))
-        self.assertEqual(DailyFinancialReport.objects.count(), len(self.date_range))
+        self.assertEqual(created_count, len(self.date_range) - 1)
+        self.assertEqual(DailyFinancialReport.objects.count(), len(self.date_range) - 1)
 
         first_day_report = DailyFinancialReport.objects.get(report_date=self.date_range[0])
         self.assertEqual(first_day_report.total_revenue, Decimal('100.00'))
         self.assertTrue(first_day_report.is_finalized)
 
-        today_report = DailyFinancialReport.objects.get(report_date=self.date_range[-1])
-        self.assertFalse(today_report.is_finalized)
+        self.assertFalse(DailyFinancialReport.objects.filter(report_date=self.date_range[-1]).exists())
 
     def test_create_financial_reports_is_idempotent(self):
         create_expenses(self.date_range, self.admin)
@@ -80,7 +79,7 @@ class SeedFinanceTests(TestCase):
 
         create_financial_reports(self.date_range)
 
-        self.assertEqual(DailyFinancialReport.objects.count(), len(self.date_range))
+        self.assertEqual(DailyFinancialReport.objects.count(), len(self.date_range) - 1)
 
 
 class SeedExpenseProportionTests(TestCase):

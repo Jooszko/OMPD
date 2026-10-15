@@ -42,6 +42,8 @@ ACTIONS = {
         'report.generated': 'Wygenerowanie raportu',
         'report.regenerated': 'Ponowne wygenerowanie raportu',
         'report.deleted': 'Usunięcie raportu',
+        'report.closed': 'Zamknięcie dnia',
+        'report.reopened': 'Ponowne otwarcie dnia',
     },
     'logistics': {
         'stop.delivered': 'Dostarczenie przystanku',

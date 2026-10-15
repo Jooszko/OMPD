@@ -29,7 +29,7 @@ class SeedDashboardCommandTests(TestCase):
         self.assertGreaterEqual(StandingOrder.objects.count(), 45)
         self.assertGreater(DailyOrder.objects.count(), 0)
         self.assertGreater(Expense.objects.count(), 20)
-        self.assertEqual(DailyFinancialReport.objects.count(), 31)
+        self.assertEqual(DailyFinancialReport.objects.count(), 30)
         self.assertEqual(Notification.objects.count(), 60)
 
     def test_seed_dashboard_is_idempotent_without_clear(self):

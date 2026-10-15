@@ -45,7 +45,7 @@ export function RevenueCostChart({ days }: { days: FinanceOverviewDay[] }) {
       </div>
 
       <div className="flex gap-2.5">
-        <div aria-hidden className="relative w-14 shrink-0" style={{ height: CHART_HEIGHT }}>
+        <div aria-hidden className="relative w-10 sm:w-14 shrink-0" style={{ height: CHART_HEIGHT }}>
           {ticks.map((tick) => (
             <span
               key={tick}
@@ -76,7 +76,7 @@ export function RevenueCostChart({ days }: { days: FinanceOverviewDay[] }) {
                 onMouseEnter={() => setHovered(index)}
                 onFocus={() => setHovered(index)}
                 onBlur={() => setHovered(null)}
-                className={`flex-1 min-w-0 h-full flex items-end justify-center gap-[3px] px-[8%] border-0 rounded-md cursor-pointer focus-visible:outline-2 focus-visible:outline-bakery-accent focus-visible:-outline-offset-2 ${
+                className={`flex-1 min-w-0 h-full flex items-end justify-center gap-[3px] px-1 border-0 rounded-md cursor-pointer focus-visible:outline-2 focus-visible:outline-bakery-accent focus-visible:-outline-offset-2 ${
                   hovered === index ? 'bg-bakery-dark/5' : 'bg-transparent'
                 }`}
               >
@@ -110,7 +110,12 @@ export function RevenueCostChart({ days }: { days: FinanceOverviewDay[] }) {
               <TooltipRow label="Surowce" value={formatMoney(-active.cogs)} />
               <TooltipRow label="Koszty operacyjne" value={formatMoney(-active.operating)} />
               {active.expenses.slice(0, 4).map((expense) => (
-                <TooltipRow key={expense.label} label={`· ${expense.label}`} value={formatMoney(-expense.amount)} muted />
+                <TooltipRow
+                  key={expense.label}
+                  label={`· ${expense.label}`}
+                  value={formatMoney(-expense.amount)}
+                  muted
+                />
               ))}
               <span className="flex justify-between gap-3 pt-1.5 mt-0.5 border-t border-[#3d3937] font-extrabold tabular-nums">
                 <span>Wynik</span>
@@ -121,19 +126,22 @@ export function RevenueCostChart({ days }: { days: FinanceOverviewDay[] }) {
         </div>
       </div>
 
-      <div aria-hidden className="flex ml-[66px]">
+      <div aria-hidden className="flex ml-[50px] sm:ml-[66px]">
         {buckets.map((bucket, index) => (
-          <span key={bucket.start} className="flex-1 min-w-0 flex flex-col items-center gap-0.5 text-center tabular-nums">
+          <span
+            key={bucket.start}
+            className="flex-1 min-w-0 flex flex-col items-center gap-0.5 text-center tabular-nums"
+          >
             <span
-              className={`text-[11px] font-bold text-[#5f5a58] whitespace-nowrap ${
+              className={`text-[10px] sm:text-[11px] leading-tight font-bold text-[#5f5a58] whitespace-nowrap ${
                 crowded && index % 2 === 1 ? 'invisible sm:visible' : ''
               }`}
             >
-              {bucket.label}
+              <BucketLabel label={bucket.label} />
             </span>
             {buckets.length <= 16 && (
               <span
-                className={`text-[11px] font-extrabold whitespace-nowrap ${resultClass(bucket.result)} ${
+                className={`text-[10px] sm:text-[11px] font-extrabold whitespace-nowrap ${resultClass(bucket.result)} ${
                   crowded ? 'hidden sm:block' : ''
                 }`}
               >
@@ -159,6 +167,17 @@ export function RevenueCostChart({ days }: { days: FinanceOverviewDay[] }) {
         </span>
       </div>
     </section>
+  );
+}
+
+function BucketLabel({ label }: { label: string }) {
+  const [from, to] = label.split('–');
+  if (to === undefined) return label;
+  return (
+    <>
+      {from}–<br className="sm:hidden" />
+      {to}
+    </>
   );
 }
 
