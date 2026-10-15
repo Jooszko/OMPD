@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import {
@@ -48,7 +49,10 @@ export default function AuditLogPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [objectFilter, setObjectFilter] = useState<ObjectFilter | null>(null);
+  const location = useLocation();
+  const [objectFilter, setObjectFilter] = useState<ObjectFilter | null>(
+    () => (location.state as { objectFilter?: ObjectFilter } | null)?.objectFilter ?? null
+  );
   const [page, setPage] = useState(1);
   const [loaded, setLoaded] = useState<LoadedPage | null>(null);
 
@@ -129,8 +133,7 @@ export default function AuditLogPage() {
   const data = loaded?.page ?? null;
   const isRefetching = !rangeError && !current && data !== null;
   const totalPages = data ? Math.max(1, Math.ceil(data.count / PAGE_SIZE)) : 1;
-  const hasFilters =
-    Object.values(filters).some(Boolean) || searchInput.trim() !== '' || objectFilter !== null;
+  const hasFilters = Object.values(filters).some(Boolean) || searchInput.trim() !== '' || objectFilter !== null;
   const actionOptions =
     options?.actions.filter((action) => !filters.category || action.category === filters.category) ?? [];
 
@@ -162,7 +165,11 @@ export default function AuditLogPage() {
         </label>
         <label className={LABEL_CLASS}>
           Rodzaj zdarzenia
-          <select value={filters.action} onChange={(e) => changeFilter('action', e.target.value)} className={FIELD_CLASS}>
+          <select
+            value={filters.action}
+            onChange={(e) => changeFilter('action', e.target.value)}
+            className={FIELD_CLASS}
+          >
             <option value="">Wszystkie</option>
             {actionOptions.map((action) => (
               <option key={action.value} value={action.value}>
@@ -258,7 +265,10 @@ export default function AuditLogPage() {
       )}
 
       {!rangeError && data && (
-        <div className={`flex flex-col gap-4 transition-opacity ${isRefetching ? 'opacity-50' : ''}`} aria-busy={isRefetching}>
+        <div
+          className={`flex flex-col gap-4 transition-opacity ${isRefetching ? 'opacity-50' : ''}`}
+          aria-busy={isRefetching}
+        >
           {data.results.length === 0 ? (
             <p className="m-0 text-sm font-semibold text-gray-500 italic">Brak wpisów dla wybranych filtrów.</p>
           ) : (

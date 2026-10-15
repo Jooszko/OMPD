@@ -197,6 +197,20 @@ export interface AppUser {
   must_change_password: boolean;
 }
 
+export interface StaffUser extends AppUser {
+  last_login: string | null;
+  date_joined: string;
+  routes: string[];
+}
+
+export interface StaffUserPayload {
+  username?: string;
+  full_name?: string;
+  role?: AppUser['role'];
+  is_active?: boolean;
+  password?: string;
+}
+
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -259,7 +273,12 @@ export async function fetchUsers(): Promise<AppUser[]> {
   return handleJsonResponse(response);
 }
 
-export async function createUser(payload: any): Promise<AppUser> {
+export async function fetchStaff(): Promise<StaffUser[]> {
+  const response = await apiFetch(`${API_BASE}/users/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function createUser(payload: StaffUserPayload): Promise<StaffUser> {
   const response = await apiFetch(`${API_BASE}/users/`, {
     method: 'POST',
     headers: authHeaders(),
@@ -268,7 +287,7 @@ export async function createUser(payload: any): Promise<AppUser> {
   return handleJsonResponse(response);
 }
 
-export async function updateUser(userId: number, payload: any): Promise<AppUser> {
+export async function updateUser(userId: number, payload: StaffUserPayload): Promise<StaffUser> {
   const response = await apiFetch(`${API_BASE}/users/${userId}/`, {
     method: 'PUT',
     headers: authHeaders(),
@@ -1268,7 +1287,19 @@ export interface AuditFilterOptions {
 }
 
 export type AuditQuery = Partial<
-  Record<'category' | 'action' | 'actor' | 'date_from' | 'date_to' | 'q' | 'object_type' | 'object_id' | 'page', string>
+  Record<
+    | 'category'
+    | 'action'
+    | 'actor'
+    | 'date_from'
+    | 'date_to'
+    | 'q'
+    | 'object_type'
+    | 'object_id'
+    | 'page'
+    | 'page_size',
+    string
+  >
 >;
 
 export async function fetchAuditEntries(query: AuditQuery): Promise<AuditPage> {
