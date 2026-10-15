@@ -2,6 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from users.models import User
+from clients.models import Route
 
 STRONG_PASSWORD = 'Piekarnia-2026!'
 
@@ -65,7 +66,52 @@ class UserManagementPermissionTests(TestCase):
         self.assertEqual(self.driver.full_name, 'Driver Nowy')
         self.assertTrue(self.driver.check_password(STRONG_PASSWORD))
 
+class StaffListTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin_s', password=STRONG_PASSWORD, role='admin', full_name='Admin S'
+        )
+        self.driver = User.objects.create_user(
+            username='driver_s', password=STRONG_PASSWORD, role='driver', full_name='Driver S'
+        )
+        Route.objects.create(route_name='Trasa 2', driver=self.driver)
+        Route.objects.create(route_name='Trasa 1', driver=self.driver)
+        Route.objects.create(route_name='Stara trasa', driver=self.driver, is_active=False)
 
+    def row(self, response, user):
+        return next(item for item in response.data if item['user_id'] == user.pk)
+
+    def test_admin_sees_account_dates_and_active_routes(self):
+        self.api.force_authenticate(self.admin)
+
+        driver = self.row(self.api.get('/api/users/'), self.driver)
+
+        self.assertEqual(driver['routes'], ['Trasa 1', 'Trasa 2'])
+        self.assertIn('last_login', driver)
+        self.assertIsNotNone(driver['date_joined'])
+
+    def test_other_roles_get_only_basic_fields(self):
+        self.api.force_authenticate(self.driver)
+
+        admin = self.row(self.api.get('/api/users/'), self.admin)
+
+        self.assertNotIn('last_login', admin)
+        self.assertNotIn('routes', admin)
+
+    def test_list_is_sorted_by_full_name(self):
+        self.api.force_authenticate(self.admin)
+
+        names = [item['full_name'] for item in self.api.get('/api/users/').data]
+
+        self.assertEqual(names, sorted(names))
+
+    def test_saved_account_is_returned_with_staff_fields(self):
+        self.api.force_authenticate(self.admin)
+
+        response = self.api.put(f'/api/users/{self.driver.pk}/', {'full_name': 'Driver Nowy'}, format='json')
+
+        self.assertEqual(response.data['routes'], ['Trasa 1', 'Trasa 2'])
 class PasswordValidationTests(TestCase):
     def setUp(self):
         self.api = APIClient()

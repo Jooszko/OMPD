@@ -1,3 +1,8 @@
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from users.models import Notification, User
 
 SEED_PASSWORD = 'bakery2026'
@@ -30,6 +35,9 @@ SEED_USERNAMES = [row[0] for row in USER_DATA]
 
 ROLE_TO_KEY = {'admin': 'admins', 'baker': 'bakers', 'driver': 'drivers'}
 
+WARSAW = ZoneInfo('Europe/Warsaw')
+SHIFT_START = {'admin': time(7, 0), 'baker': time(3, 45), 'driver': time(5, 10)}
+
 NOTIFICATION_TEMPLATES = [
     ('Niski stan magazynowy', 'Poziom surowca spadł poniżej progu minimalnego.'),
     ('Nowe zamówienie', 'Zarejestrowano nowe zamówienie od klienta.'),
@@ -39,9 +47,17 @@ NOTIFICATION_TEMPLATES = [
 ]
 
 
+def seed_last_login(role, index, is_active, now=None):
+    now = now or timezone.now()
+    days_ago = 12 if not is_active else index % 3
+    day = now.astimezone(WARSAW).date() - timedelta(days=days_ago)
+    moment = datetime.combine(day, SHIFT_START[role], tzinfo=WARSAW) + timedelta(minutes=(index * 7) % 40)
+    return moment - timedelta(days=1) if moment > now else moment
+
+
 def create_users():
     result = {'admins': [], 'bakers': [], 'drivers': []}
-    for username, full_name, role, email, is_active in USER_DATA:
+    for index, (username, full_name, role, email, is_active) in enumerate(USER_DATA):
         user, created = User.objects.get_or_create(
             username=username,
             defaults={
@@ -53,6 +69,7 @@ def create_users():
         )
         if created:
             user.set_password(SEED_PASSWORD)
+            user.last_login = seed_last_login(role, index, is_active)
             user.save()
         result[ROLE_TO_KEY[role]].append(user)
     return result
