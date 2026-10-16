@@ -27,6 +27,75 @@ html, body {
   height: 100%;
 }
 
+.sidebar-menu-scrollbar {
+  scrollbar-width: none;
+}
+
+.sidebar-menu-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+.sidebar-menu-thumb {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 150ms ease;
+}
+
+.sidebar-menu-scroll-container:hover .sidebar-menu-thumb,
+.sidebar-menu-scroll-container:focus-within .sidebar-menu-thumb {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (hover: none) {
+  .sidebar-menu-thumb {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.dashboard-list-scrollbar {
+  scrollbar-width: none;
+}
+
+.dashboard-list-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+.dashboard-main-scrollbar > .dashboard-list-scroll-thumb {
+  right: 6px;
+}
+
+.dashboard-list-table-scrollbar [data-slot="table-container"] {
+  display: contents;
+}
+
+.dashboard-list-table-scrollbar [data-slot="table"] {
+  width: calc(100% - 8px);
+}
+
+.dashboard-list-table-header th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--color-bakery-inactive);
+}
+
+@media (max-width: 639px) {
+  .dashboard-list-table-scrollbar [data-slot="table"] {
+    table-layout: fixed;
+  }
+
+  .dashboard-list-table-scrollbar [data-slot="table-head"],
+  .dashboard-list-table-scrollbar [data-slot="table-cell"] {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
