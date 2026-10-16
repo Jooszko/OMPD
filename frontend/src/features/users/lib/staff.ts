@@ -123,7 +123,7 @@ function startOfDay(date: Date): number {
 }
 
 export function formatLastLogin(value: string | null, now = new Date()): string {
-  if (!value) return 'jeszcze nie';
+  if (!value) return 'brak';
   const date = new Date(value);
   const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
   if (days <= 0) return `dziś, ${formatTime(date)}`;

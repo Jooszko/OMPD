@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Plus, Edit, Trash2, Calendar, RefreshCw, Clock, Eye, X } from 'lucide-react';
 
 import { type Order, type OrderItem } from '../types';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { 
   fetchDailyOrders, 
   fetchStandingOrders, 
@@ -351,7 +352,7 @@ export default function ZamowieniaPanel() {
           )}
 
           <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto relative">
+            <DashboardListScrollbar className="flex-1 min-h-0">
               {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">
                   Ładowanie danych z bazy...
@@ -491,7 +492,7 @@ export default function ZamowieniaPanel() {
                   </tbody>
                 </table>
               )}
-            </div>
+            </DashboardListScrollbar>
           </div>
 
           {activeTab !== 'historia' && (
