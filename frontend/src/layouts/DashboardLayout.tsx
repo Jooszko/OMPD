@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NotificationBell } from '../features/dashboard/components/NotificationBell';
+import { DashboardListScrollbar } from '../features/dashboard/components/DashboardListScrollbar';
 import { logoutUser, fetchCurrentUser, revokeSession, type AppUser } from '../services/api';
 import { clearQueue, loadQueue, syncQueue } from '../services/actionQueue';
 
@@ -13,6 +14,9 @@ export const DashboardLayout: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>('admin');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuScrollbar, setMenuScrollbar] = useState({ height: 0, top: 0 });
+  const menuScrollRef = useRef<HTMLElement>(null);
+  const menuScrollDragRef = useRef<{ pointerId: number; startY: number; startScrollTop: number } | null>(null);
 
   useEffect(() => {
     fetchCurrentUser()
@@ -65,6 +69,62 @@ export const DashboardLayout: React.FC = () => {
   ];
 
   const visibleMenuItems = menuItems.filter(item => item.roles.includes(currentRole));
+
+  const updateMenuScrollbar = () => {
+    const menu = menuScrollRef.current;
+    if (!menu) return;
+
+    const maxScrollTop = menu.scrollHeight - menu.clientHeight;
+    const height = maxScrollTop > 0
+      ? Math.min(menu.clientHeight, Math.max(24, (menu.clientHeight * menu.clientHeight) / menu.scrollHeight))
+      : 0;
+    const top = maxScrollTop > 0
+      ? (menu.scrollTop / maxScrollTop) * (menu.clientHeight - height)
+      : 0;
+
+    setMenuScrollbar((current) =>
+      current.height === height && current.top === top ? current : { height, top }
+    );
+  };
+
+  useEffect(() => {
+    const menu = menuScrollRef.current;
+    const content = menu?.firstElementChild;
+    if (!menu || !content) return;
+
+    const observer = new ResizeObserver(updateMenuScrollbar);
+    observer.observe(menu);
+    observer.observe(content);
+    const frame = requestAnimationFrame(updateMenuScrollbar);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [visibleMenuItems.length]);
+
+  const handleMenuScrollbarPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const menu = menuScrollRef.current;
+    if (!menu) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    menuScrollDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startScrollTop: menu.scrollTop,
+    };
+  };
+
+  const handleMenuScrollbarPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const menu = menuScrollRef.current;
+    const drag = menuScrollDragRef.current;
+    const scrollRange = menu ? menu.clientHeight - menuScrollbar.height : 0;
+    if (!menu || !drag || drag.pointerId !== event.pointerId || scrollRange <= 0) return;
+
+    const maxScrollTop = menu.scrollHeight - menu.clientHeight;
+    menu.scrollTop = drag.startScrollTop + ((event.clientY - drag.startY) / scrollRange) * maxScrollTop;
+  };
 
   const getRoleLabel = (role: UserRole) => {
     if (role === 'admin') return 'Administrator';
@@ -120,28 +180,47 @@ export const DashboardLayout: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <nav className="flex flex-col gap-1.5 p-3 mt-2 overflow-y-auto flex-1 min-h-0 pr-1.5">
-            <NotificationBell />
-            <hr className="border-0 border-t border-bakery-border my-1 shrink-0" />
+          <div className="sidebar-menu-scroll-container relative flex-1 min-h-0">
+            <nav
+              ref={menuScrollRef}
+              onScroll={updateMenuScrollbar}
+              className="sidebar-menu-scrollbar h-full min-h-0 overflow-y-auto"
+            >
+              <div className="flex flex-col gap-1.5 p-3 mt-2 pr-3.5">
+                <NotificationBell />
+                <hr className="border-0 border-t border-bakery-border my-1 shrink-0" />
 
-            {visibleMenuItems.map((item) => {
-              const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
+                {visibleMenuItems.map((item) => {
+                  const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
               
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`w-full h-[40px] min-h-[40px] flex items-center justify-center no-underline text-sm font-medium rounded shadow-sm transition-all duration-150 box-border shrink-0 ${
-                    isActive 
-                      ? 'bg-bakery-dark text-white border border-bakery-dark' 
-                      : 'bg-bakery-inactive text-bakery-dark border border-bakery-btnBorder hover:bg-[#dcd8d8] active:scale-[0.99]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`w-full h-[40px] min-h-[40px] flex items-center justify-center no-underline text-sm font-medium rounded shadow-sm transition-all duration-150 box-border shrink-0 ${
+                        isActive 
+                          ? 'bg-bakery-dark text-white border border-bakery-dark' 
+                          : 'bg-bakery-inactive text-bakery-dark border border-bakery-btnBorder hover:bg-[#dcd8d8] active:scale-[0.99]'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+            {menuScrollbar.height > 0 && (
+              <div
+                aria-hidden="true"
+                className="sidebar-menu-thumb absolute right-1 top-0 w-1 rounded-full bg-bakery-dark touch-none cursor-pointer"
+                style={{ height: menuScrollbar.height, transform: `translateY(${menuScrollbar.top}px)` }}
+                onPointerDown={handleMenuScrollbarPointerDown}
+                onPointerMove={handleMenuScrollbarPointerMove}
+                onPointerUp={() => { menuScrollDragRef.current = null; }}
+                onPointerCancel={() => { menuScrollDragRef.current = null; }}
+              />
+            )}
+          </div>
         </div>
 
         <div className="bg-bakery-dark p-4 border-t border-bakery-border text-white flex flex-col gap-2 box-border shrink-0">
@@ -182,10 +261,16 @@ export const DashboardLayout: React.FC = () => {
 
       </aside>
 
-      <main className="flex-1 h-full overflow-x-hidden overflow-y-auto bg-bakery-main p-4 md:p-6 box-border">
-        <div className="w-full h-full">
-          <Outlet context={{ currentRole }} />
-        </div>
+      <main className="flex-1 h-full min-h-0 overflow-hidden bg-bakery-main">
+        <DashboardListScrollbar
+          className="dashboard-main-scrollbar h-full"
+          contentClassName="min-h-full p-4 md:p-6 box-border"
+          thumbTrackPadding={8}
+        >
+          <div className="w-full min-h-full">
+            <Outlet context={{ currentRole }} />
+          </div>
+        </DashboardListScrollbar>
       </main>
 
     </div>

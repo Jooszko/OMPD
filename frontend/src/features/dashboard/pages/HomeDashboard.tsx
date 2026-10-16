@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useOutletContext } from 'react-router-dom';
 import { useDashboard } from '../hooks/useDashboard';
 import type { TodayOrder } from '../../../services/api';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -75,7 +76,7 @@ export const HomeDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-              <Card className="lg:col-span-2 bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[320px] flex flex-col overflow-hidden">
+              <Card className="lg:col-span-2 bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[380px] flex flex-col overflow-hidden">
                 <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
                   <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">
                     Zamówienia
@@ -84,9 +85,10 @@ export const HomeDashboard: React.FC = () => {
                     Suma: {data?.today_orders.length ?? 0}
                   </span>
                 </CardHeader>
-                <CardContent className="p-2 flex-1 overflow-y-auto">
+                <CardContent className="p-2 flex-1 min-h-0 overflow-hidden">
+                  <DashboardListScrollbar className="dashboard-list-table-scrollbar -mr-2 h-full">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                    <TableHeader className="dashboard-list-table-header">
                       <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">
                           Nazwa firmy
@@ -134,10 +136,11 @@ export const HomeDashboard: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </DashboardListScrollbar>
                 </CardContent>
               </Card>
 
-              <div className="flex flex-col gap-4 h-[320px]">
+              <div className="flex flex-col gap-4 h-[380px]">
                 <Card className="bg-bakery-inactive border-bakery-btnBorder py-3 px-4 flex flex-col items-center justify-center text-center shadow-sm shrink-0">
                   <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">
                     Łączna ilość do wysyłki
@@ -153,9 +156,10 @@ export const HomeDashboard: React.FC = () => {
                       Dzisiejsze składniki
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 flex-1 overflow-y-auto">
+                  <CardContent className="p-2 flex-1 min-h-0 overflow-hidden">
+                    <DashboardListScrollbar className="dashboard-list-table-scrollbar -mr-2 h-full">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                      <TableHeader className="dashboard-list-table-header">
                         <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
                           <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">
                             Składnik
@@ -181,6 +185,7 @@ export const HomeDashboard: React.FC = () => {
                         ))}
                       </TableBody>
                     </Table>
+                    </DashboardListScrollbar>
                   </CardContent>
                 </Card>
               </div>
@@ -197,15 +202,16 @@ export const HomeDashboard: React.FC = () => {
               Podsumowanie finansowe daily
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[200px] flex flex-col overflow-hidden">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[280px] flex flex-col overflow-hidden">
                 <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
                   <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">
                     Wpływy per klient
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-2 flex-1 overflow-y-auto">
+                <CardContent className="p-2 flex-1 min-h-0 overflow-hidden">
+                  <DashboardListScrollbar className="dashboard-list-table-scrollbar -mr-2 h-full">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                    <TableHeader className="dashboard-list-table-header">
                       <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">
                           Nazwa firmy
@@ -231,10 +237,11 @@ export const HomeDashboard: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </DashboardListScrollbar>
                 </CardContent>
               </Card>
 
-              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[200px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[280px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 {data?.financial_summary ? (
                   <>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">Przychód dzienny</p>
@@ -247,7 +254,7 @@ export const HomeDashboard: React.FC = () => {
                 )}
               </Card>
 
-              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[200px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
+              <Card className="bg-bakery-inactive border-bakery-btnBorder h-[280px] p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 {data?.financial_summary ? (
                   <>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 font-bold">Zysk netto</p>
@@ -272,7 +279,7 @@ export const HomeDashboard: React.FC = () => {
               Podsumowanie stanów magazynowych
             </div>
 
-            <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[240px] flex flex-col overflow-hidden">
+            <Card className="bg-bakery-inactive border-bakery-btnBorder shadow-sm h-[350px] flex flex-col overflow-hidden">
               <CardHeader className="flex flex-row justify-between items-center py-2 px-4 border-b border-bakery-btnBorder space-y-0 shrink-0">
                 <CardTitle className="text-xs font-bold uppercase tracking-wide text-bakery-dark">
                   Składniki w magazynie
@@ -281,9 +288,10 @@ export const HomeDashboard: React.FC = () => {
                   Pozycji: {data?.warehouse_stock.length ?? 0}
                 </span>
               </CardHeader>
-              <CardContent className="p-2 flex-1 overflow-y-auto">
+              <CardContent className="p-2 flex-1 min-h-0 overflow-hidden">
+                <DashboardListScrollbar className="dashboard-list-table-scrollbar -mr-2 h-full">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-bakery-inactive z-10">
+                  <TableHeader className="dashboard-list-table-header">
                     <TableRow className="border-b border-bakery-btnBorder hover:bg-transparent">
                       <TableHead className="text-[10px] font-bold uppercase tracking-wider text-bakery-dark h-8 px-3">
                         Nazwa
@@ -324,6 +332,7 @@ export const HomeDashboard: React.FC = () => {
                     })}
                   </TableBody>
                 </Table>
+                </DashboardListScrollbar>
               </CardContent>
             </Card>
           </section>
