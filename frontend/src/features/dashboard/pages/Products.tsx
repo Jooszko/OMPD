@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import {
   fetchProducts,
   fetchIngredients,
@@ -217,7 +218,7 @@ export default function ProductsPanel() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
           <div className="lg:col-span-2 flex flex-col gap-4">
             <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto relative">
+              <DashboardListScrollbar className="products-table-scrollbar flex-1 min-h-0" contentClassName="pr-2">
                 {isLoading ? (
                   <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
                 ) : (
@@ -254,7 +255,7 @@ export default function ProductsPanel() {
                   </tbody>
                 </table>
                 )}
-              </div>
+              </DashboardListScrollbar>
             </div>
 
             <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
@@ -452,7 +453,8 @@ export default function ProductsPanel() {
 
               <div className="flex flex-col flex-1 min-h-0">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Składniki przypisane do zestawu:</span>
-                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex-1 overflow-y-auto p-1.5 divide-y divide-bakery-btnBorder">
+                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex-1 min-h-0 overflow-hidden">
+                  <DashboardListScrollbar className="h-full" contentClassName="p-1.5 divide-y divide-bakery-btnBorder">
                   {recipeItems.length > 0 ? (
                     recipeItems.map((item, idx) => {
                       const ing = ingredients.find(i => i.ingredient_id === item.ingredient_id);
@@ -471,6 +473,7 @@ export default function ProductsPanel() {
                   ) : (
                     <div className="text-center py-12 text-gray-400 text-xs font-semibold italic">Brak składników w tej karcie. Dodaj surowce powyżej.</div>
                   )}
+                  </DashboardListScrollbar>
                 </div>
               </div>
 

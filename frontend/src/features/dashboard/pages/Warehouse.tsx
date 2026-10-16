@@ -1,5 +1,6 @@
 import { useDashboard } from '../hooks/useDashboard';
 import { WarehouseStockChart } from '../components/WarehouseStockChart';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { computeStockStatus, STOCK_STATUS_COLORS, STOCK_STATUS_LABELS } from '../lib/warehouseStock';
 
 export default function Warehouse() {
@@ -50,7 +51,7 @@ export default function Warehouse() {
       </div>
 
       <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
+        <DashboardListScrollbar className="flex-1 min-h-0">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-bakery-inactive z-10">
               <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
@@ -99,7 +100,7 @@ export default function Warehouse() {
               )}
             </tbody>
           </table>
-        </div>
+        </DashboardListScrollbar>
       </div>
     </div>
   );

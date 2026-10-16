@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
 
 interface SupplierProduct {
@@ -204,7 +205,7 @@ export default function SuppliersPanel() {
 
             <div className="flex flex-col gap-4 w-full">
                 <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto relative">
+                    <DashboardListScrollbar className="flex-1 min-h-0">
                         {isLoading ? (
                             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
                         ) : (
@@ -284,7 +285,7 @@ export default function SuppliersPanel() {
                                 <p className="text-xs m-0">Zmień frazę wyszukiwania lub dodaj nowego dostawcę.</p>
                             </div>
                         )}
-                    </div>
+                    </DashboardListScrollbar>
                 </div>
 
                 <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">

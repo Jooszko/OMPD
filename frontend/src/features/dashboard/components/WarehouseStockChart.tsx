@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import type { WarehouseItem } from '../../../services/api';
+import { DashboardListScrollbar } from './DashboardListScrollbar';
 import {
   computeStockStatus,
   STOCK_STATUS_COLORS,
@@ -80,7 +81,7 @@ export const WarehouseStockChart: React.FC<WarehouseStockChartProps> = ({ items 
         })}
       </div>
 
-      <div className="h-[420px] overflow-y-auto pr-1 pt-5">
+      <DashboardListScrollbar className="warehouse-stock-chart-scrollbar h-[420px]" contentClassName="pt-5 pr-1">
         <div
           className="grid items-center"
           style={{ gridTemplateColumns: '160px 1fr 150px', gridAutoRows: ROW_HEIGHT }}
@@ -172,7 +173,7 @@ export const WarehouseStockChart: React.FC<WarehouseStockChartProps> = ({ items 
             );
           })}
         </div>
-      </div>
+      </DashboardListScrollbar>
     </div>
   );
 };

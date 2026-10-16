@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, UserPlus, CheckCircle, XCircle, MapPin, X, FileText, Truck, Crosshair, Phone } from 'lucide-react';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { fetchClients, saveClient, fetchRoutes, type AppClient, type RouteOption } from '../../../services/api';
 
 export default function ClientsPanel() {
@@ -122,7 +123,7 @@ export default function ClientsPanel() {
 
         <div className="flex flex-col gap-4 w-full">
           <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto relative">
+            <DashboardListScrollbar className="flex-1 min-h-0">
               {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">
                   Ładowanie danych z bazy...
@@ -216,7 +217,7 @@ export default function ClientsPanel() {
                   </tbody>
                 </table>
               )}
-            </div>
+            </DashboardListScrollbar>
           </div>
 
           <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">

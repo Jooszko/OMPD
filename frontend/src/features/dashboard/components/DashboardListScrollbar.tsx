@@ -56,7 +56,7 @@ export const DashboardListScrollbar: React.FC<DashboardListScrollbarProps> = ({
     const observer = new ResizeObserver(updateScrollbar);
     observer.observe(viewport);
     observer.observe(content);
-    const table = content.querySelector('[data-slot="table"]');
+    const table = content.querySelector('table');
     if (table) observer.observe(table);
     const frame = requestAnimationFrame(updateScrollbar);
 
