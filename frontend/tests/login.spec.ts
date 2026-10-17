@@ -11,7 +11,6 @@ test.describe('Moduł Logowania', () => {
 
     await page.click('button[type="submit"]');
 
-    // await expect(page).toHaveURL(/.*dashboard|.*orders/); 
     await expect(page.locator('h1')).toContainText('Dzień dobry');
     await expect(page.locator('a').first()).toContainText('Strona Główna');
 
