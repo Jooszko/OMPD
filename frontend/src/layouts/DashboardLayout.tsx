@@ -252,6 +252,7 @@ export const DashboardLayout: React.FC = () => {
           
           <button
             onClick={handleLogout}
+            id="logout-button"
             className="flex items-center gap-2 text-xs text-gray-400 bg-none border-none border-t border-[#27272a] pt-2 mt-1 w-full text-left cursor-pointer transition-colors duration-150 hover:text-bakery-accent"
           >
             <LogOut size={14} />
