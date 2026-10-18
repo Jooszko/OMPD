@@ -4,8 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from audit.services import field_changes, record_event
-from users.permissions import AdminOrBaker
-from .models import Ingredient, Product, Recipe
+from users.permissions import AdminOnly, AdminOrBaker
+from .models import Ingredient, IngredientStock, Product, Recipe
 from .serializers import IngredientSerializer, ProductSerializer
 
 PRODUCT_AUDIT_LABELS = {'name': 'Nazwa', 'category': 'Kategoria', 'base_price': 'Cena'}
@@ -33,11 +33,34 @@ def _recipe_changes(before, after):
 
 
 class IngredientListView(APIView):
-    permission_classes = [AdminOrBaker]
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [AdminOnly()]
+        return [AdminOrBaker()]
+
     def get(self, request):
         ingredients = Ingredient.objects.all().order_by('name')
         serializer = IngredientSerializer(ingredients, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = IngredientSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            ingredient = serializer.save()
+            IngredientStock.objects.create(ingredient=ingredient)
+            record_event(
+                request, category='products', action='ingredient.created', obj=ingredient,
+                object_label=ingredient.name,
+                description=f'Dodano składnik {ingredient.name} ({ingredient.unit}) do bazy surowców.',
+                changes=[
+                    {'field': 'name', 'label': 'Nazwa', 'old': None, 'new': ingredient.name},
+                    {'field': 'unit', 'label': 'Jednostka', 'old': None, 'new': ingredient.unit},
+                ],
+            )
+        return Response(IngredientSerializer(ingredient).data, status=status.HTTP_201_CREATED)
 
 
 class ProductListView(APIView):
