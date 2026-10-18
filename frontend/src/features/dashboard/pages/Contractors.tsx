@@ -182,49 +182,47 @@ export default function SuppliersPanel() {
     });
 
     return (
-        <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark">
 
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Księga Kontrahentów</h1>
-                    <p className="text-xs text-gray-500 font-medium">Baza dostawców surowców, zarządzanie danymi kontaktowymi oraz asortymentem surowcowym.</p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                    <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]">Księga Kontrahentów</h1>
+                    <p className="m-0 text-sm text-[#4a4543]">Baza dostawców surowców, zarządzanie danymi kontaktowymi oraz asortymentem surowcowym.</p>
                 </div>
-                <div className="relative w-full max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-bakery-border w-4 h-4" />
+                <label className="flex-[1_1_280px] max-w-lg flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+                    <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
                     <input
                         type="text"
                         placeholder="Szukaj po nazwie firmy, NIP lub surowca..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-1.5 border border-bakery-btnBorder rounded text-xs bg-bakery-rowBg focus:bg-white text-bakery-dark font-medium outline-none focus:border-bakery-accent"
+                        className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
                     />
-                </div>
+                </label>
             </div>
 
-            <hr className="border-0 border-t border-bakery-border my-1" />
-
             <div className="flex flex-col gap-4 w-full">
-                <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
+                <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
                     <DashboardListScrollbar className="flex-1 min-h-0">
                         {isLoading ? (
-                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                            <div className="absolute inset-0 flex items-center justify-center text-sm text-[#5f5a58] font-semibold">Ładowanie danych z bazy...</div>
                         ) : (
-                            <table className="w-full text-left border-collapse">
-                                <thead className="sticky top-0 bg-bakery-inactive z-10">
-                                    <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
-                                        <th className="py-2 px-3 w-12 text-center h-8">Wybór</th>
-                                        <th className="py-2 px-3 h-8">Nazwa Firmy</th>
-                                        <th className="py-2 px-3 h-8">Identyfikatory</th>
-                                        <th className="py-2 px-3 h-8">Dane Kontaktowe</th>
-                                        <th className="py-2 px-3 h-8">Lokalizacja</th>
-                                        <th className="py-2 px-3 h-8 text-center">Status relacji</th>
-                                        <th className="py-2 px-3 h-8">Produkty dostawcy</th>
+                            <table className="w-full min-w-[900px] text-left border-collapse">
+                                <thead className="sticky top-0 bg-[#efebe9] z-10">
+                                    <tr className="border-b border-[#e2dcda] text-[11px] font-extrabold text-[#5f5a58] uppercase tracking-[0.06em]">
+                                        <th className="py-3 px-4 w-12 text-center">Wybór</th>
+                                        <th className="py-3 px-4">Nazwa Firmy</th>
+                                        <th className="py-3 px-4">Identyfikatory</th>
+                                        <th className="py-3 px-4">Dane Kontaktowe</th>
+                                        <th className="py-3 px-4">Lokalizacja</th>
+                                        <th className="py-3 px-4 text-center">Status relacji</th>
+                                        <th className="py-3 px-4">Produkty dostawcy</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-bakery-btnBorder text-sm">
+                                <tbody className="divide-y divide-[#e6e1df] text-sm">
                                     {filteredSuppliers.map((supplier) => (
-                                        <tr key={supplier.supplier_id} className={`bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder ${selectedSupplierId === supplier.supplier_id ? 'bg-[#c9c3c3]' : ''}`}>
-                                            <td className="py-2 px-3 text-center">
+                                        <tr key={supplier.supplier_id} className={`bg-bakery-card hover:bg-[#f3efed] transition ${selectedSupplierId === supplier.supplier_id ? '!bg-[#ebe4e1]' : ''}`}>
+                                            <td className="py-3 px-4 text-center">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedSupplierId === supplier.supplier_id}
@@ -232,8 +230,8 @@ export default function SuppliersPanel() {
                                                     className="rounded border-bakery-border text-bakery-dark focus:ring-bakery-accent w-4 h-4 accent-bakery-dark cursor-pointer"
                                                 />
                                             </td>
-                                            <td className="py-2 px-3 font-bold text-bakery-dark">{supplier.name}</td>
-                                            <td className="py-2 px-3 text-xs font-semibold text-gray-600">
+                                            <td className="py-3 px-4 font-extrabold text-bakery-dark">{supplier.name}</td>
+                                            <td className="py-3 px-4 text-[13px] font-semibold text-[#4a4543]">
                                                 {supplier.nip ? (
                                                     <div className="flex items-center gap-1">
                                                         <FileText className="w-3.5 h-3.5 text-gray-400" /> NIP: <span className="font-mono font-bold">{supplier.nip}</span>
@@ -242,12 +240,12 @@ export default function SuppliersPanel() {
                                                     <span className="text-gray-400 italic">Brak NIP</span>
                                                 )}
                                             </td>
-                                            <td className="py-2 px-3 space-y-0.5">
-                                                <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Phone className="w-3.5 h-3.5" /> {supplier.phone}</div>
-                                                <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-xs"><Mail className="w-3.5 h-3.5" /> {supplier.email}</div>
+                                            <td className="py-3 px-4 space-y-1">
+                                                <div className="flex items-center gap-1.5 text-[#4a4543] font-semibold text-[13px]"><Phone className="w-3.5 h-3.5" /> {supplier.phone}</div>
+                                                <div className="flex items-center gap-1.5 text-[#4a4543] font-semibold text-[13px]"><Mail className="w-3.5 h-3.5" /> {supplier.email}</div>
                                             </td>
-                                            <td className="py-2 px-3 text-xs font-semibold text-gray-600"><MapPin className="w-3.5 h-3.5 inline mr-1 text-gray-400" /> {supplier.address}</td>
-                                            <td className="py-2 px-3 text-center">
+                                            <td className="py-3 px-4 text-[13px] font-semibold text-[#4a4543]"><MapPin className="w-3.5 h-3.5 inline mr-1 text-[#8a8482]" /> {supplier.address}</td>
+                                            <td className="py-3 px-4 text-center">
                                                 <div className="flex items-center justify-center gap-1">
                                                     {supplier.is_active ? (
                                                         <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
@@ -260,10 +258,10 @@ export default function SuppliersPanel() {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="py-2 px-3 text-xs">
+                                            <td className="py-3 px-4 text-[13px]">
                                                 <div className="flex flex-wrap gap-1">
                                                     {supplier.products && supplier.products.slice(0, 3).map(p => (
-                                                        <span key={p.product_id} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[10px]">{p.name}</span>
+                                                        <span key={p.product_id} className="bg-[#efebe9] border border-[#e2dcda] px-2 py-0.5 rounded-full text-[#4a4543] font-bold text-[11px]">{p.name}</span>
                                                     ))}
                                                     {supplier.products && supplier.products.length > 3 && (
                                                         <span className="text-[10px] text-gray-500 font-semibold italic">+{supplier.products.length - 3} więcej</span>
@@ -279,43 +277,43 @@ export default function SuppliersPanel() {
                             </table>
                         )}
                         {!isLoading && filteredSuppliers.length === 0 && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-gray-400 p-8">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[#8a8482] p-8">
                                 <SearchCheck className="w-12 h-12 mb-4" />
                                 <p className="text-sm font-semibold m-0">Brak kontrahentów spełniających kryteria.</p>
-                                <p className="text-xs m-0">Zmień frazę wyszukiwania lub dodaj nowego dostawcę.</p>
+                                <p className="text-[13px] m-0">Zmień frazę wyszukiwania lub dodaj nowego dostawcę.</p>
                             </div>
                         )}
                     </DashboardListScrollbar>
                 </div>
 
-                <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-2 bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
+                <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-3 bg-bakery-card p-3.5 rounded-[14px] border border-bakery-btnBorder shadow-sm">
                     <div className="flex flex-wrap justify-center min-[1016px]:justify-start items-center gap-2">
                         <button
                             onClick={handleOpenAdd}
-                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs transition active:scale-[0.98]"
+                            className="inline-flex items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
                         >
                             <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj Kontrahenta
                         </button>
                         <button
                             onClick={handleOpenEdit}
                             disabled={!selectedSupplierId}
-                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded shadow-2xs hover:bg-[#dcd8d8] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                            className="inline-flex items-center gap-2 min-h-11 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl shadow-sm hover:bg-[#f3efed] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
                         >
                             <Edit className="w-4 h-4" /> Edytuj dane / status
                         </button>
                     </div>
                     {!selectedSupplierId && (
-                        <span className="text-[10px] text-gray-500 font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2 italic">Zaznacz firmę w tabeli powyżej, aby dokonać zmian w kartotece lub zmienić status aktywności. Usuwanie zostało zablokowane.</span>
+                        <span className="text-[13px] text-[#5f5a58] font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2">Zaznacz firmę w tabeli powyżej, aby dokonać zmian w kartotece lub zmienić status aktywności. Usuwanie zostało zablokowane.</span>
                     )}
                 </div>
             </div>
 
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
-                    <form onSubmit={handleSaveSupplier} className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-4xl overflow-hidden flex flex-col h-[560px]">
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <form onSubmit={handleSaveSupplier} className="bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col h-[560px] max-h-[calc(100dvh-2rem)] font-auth">
 
-                        <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
-                            <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                        <div className="bg-bakery-dark text-white px-5 py-4 flex justify-between items-center shrink-0">
+                            <h2 className="m-0 text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
                                 <MapPin className="w-4 h-4 text-bakery-accent" />
                                 {modalMode === 'add' ? 'Nowa Kartoteka Kontrahenta' : `Edycja firmy: ${suppliers.find(s => s.supplier_id === selectedSupplierId)?.name}`}
                             </h2>
@@ -325,30 +323,30 @@ export default function SuppliersPanel() {
                         </div>
 
                         <div className="p-5 flex-1 overflow-y-auto flex flex-col min-h-0">
-                            <div className="grid grid-cols-2 gap-x-5 gap-y-4 border-b border-bakery-btnBorder pb-4 mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4 border-b border-[#e6e1df] pb-4 mb-4">
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Pełna nazwa firmy Dostawcy *</label>
-                                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" required />
+                                    <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Pełna nazwa firmy Dostawcy *</label>
+                                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Numer NIP (Opcjonalnie)</label>
-                                    <input type="text" value={nip} onChange={(e) => setNip(e.target.value)} placeholder="np. 1234567890" className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent font-mono" />
+                                    <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Numer NIP (Opcjonalnie)</label>
+                                    <input type="text" value={nip} onChange={(e) => setNip(e.target.value)} placeholder="np. 1234567890" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent font-mono" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Adres siedziby</label>
-                                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" />
+                                    <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Adres siedziby</label>
+                                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Telefon kontaktowy</label>
-                                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-bold rounded text-xs p-2 outline-none focus:border-bakery-accent font-mono" />
+                                    <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Telefon kontaktowy</label>
+                                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-bold rounded-xl text-sm outline-none focus:border-bakery-accent font-mono" />
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Adres e-mail</label>
-                                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" />
+                                <div className="sm:col-span-2">
+                                    <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Adres e-mail</label>
+                                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" />
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 pb-4 border-b border-bakery-btnBorder mb-4">
+                            <div className="flex items-center gap-2 pb-4 border-b border-[#e6e1df] mb-4">
                                 <input
                                     type="checkbox"
                                     id="supplierActiveCheckbox"
@@ -361,9 +359,9 @@ export default function SuppliersPanel() {
                                 </label>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-5 min-h-0">
-                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col h-56 overflow-hidden">
-                                    <div className="p-2 border-b border-bakery-btnBorder flex flex-col gap-1.5 shrink-0 bg-bakery-inactive">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 min-h-0">
+                                <div className="border border-bakery-btnBorder rounded-xl bg-white flex flex-col h-56 overflow-hidden">
+                                    <div className="p-3 border-b border-[#e6e1df] flex flex-col gap-1.5 shrink-0 bg-[#efebe9]">
                                         <div className="flex justify-between items-center">
                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                                 Ogólna Baza Surowców
@@ -405,7 +403,7 @@ export default function SuppliersPanel() {
                                             .map(p => (
                                                 <div 
                                                     key={p.product_id} 
-                                                    className="p-1.5 px-2 bg-bakery-inactive hover:bg-[#c9c3c3] rounded text-xs font-semibold text-bakery-dark flex justify-between items-center transition"
+                                                    className="p-2 px-2.5 bg-[#f3efed] hover:bg-[#ebe4e1] rounded-lg text-[13px] font-semibold text-bakery-dark flex justify-between items-center transition"
                                                 >
                                                     <span className="truncate pr-2">{p.name}</span>
                                                     <button 
@@ -429,15 +427,15 @@ export default function SuppliersPanel() {
                                     </div>
                                 </div>
 
-                                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex flex-col h-56 overflow-hidden">
-                                    <div className="p-2.5 px-3 border-b border-bakery-btnBorder flex items-center justify-between shrink-0 bg-bakery-inactive">
+                                <div className="border border-bakery-btnBorder rounded-xl bg-white flex flex-col h-56 overflow-hidden">
+                                    <div className="p-3 border-b border-[#e6e1df] flex items-center justify-between shrink-0 bg-[#efebe9]">
                                         <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"><Package className="w-3.5 h-3.5 text-bakery-dark" /> Przypisane Surowce</span>
                                         <span className="text-[10px] font-bold font-mono text-gray-500 bg-bakery-rowBg px-1.5 py-0.5 rounded border border-bakery-btnBorder">{supplierProducts.length}</span>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                                         {supplierProducts.length > 0 ? (
                                             supplierProducts.map(p => (
-                                                <div key={p.product_id} className="p-1.5 px-2 bg-bakery-inactive rounded text-xs font-semibold text-bakery-dark flex justify-between items-center">
+                                                <div key={p.product_id} className="p-2 px-2.5 bg-[#f3efed] rounded-lg text-[13px] font-semibold text-bakery-dark flex justify-between items-center">
                                                     <span className="truncate pr-2">{p.name}</span>
                                                     <button type="button" onClick={() => handleRemoveProductFromSupplier(p.product_id)} className="text-red-700 p-0.5 hover:bg-red-100 transition rounded shrink-0" title="Usuń powiązanie">
                                                         <X className="w-4 h-4" />
@@ -452,11 +450,11 @@ export default function SuppliersPanel() {
                             </div>
                         </div>
 
-                        <div className="bg-bakery-rowBg p-3 border-t border-bakery-btnBorder flex justify-end gap-2 shrink-0">
-                            <button type="submit" className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded shadow-xs transition">
+                        <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex justify-end gap-2 shrink-0">
+                            <button type="submit" className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition">
                                 Zapisz Kartotekę
                             </button>
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-xs font-bold bg-bakery-inactive border border-bakery-btnBorder text-bakery-dark rounded transition">
+                            <button type="button" onClick={() => setIsModalOpen(false)} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed]">
                                 Anuluj
                             </button>
                         </div>
@@ -466,11 +464,11 @@ export default function SuppliersPanel() {
             )}
 
             {isNewProductModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[60]">
-                    <div className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+                    <div className="bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col font-auth">
 
-                        <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
-                            <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                        <div className="bg-bakery-dark text-white px-5 py-4 flex justify-between items-center shrink-0">
+                            <h2 className="m-0 text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
                                 <Plus className="w-4 h-4 text-bakery-accent" /> Definicja Nowego Surowca
                             </h2>
                             <button type="button" onClick={() => setIsNewProductModalOpen(false)} className="text-gray-400 hover:text-white transition">
@@ -480,17 +478,17 @@ export default function SuppliersPanel() {
 
                         <div className="p-5 space-y-3.5">
                             <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nazwa handlowa surowca *</label>
-                                <input type="text" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="np. Zakwas żytni w proszku" className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent" required />
+                                <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Nazwa handlowa surowca *</label>
+                                <input type="text" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="np. Zakwas żytni w proszku" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
                                 <span className="text-[10px] text-gray-400 font-medium block mt-1">Definicja zostanie zapisana na stałe w bazie surowców.</span>
                             </div>
                         </div>
 
-                        <div className="bg-bakery-rowBg p-3 border-t border-bakery-btnBorder flex justify-end gap-2 shrink-0">
-                            <button type="button" onClick={handleCreateNewGlobalProduct} className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded shadow-xs transition active:scale-[0.98]">
+                        <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex flex-wrap justify-end gap-2 shrink-0">
+                            <button type="button" onClick={handleCreateNewGlobalProduct} className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]">
                                 Dodaj surowiec do bazy ogólnej
                             </button>
-                            <button type="button" onClick={() => setIsNewProductModalOpen(false)} className="px-4 py-2 text-xs font-bold bg-bakery-inactive border border-bakery-btnBorder text-bakery-dark rounded transition">
+                            <button type="button" onClick={() => setIsNewProductModalOpen(false)} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed]">
                                 Anuluj
                             </button>
                         </div>
