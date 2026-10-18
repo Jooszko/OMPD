@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
-import { fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
+import { createIngredient, fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
 
 interface SupplierProduct {
     product_id: number;
@@ -19,12 +19,15 @@ interface Supplier {
     products: SupplierProduct[];
 }
 
+type SupplierStatusFilter = 'all' | 'active' | 'inactive';
+
 export default function SuppliersPanel() {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [globalProducts, setGlobalProducts] = useState<SupplierProduct[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<SupplierStatusFilter>('all');
     const [ingredientSearch, setIngredientSearch] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +43,8 @@ export default function SuppliersPanel() {
 
     const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
     const [newProductName, setNewProductName] = useState('');
+    const [newProductUnit, setNewProductUnit] = useState('');
+    const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -133,7 +138,9 @@ export default function SuppliersPanel() {
             
             setIsModalOpen(false);
             setSelectedSupplierId(null);
-            alert('Kontrahent został pomyślnie zapisany w bazie danych.');
+            if (modalMode === 'add') {
+                alert('Kontrahent został pomyślnie zapisany w bazie danych.');
+            }
         } catch (error: unknown) {
             console.error("Błąd podczas zapisu w komponencie:", error);
             const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
@@ -153,33 +160,55 @@ export default function SuppliersPanel() {
         setSupplierProducts(supplierProducts.filter(p => p.product_id !== productIdToRemove));
     };
 
-    const handleCreateNewGlobalProduct = () => {
-        if (!newProductName.trim()) {
-            alert('Nazwa produktu nie może być pusta.');
+    const handleCreateNewGlobalProduct = async () => {
+        const trimmedName = newProductName.trim();
+        const trimmedUnit = newProductUnit.trim();
+        if (!trimmedName) {
+            alert('Nazwa składnika nie może być pusta.');
             return;
         }
-        if (globalProducts.some(p => p.name.toLowerCase() === newProductName.trim().toLowerCase())) {
-            alert('Produkt o tej nazwie już istnieje w ogólnej bazie.');
+        if (!trimmedUnit) {
+            alert('Jednostka miary jest wymagana.');
             return;
         }
-        const newProduct: SupplierProduct = {
-            product_id: Date.now(),
-            name: newProductName.trim(),
-        };
-        setGlobalProducts([...globalProducts, newProduct]);
-        setIsNewProductModalOpen(false);
-        setNewProductName('');
+        if (globalProducts.some(p => p.name.toLowerCase() === `${trimmedName} (${trimmedUnit})`.toLowerCase())) {
+            alert('Składnik o tej nazwie i jednostce już istnieje w ogólnej bazie.');
+            return;
+        }
+
+        setIsCreatingProduct(true);
+        try {
+            const ingredient = await createIngredient({ name: trimmedName, unit: trimmedUnit });
+            setGlobalProducts(current => [
+                ...current,
+                { product_id: ingredient.ingredient_id, name: `${ingredient.name} (${ingredient.unit})` },
+            ]);
+            setIsNewProductModalOpen(false);
+            setNewProductName('');
+            setNewProductUnit('');
+        } catch (error: unknown) {
+            console.error('Błąd podczas dodawania składnika do bazy:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
+            alert(`Nie udało się dodać składnika do bazy. ${errorMessage}`);
+        } finally {
+            setIsCreatingProduct(false);
+        }
     };
 
     const query = searchTerm.toLowerCase().trim();
 
-    const filteredSuppliers = suppliers.filter(s => {
+    const activeCount = suppliers.filter(s => s.is_active).length;
+    const inactiveCount = suppliers.length - activeCount;
+    const searchedSuppliers = suppliers.filter(s => {
         const matchesName = s.name?.toLowerCase().includes(query) ?? false;
         const matchesNip = s.nip ? s.nip.toLowerCase().includes(query) : false;
         const matchesProducts = s.products?.some(p => p.name?.toLowerCase().includes(query)) ?? false;
 
         return matchesName || matchesNip || matchesProducts;
     });
+    const filteredSuppliers = searchedSuppliers.filter(s =>
+        statusFilter === 'all' || s.is_active === (statusFilter === 'active')
+    );
 
     return (
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark">
@@ -199,6 +228,61 @@ export default function SuppliersPanel() {
                         className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
                     />
                 </label>
+            </div>
+
+            <div role="group" aria-label="Filtr statusu kontrahentów">
+                <div className="sm:hidden -mx-4 px-4 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {([
+                        { key: 'active', label: 'Aktywni', count: activeCount },
+                        { key: 'inactive', label: 'Nieaktywni', count: inactiveCount },
+                    ] as const).map((tile) => (
+                        <button
+                            key={tile.key}
+                            type="button"
+                            aria-pressed={statusFilter === tile.key}
+                            onClick={() => setStatusFilter(statusFilter === tile.key ? 'all' : tile.key)}
+                            className={`shrink-0 min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap ${
+                                statusFilter === tile.key
+                                    ? 'bg-bakery-dark border-bakery-dark text-white'
+                                    : 'bg-bakery-card border-bakery-btnBorder text-bakery-dark'
+                            }`}
+                        >
+                            {tile.label} {tile.count}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="hidden sm:flex flex-wrap gap-3">
+                    {([
+                        { key: 'active', label: 'Aktywni', hint: 'aktywni kontrahenci', count: activeCount, color: 'text-[#1f5f33]' },
+                        { key: 'inactive', label: 'Nieaktywni', hint: 'nieaktywni kontrahenci', count: inactiveCount, color: 'text-[#4a4543]' },
+                    ] as const).map((tile) => {
+                        const selected = statusFilter === tile.key;
+                        return (
+                            <button
+                                key={tile.key}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => setStatusFilter(selected ? 'all' : tile.key)}
+                                className={`w-fit text-left px-4 py-3.5 rounded-[14px] border shadow-sm flex flex-col gap-1.5 transition ${
+                                    selected
+                                        ? 'bg-bakery-dark border-bakery-dark text-white'
+                                        : 'bg-bakery-card border-bakery-btnBorder text-bakery-dark hover:border-[#8f8a88]'
+                                }`}
+                            >
+                                <span className={`text-[11px] font-extrabold uppercase tracking-[0.08em] ${selected ? 'text-[#d9d2cf]' : 'text-[#5f5a58]'}`}>
+                                    {tile.label}
+                                </span>
+                                <span className={`font-display text-[28px] leading-none font-extrabold tabular-nums ${selected ? '' : tile.color}`}>
+                                    {tile.count}
+                                </span>
+                                <span className={`text-xs font-bold ${selected ? 'text-[#d9d2cf]' : 'text-[#5f5a58]'}`}>
+                                    {tile.hint}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             <div className="flex flex-col gap-4 w-full">
@@ -303,7 +387,7 @@ export default function SuppliersPanel() {
                         </button>
                     </div>
                     {!selectedSupplierId && (
-                        <span className="text-[13px] text-[#5f5a58] font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2">Zaznacz firmę w tabeli powyżej, aby dokonać zmian w kartotece lub zmienić status aktywności. Usuwanie zostało zablokowane.</span>
+                        <span className="text-[13px] text-[#5f5a58] font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2">Zaznacz firmę w tabeli powyżej, aby dokonać zmian w kartotece lub zmienić status aktywności.</span>
                     )}
                 </div>
             </div>
@@ -368,7 +452,11 @@ export default function SuppliersPanel() {
                                             </span>
                                             <button 
                                                 type="button" 
-                                                onClick={() => setIsNewProductModalOpen(true)} 
+                                                onClick={() => {
+                                                    setNewProductName('');
+                                                    setNewProductUnit('');
+                                                    setIsNewProductModalOpen(true);
+                                                }} 
                                                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
                                             >
                                                 <Plus className="w-3 h-3 text-bakery-accent" /> Zdefiniuj
@@ -477,18 +565,22 @@ export default function SuppliersPanel() {
                         </div>
 
                         <div className="p-5 space-y-3.5">
-                            <div>
-                                <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Nazwa handlowa surowca *</label>
-                                <input type="text" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="np. Zakwas żytni w proszku" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
-                                <span className="text-[10px] text-gray-400 font-medium block mt-1">Definicja zostanie zapisana na stałe w bazie surowców.</span>
-                            </div>
+                            <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
+                                Nazwa składnika *
+                                <input type="text" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="np. Zakwas żytni w proszku" maxLength={100} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
+                            </label>
+                            <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
+                                Jednostka miary *
+                                <input type="text" value={newProductUnit} onChange={(e) => setNewProductUnit(e.target.value)} placeholder="np. kg, l, szt" maxLength={10} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
+                            </label>
+                            <span className="text-[10px] text-gray-400 font-medium block">Składnik zostanie zapisany na stałe w bazie surowców.</span>
                         </div>
 
                         <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex flex-wrap justify-end gap-2 shrink-0">
-                            <button type="button" onClick={handleCreateNewGlobalProduct} className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]">
-                                Dodaj surowiec do bazy ogólnej
+                            <button type="button" onClick={handleCreateNewGlobalProduct} disabled={isCreatingProduct} className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98] disabled:opacity-50">
+                                {isCreatingProduct ? 'Zapisywanie...' : 'Dodaj składnik do bazy ogólnej'}
                             </button>
-                            <button type="button" onClick={() => setIsNewProductModalOpen(false)} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed]">
+                            <button type="button" onClick={() => setIsNewProductModalOpen(false)} disabled={isCreatingProduct} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed] disabled:opacity-50">
                                 Anuluj
                             </button>
                         </div>

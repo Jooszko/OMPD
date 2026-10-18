@@ -445,6 +445,15 @@ export async function fetchIngredients(): Promise<AppIngredient[]> {
   return handleJsonResponse(response);
 }
 
+export async function createIngredient(payload: Pick<AppIngredient, 'name' | 'unit'>): Promise<AppIngredient> {
+  const response = await apiFetch(`${API_BASE}/products/ingredients/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
 export async function fetchProducts(): Promise<AppProduct[]> {
   const response = await apiFetch(`${API_BASE}/products/`, { headers: authHeaders() });
   return handleJsonResponse(response);

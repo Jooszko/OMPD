@@ -16,6 +16,7 @@ ACTIONS = {
         'client.geocoded': 'Ustalenie lokalizacji klienta',
     },
     'products': {
+        'ingredient.created': 'Dodanie składnika',
         'product.updated': 'Zmiana produktu',
         'product.price_changed': 'Zmiana ceny',
         'recipe.created': 'Dodanie receptury',
