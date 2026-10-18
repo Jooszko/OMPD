@@ -21,40 +21,55 @@ interface LoadedHistory {
   error: string | null;
 }
 
-export function AccountHistory({ userId, fullName, version }: { userId: number; fullName: string; version: number }) {
+export function AccountHistory({
+  objectType = 'user',
+  objectId,
+  label,
+  title = 'Historia konta',
+  version,
+}: {
+  objectType?: string;
+  objectId: number;
+  label: string;
+  title?: string;
+  version: number;
+}) {
   const [loaded, setLoaded] = useState<LoadedHistory | null>(null);
-  const key = `${userId}|${version}`;
+  const key = `${objectType}|${objectId}|${version}`;
 
   useEffect(() => {
     let cancelled = false;
-    fetchAuditEntries({ object_type: 'user', object_id: String(userId), page_size: String(HISTORY_SIZE) })
+    fetchAuditEntries({ object_type: objectType, object_id: String(objectId), page_size: String(HISTORY_SIZE) })
       .then((page) => {
         if (!cancelled) setLoaded({ key, entries: page.results, total: page.count, error: null });
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoaded({ key, entries: [], total: 0, error: apiErrorMessage(err, 'Nie udało się pobrać historii.') });
+        if (!cancelled)
+          setLoaded({ key, entries: [], total: 0, error: apiErrorMessage(err, 'Nie udało się pobrać historii.') });
       });
     return () => {
       cancelled = true;
     };
-  }, [userId, key]);
+  }, [objectType, objectId, key]);
 
   const current = loaded?.key === key ? loaded : null;
 
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">Historia konta</h3>
+        <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">{title}</h3>
         <Link
           to="/audit-log"
-          state={{ objectFilter: { type: 'user', id: String(userId), label: fullName } }}
+          state={{ objectFilter: { type: objectType, id: String(objectId), label } }}
           className="text-[13px] font-extrabold text-bakery-dark"
         >
           Cały dziennik →
         </Link>
       </div>
 
-      {!current && <div aria-label="Wczytywanie historii" className="h-24 rounded-xl bg-bakery-inactive animate-pulse" />}
+      {!current && (
+        <div aria-label="Wczytywanie historii" className="h-24 rounded-xl bg-bakery-inactive animate-pulse" />
+      )}
       {current?.error && <p className="m-0 text-sm font-semibold text-rose-700">{current.error}</p>}
       {current && !current.error && current.entries.length === 0 && (
         <p className="m-0 text-sm font-semibold italic text-[#5f5a58]">Brak wpisów w dzienniku dla tego konta.</p>
@@ -64,13 +79,18 @@ export function AccountHistory({ userId, fullName, version }: { userId: number; 
         <ol className="m-0 p-0 list-none flex flex-col gap-4">
           {current.entries.map((entry) => (
             <li key={entry.entry_id} className="grid grid-cols-[20px_1fr] gap-3">
-              <span aria-hidden className={`mt-1 w-3 h-3 rounded-full ring-4 ${DOT_TONES[historyTone(entry.action)]}`} />
+              <span
+                aria-hidden
+                className={`mt-1 w-3 h-3 rounded-full ring-4 ${DOT_TONES[historyTone(entry.action)]}`}
+              />
               <span className="min-w-0 flex flex-col gap-1">
                 <span className="text-sm font-extrabold">{entry.action_label}</span>
                 {entry.changes.map((change) => (
                   <span key={change.field} className="flex flex-wrap items-center gap-1.5 text-[13px] font-bold">
                     <span className="text-[#5f5a58]">{change.label}:</span>
-                    <span className="px-2 rounded-md bg-[#f3efed] text-[#5f5a58] line-through">{formatAuditValue(change.old)}</span>
+                    <span className="px-2 rounded-md bg-[#f3efed] text-[#5f5a58] line-through">
+                      {formatAuditValue(change.old)}
+                    </span>
                     <span aria-hidden>→</span>
                     <span className="sr-only">zmieniono na</span>
                     <span className="px-2 rounded-md bg-[#dfe8f6] text-[#1d4f91]">{formatAuditValue(change.new)}</span>
@@ -78,7 +98,7 @@ export function AccountHistory({ userId, fullName, version }: { userId: number; 
                 ))}
                 <span className="text-xs font-semibold text-[#5f5a58]">
                   {formatDateTime(entry.created_at)}
-                  {entry.actor !== userId && entry.actor_name && ` · ${entry.actor_name}`}
+                  {!(objectType === 'user' && entry.actor === objectId) && entry.actor_name && ` · ${entry.actor_name}`}
                 </span>
               </span>
             </li>

@@ -150,7 +150,7 @@ describe('formatLastLogin', () => {
   const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
 
   it.each([
-    [null, 'jeszcze nie'],
+    [null, 'brak'],
     [at(15, 5, 21), 'dziś, 05:21'],
     [at(14, 23, 59), 'wczoraj, 23:59'],
     [at(12, 8), '3 dni temu'],
@@ -172,6 +172,7 @@ describe('historyTone', () => {
     ['login.failed', 'danger'],
     ['login.inactive_account', 'danger'],
     ['user.updated', 'change'],
+    ['client.updated', 'change'],
     ['user.password_reset', 'password'],
     ['password.initial_set', 'password'],
     ['user.created', 'neutral'],

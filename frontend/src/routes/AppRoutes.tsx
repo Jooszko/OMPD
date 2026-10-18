@@ -6,7 +6,7 @@ import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
 import ZamowieniaPanel from '../features/dashboard/pages/Orders';
 import Produkty from '../features/dashboard/pages/Products';
 import UsersPage from '../features/users/pages/UsersPage';
-import Clients from '../features/dashboard/pages/Clients';
+import ClientsPage from '../features/clients/pages/ClientsPage';
 import Contractors from '../features/dashboard/pages/Contractors';
 import Warehouse from '../features/dashboard/pages/Warehouse';
 import Logistics from '../features/dashboard/pages/Logistics';
@@ -76,7 +76,7 @@ export const AppRoutes: React.FC = () => {
         </Route>
         <Route path="users" element={<UsersPage />} />
         <Route path="audit-log" element={<AuditLog />} />
-        <Route path="clients" element={<Clients />} />
+        <Route path="clients" element={<ClientsPage />} />
         <Route path="contractors" element={<Contractors />} />
         <Route path="notifications" element={<Notifications />} />
       </Route>
