@@ -13,6 +13,7 @@ ACTIONS = {
     'clients': {
         'client.created': 'Dodanie klienta',
         'client.updated': 'Zmiana danych klienta',
+        'client.geocoded': 'Ustalenie lokalizacji klienta',
     },
     'products': {
         'product.updated': 'Zmiana produktu',

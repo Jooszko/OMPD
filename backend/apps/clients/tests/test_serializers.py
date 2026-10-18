@@ -59,6 +59,25 @@ class ClientSerializerCoordinatesTests(TestCase):
 
         self.assertEqual(instance.latitude, Decimal('49.798000'))
         self.assertEqual(instance.longitude, Decimal('18.783000'))
+        
+    def test_sent_coordinates_record_when_they_were_set(self):
+        serializer = ClientSerializer(
+            self.client_obj,
+            data={'address': 'Inny adres 5', 'latitude': '50.1', 'longitude': '19.2'},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        self.assertIsNotNone(serializer.save().geocoded_at)
+
+    def test_new_client_with_coordinates_gets_geocoded_at(self):
+        serializer = ClientSerializer(
+            data={'name': 'Nowy', 'address': 'Rynek 2', 'route': self.route.pk, 'latitude': '50.1', 'longitude': '19.2'}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        self.assertIsNotNone(serializer.save().geocoded_at)
+
 
     def test_geocoded_at_is_read_only(self):
         serializer = ClientSerializer(

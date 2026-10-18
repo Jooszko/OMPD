@@ -146,7 +146,7 @@ export type HistoryTone = 'success' | 'danger' | 'change' | 'password' | 'neutra
 export function historyTone(action: string): HistoryTone {
   if (action === 'login.succeeded') return 'success';
   if (action.startsWith('login.')) return 'danger';
-  if (action === 'user.updated') return 'change';
+  if (action.endsWith('.updated')) return 'change';
   if (action === 'user.password_reset' || action === 'password.initial_set') return 'password';
   return 'neutral';
 }

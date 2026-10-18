@@ -308,6 +308,7 @@ export interface RouteOption {
   route_id: number;
   route_name: string;
   is_active: boolean;
+  driver_name: string | null;
 }
 
 export interface AppClient {
@@ -322,6 +323,84 @@ export interface AppClient {
   latitude: string | null;
   longitude: string | null;
   geocoded_at: string | null;
+  standing_days: number[];
+}
+
+export interface ClientPayload {
+  name?: string;
+  address?: string;
+  nip?: string | null;
+  phone?: string;
+  route?: number;
+  is_active?: boolean;
+  latitude?: string | null;
+  longitude?: string | null;
+}
+
+export type DeliveryStatus = 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
+
+export interface ClientCard extends AppClient {
+  standing_orders: { so_id: number; day_of_week: number; product_name: string; quantity: number; price: string }[];
+  last_30_days: { sales: string; delivered_days: number; planned_days: number; returns: string };
+  recent_deliveries: { date: string; value: string; status: DeliveryStatus; status_label: string }[];
+}
+
+export interface GeocodePreview {
+  latitude: string;
+  longitude: string;
+  label: string;
+}
+
+export type GeocodeErrorCode = 'empty' | 'not_found' | 'unavailable';
+
+export class GeocodeError extends Error {
+  code: GeocodeErrorCode;
+
+  constructor(message: string, code: GeocodeErrorCode) {
+    super(message);
+    this.name = 'GeocodeError';
+    this.code = code;
+  }
+}
+
+async function geocodeRequest<T>(url: string, body?: unknown): Promise<T> {
+  const response = await apiFetch(url, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body ?? {}) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new GeocodeError(data.error ?? 'Nie udało się sprawdzić adresu.', data.code ?? 'unavailable');
+  }
+  return data;
+}
+
+export async function fetchClientCard(clientId: number): Promise<ClientCard> {
+  const response = await apiFetch(`${API_BASE}/clients/${clientId}/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
+}
+
+export async function createClient(payload: ClientPayload): Promise<AppClient> {
+  const response = await apiFetch(`${API_BASE}/clients/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function updateClient(clientId: number, payload: ClientPayload): Promise<AppClient> {
+  const response = await apiFetch(`${API_BASE}/clients/${clientId}/`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export function previewAddress(address: string): Promise<GeocodePreview> {
+  return geocodeRequest(`${API_BASE}/clients/geocode/`, { address });
+}
+
+export function geocodeClient(clientId: number): Promise<AppClient> {
+  return geocodeRequest(`${API_BASE}/clients/${clientId}/geocode/`);
 }
 
 export async function fetchRoutes(): Promise<RouteOption[]> {
@@ -331,17 +410,6 @@ export async function fetchRoutes(): Promise<RouteOption[]> {
 
 export async function fetchClients(): Promise<AppClient[]> {
   const response = await apiFetch(`${API_BASE}/clients/`, { headers: authHeaders() });
-  return handleJsonResponse(response);
-}
-
-export async function saveClient(payload: any, clientId: number | null = null): Promise<AppClient> {
-  const url = clientId ? `${API_BASE}/clients/${clientId}/` : `${API_BASE}/clients/`;
-  const method = clientId ? 'PUT' : 'POST';
-  const response = await apiFetch(url, {
-    method,
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
   return handleJsonResponse(response);
 }
 

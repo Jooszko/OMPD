@@ -49,7 +49,9 @@ export function StaffPanel({
       >
         <div className="px-5 sm:px-6 pt-4 pb-5 bg-bakery-dark text-white flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#cfc8c4]">Karta pracownika</span>
+            <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#cfc8c4]">
+              Karta pracownika
+            </span>
             <button
               type="button"
               onClick={onClose}
@@ -161,8 +163,8 @@ export function StaffPanel({
             </section>
           )}
 
-          <AccountHistory userId={user.user_id} fullName={user.full_name} version={historyVersion} />
-          
+          <AccountHistory objectId={user.user_id} label={user.full_name} version={historyVersion} />
+
           {!isMe && (
             <section className="mt-auto p-4 rounded-xl border border-dashed border-[#d9a3a3] flex flex-col gap-2.5">
               <h3 className="m-0 text-sm font-extrabold text-[#8f1616]">Usunięcie konta</h3>
