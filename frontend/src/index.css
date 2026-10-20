@@ -27,34 +27,6 @@ html, body {
   height: 100%;
 }
 
-.sidebar-menu-scrollbar {
-  scrollbar-width: none;
-}
-
-.sidebar-menu-scrollbar::-webkit-scrollbar {
-  display: none;
-  width: 0;
-}
-
-.sidebar-menu-thumb {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 150ms ease;
-}
-
-.sidebar-menu-scroll-container:hover .sidebar-menu-thumb,
-.sidebar-menu-scroll-container:focus-within .sidebar-menu-thumb {
-  opacity: 1;
-  visibility: visible;
-}
-
-@media (hover: none) {
-  .sidebar-menu-thumb {
-    opacity: 1;
-    visibility: visible;
-  }
-}
-
 .dashboard-list-scrollbar {
   scrollbar-width: none;
 }

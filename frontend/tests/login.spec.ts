@@ -12,7 +12,7 @@ test.describe('Moduł Logowania', () => {
     await page.click('button[type="submit"]');
 
     await expect(page.locator('h1')).toContainText(/Dzień dobry|Dobry wieczór/);
-    await expect(page.locator('a').first()).toContainText('Strona Główna');
+    await expect(page.locator('a').first()).toContainText('Strona główna');
 
     await page.click('button[id="logout-button"]');
     await expect(page.locator('h1')).toContainText('Zaloguj się');

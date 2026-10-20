@@ -13,7 +13,7 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('textbox', { name: 'Hasło' }).press('CapsLock');
     await page.getByRole('textbox', { name: 'Hasło' }).fill('Zaq12wsx');
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
-    await page.getByRole('link', { name: 'Strona Główna' }).click();
+    await page.getByRole('link', { name: 'Strona główna' }).click();
     await page.getByRole('heading', { name: /Dzień dobry|Dobry wieczór/ }).click();
     await page.getByRole('heading', { name: 'Droga zamówień' }).click();
     await page.getByRole('heading', { name: 'Trasy dziś' }).click();

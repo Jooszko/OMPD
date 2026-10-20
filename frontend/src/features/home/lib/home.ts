@@ -130,6 +130,10 @@ export function shiftSummary(shift: HomeShift): Segment[] {
   ];
 }
 
+export function ringFontSize(value: string): number {
+  return Math.min(40, Math.floor(150 / Math.max(value.length, 1)));
+}
+
 export function donutArcs<K extends string>(
   counts: Record<K, number>,
   order: K[],

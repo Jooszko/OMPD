@@ -10,6 +10,7 @@ import {
   initials,
   plural,
   progressStops,
+  ringFontSize,
   routeLabel,
   shiftSummary,
   trendBars,
@@ -117,6 +118,12 @@ describe('shiftSummary', () => {
       'Plan produkcji na 21.10 jeszcze nie powstał, a do upieczenia jest 184 szt.',
     );
     expect(text(shift({ has_plan: false, pieces: 0 }))).toBe('Plan produkcji na 21.10 jeszcze nie powstał.');
+  });
+});
+
+describe('ringFontSize', () => {
+  it('shrinks the ring label as it gets longer', () => {
+    expect(['1/7', '5/23', '13/23', '120/140'].map(ringFontSize)).toEqual([40, 37, 30, 21]);
   });
 });
 

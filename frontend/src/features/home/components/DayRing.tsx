@@ -1,4 +1,4 @@
-import { donutArcs } from '../lib/home';
+import { donutArcs, ringFontSize } from '../lib/home';
 
 const RADIUS = 60;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -19,15 +19,26 @@ interface DayRingProps<K extends string> {
 
 export function DayRing<K extends string>({ counts, parts, value, caption, size = 176 }: DayRingProps<K>) {
   const colors = Object.fromEntries(parts.map((part) => [part.key, part.color])) as Record<K, string>;
-  const arcs = donutArcs(counts, parts.map((part) => part.key), CIRCUMFERENCE);
+  const fontSize = ringFontSize(value);
+  const arcs = donutArcs(
+    counts,
+    parts.map((part) => part.key),
+    CIRCUMFERENCE
+  );
   const visible = parts.filter((part) => counts[part.key] > 0);
-  const description = visible.length > 0
-    ? visible.map((part) => `${part.label} ${counts[part.key]}`).join(', ')
-    : caption;
+  const description =
+    visible.length > 0 ? visible.map((part) => `${part.label} ${counts[part.key]}`).join(', ') : caption;
 
   return (
     <div className="relative mx-auto sm:mx-0 flex items-center gap-5">
-      <svg role="img" aria-label={`${value} ${caption}. ${description}`} width={size} height={size} viewBox="0 0 176 176" className="shrink-0">
+      <svg
+        role="img"
+        aria-label={`${value} ${caption}. ${description}`}
+        width={size}
+        height={size}
+        viewBox="0 0 176 176"
+        className="shrink-0"
+      >
         <g transform="rotate(-90 88 88)" fill="none" strokeWidth={16}>
           <circle cx={88} cy={88} r={RADIUS} stroke="#2e2a29" />
           {arcs.map((arc) => (
@@ -42,7 +53,14 @@ export function DayRing<K extends string>({ counts, parts, value, caption, size 
             />
           ))}
         </g>
-        <text x={88} y={84} textAnchor="middle" fill="#ffffff" className="font-display text-[40px] font-extrabold">
+        <text
+          x={88}
+          y={70 + fontSize * 0.35}
+          textAnchor="middle"
+          fill="#ffffff"
+          className="font-display font-extrabold"
+          style={{ fontSize }}
+        >
           {value}
         </text>
         <text x={88} y={108} textAnchor="middle" fill="#d9d2cf" className="font-auth text-[12px] font-extrabold">
