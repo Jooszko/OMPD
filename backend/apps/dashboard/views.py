@@ -4,7 +4,7 @@ import mimetypes
 from datetime import date, datetime, timedelta
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from django.db.models import Case, DecimalField, ExpressionWrapper, F, IntegerField, Prefetch, Q, Sum, When
+from django.db.models import Case, F, IntegerField, Prefetch, Q, When
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
@@ -17,103 +17,28 @@ from rest_framework.parsers import MultiPartParser
 
 from clients.models import Client, Route
 from orders.models import DailyOrder, DeliveryProof, ProductReturn
-from products.models import Ingredient, Recipe
-from finance.models import DailyFinancialReport
+from products.models import Ingredient
 from users.models import Notification, User
 from .services.optimize import optimize_stop_order
 from .services.directions_cache import get_cached_route_directions
 from .services.routing import RoutingError
 from .services.delivery_stats import build_delivery_stats
 from .services.returns import last_delivery_items, returns_overview
+from .services.home import build_home
 from .models import ClientAction
 from users.permissions import AdminOrBaker
 from audit.services import field_changes, record_event
 
 class DashboardView(APIView):
     permission_classes = [AdminOrBaker]
+
     def get(self, request):
-        today = date.today()
-        today_orders_qs = DailyOrder.objects.filter(order_date=today).select_related('client', 'product')
-
-        today_orders = [
-            {
-                'client_name': o.client.name,
-                'product_name': o.product.name,
-                'quantity': o.quantity,
-                'price_at_sale': str(o.price_at_sale),
-                'status': o.status,
-            }
-            for o in today_orders_qs
-        ]
-
-        total_items = today_orders_qs.aggregate(total=Sum('quantity'))['total'] or 0
-
-        ingredients_used = list(
-            Recipe.objects
-            .filter(product__daily_orders__order_date=today)
-            .values('ingredient__name', 'ingredient__unit')
-            .annotate(
-                total_amount=Sum(
-                    ExpressionWrapper(
-                        F('amount') * F('product__daily_orders__quantity'),
-                        output_field=DecimalField(max_digits=10, decimal_places=3),
-                    )
-                )
-            )
-            .order_by('ingredient__name')
-            .values('ingredient__name', 'ingredient__unit', 'total_amount')
-        )
-
-        revenue_per_client = list(
-            DailyOrder.objects
-            .filter(order_date=today)
-            .values('client__name')
-            .annotate(
-                total_revenue=Sum(
-                    ExpressionWrapper(
-                        F('quantity') * F('price_at_sale'),
-                        output_field=DecimalField(max_digits=12, decimal_places=2),
-                    )
-                )
-            )
-            .order_by('client__name')
-        )
-
-        warehouse_stock = list(
+        warehouse_stock = (
             Ingredient.objects
             .values('name', 'unit', 'stock__current_stock', 'stock__min_stock_level')
             .order_by('name')
         )
-
-        report = DailyFinancialReport.objects.filter(report_date=today).first()
-        financial_summary = None
-        if report:
-            financial_summary = {
-                'total_revenue': str(report.total_revenue),
-                'total_cogs': str(report.total_cogs),
-                'total_operating_expenses': str(report.total_operating_expenses),
-                'net_profit': str(report.net_profit),
-                'is_finalized': report.is_finalized,
-            }
-
         return Response({
-            'today_orders': today_orders,
-            'total_items_for_shipment': total_items,
-            'ingredients_used_today': [
-                {
-                    'name': row['ingredient__name'],
-                    'unit': row['ingredient__unit'],
-                    'total_amount': str(row['total_amount']),
-                }
-                for row in ingredients_used
-            ],
-            'revenue_per_client': [
-                {
-                    'client_name': row['client__name'],
-                    'total_revenue': str(row['total_revenue']),
-                }
-                for row in revenue_per_client
-            ],
             'warehouse_stock': [
                 {
                     'name': row['name'],
@@ -123,8 +48,14 @@ class DashboardView(APIView):
                 }
                 for row in warehouse_stock
             ],
-            'financial_summary': financial_summary,
         })
+
+
+class HomeView(APIView):
+    permission_classes = [AdminOrBaker]
+
+    def get(self, request):
+        return Response(build_home(request.user, timezone.localdate()))
 
 
 class LogisticsView(APIView):

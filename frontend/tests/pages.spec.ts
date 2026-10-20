@@ -14,13 +14,11 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('textbox', { name: 'Hasło' }).fill('Zaq12wsx');
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
     await page.getByRole('link', { name: 'Strona Główna' }).click();
-    await page.getByRole('heading', { name: 'Dzień dobry' }).click();
-    await page.getByRole('main').getByText('Zamówienia', { exact: true }).click();
-    await page.getByText('Łączna ilość do wysyłki').click();
-    await page.getByText('Dzisiejsze składniki').click();
-    await page.getByText('Podsumowanie finansowe daily').click();
-    await page.getByText('Podsumowanie stanów').click();
-    await page.getByRole('link', { name: 'Zamówienia' }).click();
+    await page.getByRole('heading', { name: /Dzień dobry|Dobry wieczór/ }).click();
+    await page.getByRole('heading', { name: 'Droga zamówień' }).click();
+    await page.getByRole('heading', { name: 'Trasy dziś' }).click();
+    await page.getByRole('heading', { name: 'Ostatnio w systemie' }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Zamówienia' }).click();
     await page.getByRole('heading', { name: 'Zarządzanie Zamówieniami' }).click();
     await page.getByRole('heading', { name: 'Sumaryczna produkcja na dzi' }).click();
     await page.getByRole('link', { name: 'Tablica produkcji' }).click();
@@ -44,7 +42,7 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('link', { name: 'Dziennik zmian' }).click();
     await page.getByRole('heading', { name: 'Dziennik zmian' }).click();
     await page.getByRole('link', { name: 'Klienci' }).click();
-    await page.getByRole('heading', { name: 'Baza Odbiorców i Klientów' }).click();
+    await page.getByRole('heading', { name: 'Klienci', exact: true }).click();
     await page.getByRole('link', { name: 'Kontrahenci' }).click();
     await page.getByRole('heading', { name: 'Księga Kontrahentów' }).click();
     

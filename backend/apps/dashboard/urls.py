@@ -5,6 +5,7 @@ from .views import (
     DeliveryProofFileView,
     DeliveryStatsView,
     DeliverStopView,
+    HomeView,
     LogisticsView,
     ReportOrderProblemView,
     ReportStopProblemView,
@@ -18,6 +19,7 @@ from .views import (
 
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    path('dashboard/home/', HomeView.as_view(), name='dashboard-home'),
     path('logistics/', LogisticsView.as_view(), name='logistics'),
     path('logistics/orders/<int:pk>/status/', UpdateOrderStatusView.as_view(), name='logistics-order-status'),
     path('logistics/clients/<int:pk>/deliver/', DeliverStopView.as_view(), name='logistics-deliver-stop'),

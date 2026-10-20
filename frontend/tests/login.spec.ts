@@ -11,7 +11,7 @@ test.describe('Moduł Logowania', () => {
 
     await page.click('button[type="submit"]');
 
-    await expect(page.locator('h1')).toContainText('Dzień dobry');
+    await expect(page.locator('h1')).toContainText(/Dzień dobry|Dobry wieczór/);
     await expect(page.locator('a').first()).toContainText('Strona Główna');
 
     await page.click('button[id="logout-button"]');

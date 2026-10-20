@@ -2,25 +2,6 @@ import { clearCache } from './offlineCache';
 
 const API_BASE = '/api';
 
-export interface TodayOrder {
-  client_name: string;
-  product_name: string;
-  quantity: number;
-  price_at_sale: string;
-  status: 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
-}
-
-export interface IngredientUsed {
-  name: string;
-  unit: string;
-  total_amount: string;
-}
-
-export interface RevenuePerClient {
-  client_name: string;
-  total_revenue: string;
-}
-
 export interface WarehouseItem {
   name: string;
   unit: string;
@@ -28,21 +9,8 @@ export interface WarehouseItem {
   min_stock_level: string;
 }
 
-export interface FinancialSummary {
-  total_revenue: string;
-  total_cogs: string;
-  total_operating_expenses: string;
-  net_profit: string;
-  is_finalized: boolean;
-}
-
 export interface DashboardData {
-  today_orders: TodayOrder[];
-  total_items_for_shipment: number;
-  ingredients_used_today: IngredientUsed[];
-  revenue_per_client: RevenuePerClient[];
   warehouse_stock: WarehouseItem[];
-  financial_summary: FinancialSummary | null;
 }
 
 export interface LoginResponse {
@@ -169,7 +137,7 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
   return fetch(input, withAuth(init));
 }
 
-export async function fetchDashboard(): Promise<any> {
+export async function fetchDashboard(): Promise<DashboardData> {
   const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
 
@@ -186,6 +154,117 @@ export async function fetchDashboard(): Promise<any> {
     throw new Error(`Błąd serwera: ${response.status}`);
   }
   return response.json();
+}
+
+export type HomeOrderStatus = 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed';
+
+export interface HomeOrder {
+  order_id: number;
+  client_id: number;
+  client_name: string;
+  product_name: string;
+  quantity: number;
+  status: HomeOrderStatus;
+  route_name: string;
+  delivered_at: string | null;
+}
+
+export interface HomeOrders {
+  total: number;
+  clients: number;
+  routes: number;
+  pieces: number;
+  by_status: Record<HomeOrderStatus, number>;
+  items: HomeOrder[];
+}
+
+export interface HomeBatch {
+  batch_id: number;
+  dough_name: string;
+  mixer_name: string;
+  sequence: number;
+  batch_count: number;
+  stage: ProductionStage;
+}
+
+export interface HomeShift {
+  production_date: string;
+  delivery_date: string;
+  has_plan: boolean;
+  orders: number;
+  clients: number;
+  pieces: number;
+  standing_clients: number;
+  standing_pieces: number;
+  stages: Record<ProductionStage, number>;
+  batches: HomeBatch[];
+  products: { name: string; quantity: number }[];
+  ingredients: { name: string; unit: string; amount: string }[];
+}
+
+export type HomeAlert =
+  | {
+      kind: 'failed_deliveries';
+      severity: 'critical';
+      items: { order_id: number; client_name: string; date: string }[];
+    }
+  | {
+      kind: 'low_stock';
+      severity: 'critical';
+      items: { name: string; unit: string; current: string; minimum: string }[];
+    }
+  | { kind: 'missing_plan'; severity: 'warning'; items: { date: string }[] }
+  | { kind: 'day_not_closed'; severity: 'warning'; items: { date: string }[] };
+
+export interface HomeFinance {
+  revenue: string;
+  cogs: string;
+  net_profit: string;
+  average_revenue: string;
+  trend: { date: string; revenue: string }[];
+}
+
+export interface HomeRouteStop {
+  client_id: number;
+  client_name: string;
+  latitude: number | null;
+  longitude: number | null;
+  status: 'delivered' | 'failed' | 'in_delivery' | 'waiting';
+  delivered_at: string | null;
+}
+
+export interface HomeRoute {
+  route_id: number;
+  route_name: string;
+  driver_name: string;
+  state: 'done' | 'on_road' | 'waiting';
+  delivered_stops: number;
+  total_stops: number;
+  last_delivery: { client_name: string; delivered_at: string } | null;
+  stops: HomeRouteStop[];
+}
+
+export interface HomeChange {
+  entry_id: number;
+  description: string;
+  actor_name: string;
+  created_at: string;
+}
+
+export interface HomeData {
+  today: string;
+  viewer: { full_name: string; role: 'admin' | 'baker' };
+  orders: HomeOrders;
+  routes: HomeRoute[];
+  production: HomeShift;
+  alerts: HomeAlert[];
+  finance: HomeFinance | null;
+  recent_changes: HomeChange[];
+}
+
+export async function fetchHome(): Promise<HomeData> {
+  const response = await apiFetch(`${API_BASE}/dashboard/home/`, { headers: authHeaders() });
+  return handleJsonResponse(response);
 }
 
 export interface AppUser {
