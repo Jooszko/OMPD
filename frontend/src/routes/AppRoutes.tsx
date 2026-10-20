@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { HomeDashboard } from '../features/dashboard/pages/HomeDashboard';
+import HomePage from '../features/home/pages/HomePage';
 
 import ZamowieniaPanel from '../features/dashboard/pages/Orders';
 import Produkty from '../features/dashboard/pages/Products';
@@ -57,7 +57,7 @@ export const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<HomeDashboard />} />
+        <Route index element={<HomePage />} />
         <Route path="orders" element={<ZamowieniaPanel />} />
 
         <Route path="production" element={<ProductionPlanning />} />
