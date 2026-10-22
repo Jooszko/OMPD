@@ -49,5 +49,14 @@ System oparty jest na architekturze klient-serwer, co zapewnia skalowalność i 
 
 ---
 
+## 🐳 Uruchomienie w Dockerze
+1. Skopiuj `.env.docker.example` jako `.env.docker` i uzupełnij wartości.
+2. `docker compose up --build -d` – aplikacja pod http://localhost:8080
+3. Dane testowe: `docker compose exec backend python manage.py seed_dashboard`
+
+Serwer demo (https://bakery.rauhvin.pl) sam pobiera zmiany z `main` co 10 minut i po każdym starcie maszyny (`scripts/server-update.sh`).
+
+---
+
 ## 🚀 Status Projektu
 Projekt jest w fazie rozwoju. Planowana data ukończenia - lato 2026, obrony - przełom roku 2026 i 2027.

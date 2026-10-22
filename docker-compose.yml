@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17-alpine
+    env_file: .env.docker
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env.docker
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - static_files:/app/staticfiles:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  static_files:
+  media_files:
