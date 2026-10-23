@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
+import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { createIngredient, fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
 
 interface SupplierProduct {
     product_id: number;
     name: string;
+    unit?: string;
+    last_price?: string | null;
+    is_assigned?: boolean;
 }
 
 interface Supplier {
@@ -25,10 +29,13 @@ export default function SuppliersPanel() {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [globalProducts, setGlobalProducts] = useState<SupplierProduct[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [toast, setToast] = useState<ActionToastData | null>(null);
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<SupplierStatusFilter>('all');
     const [ingredientSearch, setIngredientSearch] = useState('');
+    const [productPrices, setProductPrices] = useState<Record<number, string>>({});
+    const [priceDraftSupplierId, setPriceDraftSupplierId] = useState<number | null>(null);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -44,6 +51,7 @@ export default function SuppliersPanel() {
     const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
     const [newProductName, setNewProductName] = useState('');
     const [newProductUnit, setNewProductUnit] = useState('');
+    const [newProductPrice, setNewProductPrice] = useState('');
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
     useEffect(() => {
@@ -61,7 +69,8 @@ export default function SuppliersPanel() {
                     setSuppliers(suppliersData);
                     const mappedProducts: SupplierProduct[] = ingredientsData.map((ing: AppIngredient) => ({
                         product_id: ing.ingredient_id,
-                        name: `${ing.name} (${ing.unit})`
+                        name: `${ing.name} (${ing.unit})`,
+                        unit: ing.unit,
                     }));
                     setGlobalProducts(mappedProducts);
                 }
@@ -91,6 +100,8 @@ export default function SuppliersPanel() {
         setIngredientSearch('');
         setIsActive(true);
         setSupplierProducts([]);
+        setProductPrices({});
+        setPriceDraftSupplierId(null);
         setIsModalOpen(true);
     };
 
@@ -104,7 +115,18 @@ export default function SuppliersPanel() {
             setAddress(supplier.address);
             setNip(supplier.nip || '');
             setIsActive(supplier.is_active);
-            setSupplierProducts([...supplier.products]);
+            setSupplierProducts(supplier.products.filter(product => product.is_assigned !== false));
+            const savedUnassignedPrices = Object.fromEntries(
+                supplier.products
+                    .filter(product => product.is_assigned === false)
+                    .map(product => [product.product_id, product.last_price ?? ''])
+            );
+            if (priceDraftSupplierId !== supplier.supplier_id) {
+                setProductPrices(savedUnassignedPrices);
+                setPriceDraftSupplierId(supplier.supplier_id);
+            } else {
+                setProductPrices(current => ({ ...savedUnassignedPrices, ...current }));
+            }
             setIsModalOpen(true);
             setIngredientSearch('');
         }
@@ -113,8 +135,43 @@ export default function SuppliersPanel() {
     const handleSaveSupplier = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) {
-            alert('Nazwa kontrahenta jest wymagana.');
+            setToast({ text: 'Nazwa kontrahenta jest wymagana.' });
             return;
+        }
+
+        const productsById = new Map<number, SupplierProduct>();
+        for (const product of supplierProducts) {
+            const rawPrice = product.last_price?.trim();
+            if (rawPrice) {
+                const normalizedPrice = rawPrice.replace(',', '.');
+                const price = Number(normalizedPrice);
+                if (!Number.isFinite(price) || price <= 0 || price > 99999999.99) {
+                    setToast({ text: `Wprowadź prawidłową cenę dla surowca ${product.name}.` });
+                    return;
+                }
+                productsById.set(product.product_id, { ...product, last_price: normalizedPrice, is_assigned: true });
+            } else {
+                productsById.set(product.product_id, { ...product, last_price: null, is_assigned: true });
+            }
+        }
+
+        for (const product of globalProducts) {
+            if (!Object.prototype.hasOwnProperty.call(productPrices, product.product_id) || productsById.has(product.product_id)) {
+                continue;
+            }
+            const rawPrice = productPrices[product.product_id].trim();
+            if (!rawPrice) {
+                productsById.set(product.product_id, { ...product, last_price: null, is_assigned: false });
+                continue;
+            }
+
+            const normalizedPrice = rawPrice.replace(',', '.');
+            const price = Number(normalizedPrice);
+            if (!Number.isFinite(price) || price <= 0 || price > 99999999.99) {
+                setToast({ text: `Wprowadź prawidłową cenę dla surowca ${product.name}.` });
+                return;
+            }
+            productsById.set(product.product_id, { ...product, last_price: normalizedPrice, is_assigned: false });
         }
 
         const payload = {
@@ -124,7 +181,7 @@ export default function SuppliersPanel() {
             address: address.trim(),
             nip: nip.trim() || null, 
             is_active: isActive,
-            products: supplierProducts
+            products: Array.from(productsById.values()),
         };
 
         try {
@@ -138,41 +195,60 @@ export default function SuppliersPanel() {
             
             setIsModalOpen(false);
             setSelectedSupplierId(null);
-            if (modalMode === 'add') {
-                alert('Kontrahent został pomyślnie zapisany w bazie danych.');
-            }
+            setToast({ variant: 'success', text: 'Kontrahent został pomyślnie zapisany w bazie danych.' });
         } catch (error: unknown) {
             console.error("Błąd podczas zapisu w komponencie:", error);
             const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
-            alert(`Nie udało się zapisać kontrahenta w bazie. ${errorMessage}`);
+            setToast({ text: `Nie udało się zapisać kontrahenta w bazie. ${errorMessage}` });
         }
     };
 
     const handleAddProductToSupplier = (productToAdd: SupplierProduct) => {
         if (!supplierProducts.some(p => p.product_id === productToAdd.product_id)) {
-            setSupplierProducts([...supplierProducts, productToAdd]);
+            setSupplierProducts(current => [
+                ...current,
+                { ...productToAdd, last_price: productPrices[productToAdd.product_id] || null, is_assigned: true },
+            ]);
         } else {
-            alert('Ten produkt jest już przypisany do kontrahenta.');
+            setToast({ text: 'Ten produkt jest już przypisany do kontrahenta.' });
         }
     };
 
+    const handleSupplierProductPriceChange = (productId: number, price: string) => {
+        setSupplierProducts(current => current.map(product =>
+            product.product_id === productId ? { ...product, last_price: price || null } : product
+        ));
+    };
+
     const handleRemoveProductFromSupplier = (productIdToRemove: number) => {
-        setSupplierProducts(supplierProducts.filter(p => p.product_id !== productIdToRemove));
+        const product = supplierProducts.find(item => item.product_id === productIdToRemove);
+        setSupplierProducts(current => current.filter(item => item.product_id !== productIdToRemove));
+        if (product) {
+            setProductPrices(current => ({
+                ...current,
+                [productIdToRemove]: product.last_price ?? current[productIdToRemove] ?? '',
+            }));
+        }
     };
 
     const handleCreateNewGlobalProduct = async () => {
         const trimmedName = newProductName.trim();
         const trimmedUnit = newProductUnit.trim();
+        const trimmedPrice = newProductPrice.trim();
         if (!trimmedName) {
-            alert('Nazwa składnika nie może być pusta.');
+            setToast({ text: 'Nazwa składnika nie może być pusta.' });
             return;
         }
         if (!trimmedUnit) {
-            alert('Jednostka miary jest wymagana.');
+            setToast({ text: 'Jednostka miary jest wymagana.' });
+            return;
+        }
+        if (!trimmedPrice || !Number.isFinite(Number(trimmedPrice)) || Number(trimmedPrice) <= 0) {
+            setToast({ text: 'Cena musi być większa od zera.' });
             return;
         }
         if (globalProducts.some(p => p.name.toLowerCase() === `${trimmedName} (${trimmedUnit})`.toLowerCase())) {
-            alert('Składnik o tej nazwie i jednostce już istnieje w ogólnej bazie.');
+            setToast({ text: 'Składnik o tej nazwie i jednostce już istnieje w ogólnej bazie.' });
             return;
         }
 
@@ -181,15 +257,22 @@ export default function SuppliersPanel() {
             const ingredient = await createIngredient({ name: trimmedName, unit: trimmedUnit });
             setGlobalProducts(current => [
                 ...current,
-                { product_id: ingredient.ingredient_id, name: `${ingredient.name} (${ingredient.unit})` },
+                {
+                    product_id: ingredient.ingredient_id,
+                    name: `${ingredient.name} (${ingredient.unit})`,
+                    unit: ingredient.unit,
+                },
             ]);
+            setProductPrices(current => ({ ...current, [ingredient.ingredient_id]: trimmedPrice }));
             setIsNewProductModalOpen(false);
             setNewProductName('');
             setNewProductUnit('');
+            setNewProductPrice('');
+            setToast({ variant: 'success', text: 'Surowiec dodano do ogólnej bazy. Kliknij „+”, aby przypisać go do dostawcy.' });
         } catch (error: unknown) {
             console.error('Błąd podczas dodawania składnika do bazy:', error);
             const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
-            alert(`Nie udało się dodać składnika do bazy. ${errorMessage}`);
+            setToast({ text: `Nie udało się dodać składnika do bazy. ${errorMessage}` });
         } finally {
             setIsCreatingProduct(false);
         }
@@ -202,7 +285,7 @@ export default function SuppliersPanel() {
     const searchedSuppliers = suppliers.filter(s => {
         const matchesName = s.name?.toLowerCase().includes(query) ?? false;
         const matchesNip = s.nip ? s.nip.toLowerCase().includes(query) : false;
-        const matchesProducts = s.products?.some(p => p.name?.toLowerCase().includes(query)) ?? false;
+        const matchesProducts = s.products?.some(p => p.is_assigned !== false && p.name?.toLowerCase().includes(query)) ?? false;
 
         return matchesName || matchesNip || matchesProducts;
     });
@@ -344,13 +427,13 @@ export default function SuppliersPanel() {
                                             </td>
                                             <td className="py-3 px-4 text-[13px]">
                                                 <div className="flex flex-wrap gap-1">
-                                                    {supplier.products && supplier.products.slice(0, 3).map(p => (
+                                                    {supplier.products?.filter(p => p.is_assigned !== false).slice(0, 3).map(p => (
                                                         <span key={p.product_id} className="bg-[#efebe9] border border-[#e2dcda] px-2 py-0.5 rounded-full text-[#4a4543] font-bold text-[11px]">{p.name}</span>
                                                     ))}
-                                                    {supplier.products && supplier.products.length > 3 && (
-                                                        <span className="text-[10px] text-gray-500 font-semibold italic">+{supplier.products.length - 3} więcej</span>
+                                                    {(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) > 3 && (
+                                                        <span className="text-[10px] text-gray-500 font-semibold italic">+{(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) - 3} więcej</span>
                                                     )}
-                                                    {(!supplier.products || supplier.products.length === 0) && (
+                                                    {(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) === 0 && (
                                                         <span className="text-[10px] text-gray-400 font-medium italic">Nie przypisano produktów</span>
                                                     )}
                                                 </div>
@@ -445,7 +528,7 @@ export default function SuppliersPanel() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 min-h-0">
                                 <div className="border border-bakery-btnBorder rounded-xl bg-white flex flex-col h-56 overflow-hidden">
-                                    <div className="p-3 border-b border-[#e6e1df] flex flex-col gap-1.5 shrink-0 bg-[#efebe9]">
+                                    <div className="p-3 pb-1 border-b border-[#e6e1df] flex flex-col gap-1.5 shrink-0 bg-[#efebe9]">
                                         <div className="flex justify-between items-center">
                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                                 Ogólna Baza Surowców
@@ -455,6 +538,7 @@ export default function SuppliersPanel() {
                                                 onClick={() => {
                                                     setNewProductName('');
                                                     setNewProductUnit('');
+                                                    setNewProductPrice('');
                                                     setIsNewProductModalOpen(true);
                                                 }} 
                                                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
@@ -482,6 +566,9 @@ export default function SuppliersPanel() {
                                                 </button>
                                             )}
                                         </div>
+                                        <span className="text-[10px] text-gray-500">
+                                            Kliknij „+”, aby przypisać surowiec; cena zapisze się z kartoteką.
+                                        </span>
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -491,9 +578,21 @@ export default function SuppliersPanel() {
                                             .map(p => (
                                                 <div 
                                                     key={p.product_id} 
-                                                    className="p-2 px-2.5 bg-[#f3efed] hover:bg-[#ebe4e1] rounded-lg text-[13px] font-semibold text-bakery-dark flex justify-between items-center transition"
+                                                    className="p-2 px-2.5 bg-[#f3efed] hover:bg-[#ebe4e1] rounded-lg text-[13px] font-semibold text-bakery-dark flex items-center gap-2 transition"
                                                 >
-                                                    <span className="truncate pr-2">{p.name}</span>
+                                                    <span className="truncate flex-1 min-w-0">{p.name}</span>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={productPrices[p.product_id] ?? ''}
+                                                            onChange={(e) => setProductPrices(current => ({ ...current, [p.product_id]: e.target.value }))}
+                                                            aria-label={`Cena ${p.name}`}
+                                                            placeholder="Cena"
+                                                            className="w-16 h-8 px-1.5 border border-bakery-btnBorder rounded-md text-xs bg-white text-bakery-dark outline-none focus:border-bakery-accent"
+                                                        />
+                                                        <span className="text-[10px] text-gray-500">zł/{p.unit ?? 'j.'}</span>
+                                                    </div>
                                                     <button 
                                                         type="button" 
                                                         onClick={() => handleAddProductToSupplier(p)} 
@@ -523,8 +622,20 @@ export default function SuppliersPanel() {
                                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                                         {supplierProducts.length > 0 ? (
                                             supplierProducts.map(p => (
-                                                <div key={p.product_id} className="p-2 px-2.5 bg-[#f3efed] rounded-lg text-[13px] font-semibold text-bakery-dark flex justify-between items-center">
-                                                    <span className="truncate pr-2">{p.name}</span>
+                                                <div key={p.product_id} className="p-2 px-2.5 bg-[#f3efed] rounded-lg text-[13px] font-semibold text-bakery-dark flex items-center gap-2">
+                                                    <span className="truncate flex-1 min-w-0">{p.name}</span>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={p.last_price ?? ''}
+                                                            onChange={(e) => handleSupplierProductPriceChange(p.product_id, e.target.value)}
+                                                            aria-label={`Cena ${p.name}`}
+                                                            placeholder="Cena"
+                                                            className="w-16 h-8 px-1.5 border border-bakery-btnBorder rounded-md text-xs bg-white text-bakery-dark outline-none focus:border-bakery-accent"
+                                                        />
+                                                        <span className="text-[10px] text-gray-500">zł/{p.unit ?? 'j.'}</span>
+                                                    </div>
                                                     <button type="button" onClick={() => handleRemoveProductFromSupplier(p.product_id)} className="text-red-700 p-0.5 hover:bg-red-100 transition rounded shrink-0" title="Usuń powiązanie">
                                                         <X className="w-4 h-4" />
                                                     </button>
@@ -571,7 +682,16 @@ export default function SuppliersPanel() {
                             </label>
                             <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
                                 Jednostka miary *
-                                <input type="text" value={newProductUnit} onChange={(e) => setNewProductUnit(e.target.value)} placeholder="np. kg, l, szt" maxLength={10} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
+                                <select value={newProductUnit} onChange={(e) => setNewProductUnit(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required>
+                                    <option value="" disabled>Wybierz jednostkę miary</option>
+                                    <option value="kg">kg</option>
+                                    <option value="l">l</option>
+                                    <option value="szt">szt</option>
+                                </select>
+                            </label>
+                            <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
+                                Cena u dostawcy (zł/{newProductUnit || 'jednostkę'}) *
+                                <input type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="np. 12,50" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
                             </label>
                             <span className="text-[10px] text-gray-400 font-medium block">Składnik zostanie zapisany na stałe w bazie surowców.</span>
                         </div>
@@ -589,6 +709,7 @@ export default function SuppliersPanel() {
                 </div>
             )}
 
+            <ActionToast toast={toast} onClose={() => setToast(null)} onRefresh={() => setToast(null)} />
         </div>
     );
 }

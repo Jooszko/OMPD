@@ -103,7 +103,9 @@ def _missing_prices(recipes, prices):
                 ingredients[ingredient.ingredient_id] = ingredient
 
     offers = defaultdict(list)
-    catalog = SupplierIngredient.objects.filter(ingredient_id__in=ingredients.keys()).select_related('supplier')
+    catalog = SupplierIngredient.objects.filter(
+        ingredient_id__in=ingredients.keys(), is_assigned=True,
+    ).select_related('supplier')
     for item in catalog.order_by('supplier__name'):
         offers[item.ingredient_id].append({'supplier_ingredient_id': item.pk, 'supplier': item.supplier.name})
 

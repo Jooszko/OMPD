@@ -35,7 +35,7 @@ SUPPLIER_AUDIT_LABELS = {
     'address': 'Adres',
     'nip': 'NIP',
     'is_active': 'Aktywny',
-    '_catalog': 'Asortyment',
+    '_catalog': 'Asortyment i ceny',
 }
 REPORT_AUDIT_LABELS = {
     'total_revenue': 'Przychód',
@@ -47,7 +47,12 @@ REPORT_AUDIT_LABELS = {
 
 def _supplier_state(supplier):
     catalog = sorted(
-        SupplierIngredient.objects.filter(supplier=supplier).values_list('ingredient__name', flat=True)
+        (
+            f'{item.ingredient.name} ({item.last_price:.2f} zł/{item.ingredient.unit})'
+            if item.last_price is not None else item.ingredient.name
+        )
+        + ('' if item.is_assigned else ' (nieprzypisany)')
+        for item in SupplierIngredient.objects.filter(supplier=supplier).select_related('ingredient')
     )
     fields = [field for field in SUPPLIER_AUDIT_LABELS if not field.startswith('_')]
     return {**snapshot(supplier, fields), '_catalog': ', '.join(catalog)}
@@ -57,9 +62,40 @@ def _save_supplier_catalog(supplier, products_data):
     for p in products_data:
         try:
             ingredient = Ingredient.objects.get(pk=p.get('product_id'))
-            SupplierIngredient.objects.get_or_create(supplier=supplier, ingredient=ingredient)
+            defaults = {}
+            if 'last_price' in p:
+                defaults['last_price'] = (
+                    parse_price(p['last_price'])[0] if p['last_price'] is not None else None
+                )
+            defaults['is_assigned'] = p.get('is_assigned', True)
+            supplier_ingredient, created = SupplierIngredient.objects.get_or_create(
+                supplier=supplier, ingredient=ingredient, defaults=defaults,
+            )
+            if not created:
+                update_fields = []
+                for field in ('last_price', 'is_assigned'):
+                    if field in defaults and getattr(supplier_ingredient, field) != defaults[field]:
+                        setattr(supplier_ingredient, field, defaults[field])
+                        update_fields.append(field)
+                if update_fields:
+                    supplier_ingredient.save(update_fields=[*update_fields, 'updated_at'])
         except Ingredient.DoesNotExist:
             continue
+
+
+def _supplier_catalog_error(products_data):
+    if not isinstance(products_data, list):
+        return 'Lista surowców dostawcy jest nieprawidłowa.'
+    for item in products_data:
+        if not isinstance(item, dict):
+            return 'Dane surowca dostawcy są nieprawidłowe.'
+        if 'is_assigned' in item and not isinstance(item['is_assigned'], bool):
+            return 'Status przypisania surowca jest nieprawidłowy.'
+        if item.get('last_price') is not None:
+            _, error = parse_price(item['last_price'])
+            if error:
+                return error
+    return None
 
 class SupplierListView(APIView):
     permission_classes = [AdminOnly]
@@ -70,6 +106,9 @@ class SupplierListView(APIView):
 
     def post(self, request):
         products_data = request.data.pop('products', [])
+        catalog_error = _supplier_catalog_error(products_data)
+        if catalog_error:
+            return Response({'error': catalog_error}, status=status.HTTP_400_BAD_REQUEST)
         serializer = SupplierSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -94,6 +133,9 @@ class SupplierDetailView(APIView):
 
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
         products_data = data.pop('products', [])
+        catalog_error = _supplier_catalog_error(products_data)
+        if catalog_error:
+            return Response({'error': catalog_error}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = SupplierSerializer(supplier, data=data, partial=True)
         if not serializer.is_valid():
@@ -102,8 +144,7 @@ class SupplierDetailView(APIView):
         with transaction.atomic():
             before = _supplier_state(supplier)
             serializer.save()
-            kept = [p.get('product_id') for p in products_data if str(p.get('product_id')).isdigit()]
-            SupplierIngredient.objects.filter(supplier=supplier).exclude(ingredient_id__in=kept).delete()
+            SupplierIngredient.objects.filter(supplier=supplier).update(is_assigned=False)
             _save_supplier_catalog(supplier, products_data)
             changes = field_changes(before, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
             if changes:
