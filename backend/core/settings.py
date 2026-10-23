@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from decouple import config
+from decouple import Csv, config
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,7 +13,8 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
 # Optional OpenRouteService API key for route directions (apps/dashboard/services/routing.py).
 # Falls back to the public OSRM demo server when unset.
@@ -54,9 +55,7 @@ AUTH_USER_MODEL = 'users.User'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173', cast=Csv())
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
