@@ -43,6 +43,7 @@ def ingredient_prices():
     """Average last purchase price of each ingredient across its suppliers."""
     return dict(
         SupplierIngredient.objects
+        .filter(is_assigned=True)
         .exclude(last_price__isnull=True)
         .values('ingredient_id')
         .annotate(avg_price=Avg('last_price'))

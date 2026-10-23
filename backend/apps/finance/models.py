@@ -52,6 +52,7 @@ class SupplierIngredient(TimeStampedModel):
     ingredient = models.ForeignKey('products.Ingredient', on_delete=models.CASCADE, related_name='suppliers_catalog')
     supplier_part_no = models.CharField(max_length=50, blank=True, null=True) # Kod produktu u dostawcy
     last_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) # Ostatnia cena
+    is_assigned = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ('supplier', 'ingredient')

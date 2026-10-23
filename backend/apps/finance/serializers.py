@@ -6,10 +6,11 @@ class SupplierProductSerializer(serializers.ModelSerializer):
     """Serializer mapujący produkt z perspektywy kontrahenta"""
     product_id = serializers.IntegerField(source='ingredient.ingredient_id')
     name = serializers.CharField(source='ingredient.name')
+    unit = serializers.CharField(source='ingredient.unit')
 
     class Meta:
         model = SupplierIngredient
-        fields = ['product_id', 'name']
+        fields = ['product_id', 'name', 'unit', 'last_price', 'is_assigned']
 
 class SupplierSerializer(serializers.ModelSerializer):
     products = SupplierProductSerializer(source='ingredients_catalog', many=True, read_only=True)

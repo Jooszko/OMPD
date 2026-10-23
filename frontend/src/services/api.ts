@@ -315,7 +315,10 @@ async function handleJsonResponse(response: Response): Promise<any> {
       window.location.reload();
     }
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(JSON.stringify(errorData) || `Błąd serwera: ${response.status}`);
+    const errorMessage = errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
+      ? JSON.stringify(errorData)
+      : `Błąd serwera: ${response.status}`;
+    throw new Error(errorMessage);
   }
   if (response.status === 204) return null;
   return response.json();
@@ -1043,7 +1046,10 @@ export async function saveSupplier(payload: any, supplierId: number | null = nul
       window.location.reload();
     }
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(JSON.stringify(errorData) || `Błąd serwera: ${response.status}`);
+    const errorMessage = errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
+      ? JSON.stringify(errorData)
+      : `Błąd serwera: ${response.status}`;
+    throw new Error(errorMessage);
   }
 
   return response.json();
