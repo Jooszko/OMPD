@@ -2,7 +2,8 @@ from datetime import date
 
 from django.test import SimpleTestCase
 
-from dashboard.seed.dates import build_date_range, easter_sunday, is_holiday
+from common.holidays import easter_sunday, is_holiday
+from dashboard.seed.dates import build_date_range
 
 
 class BuildDateRangeTests(SimpleTestCase):

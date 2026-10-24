@@ -20,6 +20,7 @@ from dashboard.seed.suppliers import (
     create_suppliers,
     create_supply_orders,
 )
+from orders.standing import mark_standing_days
 from dashboard.seed.users import DEFAULT_SEED_PASSWORD, DEMO_USERNAMES, create_notifications, create_users
 
 
@@ -110,6 +111,7 @@ class Command(BaseCommand):
 
         tomorrow_count = create_daily_orders(clients, products, standing_orders, [today + timedelta(days=1)], today)
         self.stdout.write(f'  Zamówienia na jutro: {tomorrow_count}')
+        mark_standing_days(today, today + timedelta(days=1))
 
         returns_count = create_product_returns(date_range)
         self.stdout.write(f'  Zwroty: {returns_count}')

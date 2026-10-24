@@ -315,9 +315,10 @@ async function handleJsonResponse(response: Response): Promise<any> {
       window.location.reload();
     }
     const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
-      ? JSON.stringify(errorData)
-      : `Błąd serwera: ${response.status}`;
+    const errorMessage =
+      errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
+        ? JSON.stringify(errorData)
+        : `Błąd serwera: ${response.status}`;
     throw new Error(errorMessage);
   }
   if (response.status === 204) return null;
@@ -599,8 +600,43 @@ export async function fetchStandingOrders(): Promise<any[]> {
   return handleJsonResponse(response);
 }
 
-export async function fetchOrderHistory(): Promise<any[]> {
-  const response = await apiFetch(`${API_BASE}/orders/history/`, { headers: authHeaders() });
+export interface OrderHistoryStop {
+  id: string;
+  date: string;
+  client_id: number;
+  client_name: string;
+  address: string;
+  status: OrderStatus;
+  total_quantity: number;
+  total_amount: number;
+  items: OrderDayItem[];
+}
+
+export interface OrderHistoryPage {
+  date_from: string;
+  date_to: string;
+  page: number;
+  pages: number;
+  count: number;
+  summary: { stops: number; pieces: number; value: number };
+  results: OrderHistoryStop[];
+}
+
+export async function fetchOrderHistory(filters: {
+  date_from: string;
+  date_to: string;
+  q: string;
+  status: string;
+  page: number;
+}): Promise<OrderHistoryPage> {
+  const params = new URLSearchParams({
+    date_from: filters.date_from,
+    date_to: filters.date_to,
+    page: String(filters.page),
+  });
+  if (filters.q) params.set('q', filters.q);
+  if (filters.status !== 'all') params.set('status', filters.status);
+  const response = await apiFetch(`${API_BASE}/orders/history/?${params}`, { headers: authHeaders() });
   return handleJsonResponse(response);
 }
 
@@ -1046,9 +1082,10 @@ export async function saveSupplier(payload: any, supplierId: number | null = nul
       window.location.reload();
     }
     const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
-      ? JSON.stringify(errorData)
-      : `Błąd serwera: ${response.status}`;
+    const errorMessage =
+      errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
+        ? JSON.stringify(errorData)
+        : `Błąd serwera: ${response.status}`;
     throw new Error(errorMessage);
   }
 
@@ -1705,4 +1742,92 @@ export async function downloadFinanceExport(kind: string, period: ReportPeriodKi
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export type OrderStatus = 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed' | 'cancelled';
+
+export interface OrderDayItem {
+  product_id: number;
+  product_name: string;
+  qty: number;
+  price: number;
+  status: OrderStatus;
+}
+
+export interface OrderDayStop {
+  id: string;
+  client_id: number;
+  client_name: string;
+  address: string;
+  phone: string;
+  is_standing: boolean;
+  status: OrderStatus;
+  locked: boolean;
+  total_quantity: number;
+  total_amount: number;
+  items: OrderDayItem[];
+}
+
+export interface OrderDayRoute {
+  route_id: number | null;
+  route_name: string;
+  driver_name: string | null;
+  total_quantity: number;
+  total_amount: number;
+  driving_order: number[];
+  stops: OrderDayStop[];
+}
+
+export interface OrderPlanChange {
+  product_id: number;
+  product_name: string;
+  planned_qty: number;
+  current_qty: number;
+  difference: number;
+}
+
+export interface OrderDay {
+  date: string;
+  is_today: boolean;
+  is_past: boolean;
+  is_holiday: boolean;
+  summary: { stops: number; pieces: number; value: number; by_status: Record<OrderStatus, number> };
+  products: { product_id: number; product_name: string; quantity: number }[];
+  routes: OrderDayRoute[];
+  standing_due: { clients: number; items: number } | null;
+  plan: { production_date: string; created_at: string; changes: OrderPlanChange[] } | null;
+}
+
+export async function fetchOrderDay(date: string): Promise<OrderDay> {
+  const response = await apiFetch(`${API_BASE}/orders/day/?date=${encodeURIComponent(date)}`, {
+    headers: authHeaders(),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function createOrdersFromStanding(
+  date: string
+): Promise<{ created_clients: number; created_items: number }> {
+  const response = await apiFetch(`${API_BASE}/orders/standing/due/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ date }),
+  });
+  return handleJsonResponse(response);
+}
+
+export interface StandingOrderGroup {
+  id: number;
+  client_id: number;
+  client_name: string;
+  address: string;
+  client_active: boolean;
+  route_id: number;
+  route_name: string;
+  driver_name: string | null;
+  days_ids: number[];
+  day_of_week: string;
+  items: { product_id: number; product_name: string; qty: number; price: number }[];
+  total_quantity: number;
+  total_amount: number;
 }

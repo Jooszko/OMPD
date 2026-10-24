@@ -3,7 +3,8 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import HomePage from '../features/home/pages/HomePage';
 
-import ZamowieniaPanel from '../features/dashboard/pages/Orders';
+import OrdersPage from '../features/orders/pages/OrdersPage';
+import RoutePrintPage from '../features/orders/pages/RoutePrintPage';
 import Produkty from '../features/dashboard/pages/Products';
 import UsersPage from '../features/users/pages/UsersPage';
 import ClientsPage from '../features/clients/pages/ClientsPage';
@@ -50,6 +51,14 @@ export const AppRoutes: React.FC = () => {
         }
       />
       <Route
+        path="/orders/print"
+        element={
+          <ProtectedRoute>
+            <RoutePrintPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/"
         element={
           <ProtectedRoute>
@@ -58,7 +67,7 @@ export const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<HomePage />} />
-        <Route path="orders" element={<ZamowieniaPanel />} />
+        <Route path="orders" element={<OrdersPage />} />
 
         <Route path="production" element={<ProductionPlanning />} />
         <Route path="production/board" element={<ProductionKiosk />} />

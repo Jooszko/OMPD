@@ -29,6 +29,7 @@ PRODUCTION_SHIFT_LAG_DAYS = config('PRODUCTION_SHIFT_LAG_DAYS', default=1, cast=
 PRODUCTION_SHIFT_CUTOFF_HOUR = config('PRODUCTION_SHIFT_CUTOFF_HOUR', default=6, cast=int)
 PRODUCTION_TIMEZONE = config('PRODUCTION_TIMEZONE', default='Europe/Warsaw')
 
+AUTO_STANDING_ORDERS = config('AUTO_STANDING_ORDERS', default=True, cast=bool) and 'test' not in sys.argv[1:2]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -68,6 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'orders.middleware.StandingOrdersMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'

@@ -7,7 +7,7 @@ from finance.models import (
     SupplyOrder,
     SupplyOrderItem,
 )
-from orders.models import DailyOrder, DeliveryProof, StandingOrder
+from orders.models import DailyOrder, DeliveryProof, StandingOrder, StandingOrderRun
 from production.models import Dough, Mixer, ProductionPlan
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from users.models import Notification, User
@@ -26,6 +26,7 @@ def clear_all():
     Supplier.objects.all().delete()
     ProductionPlan.objects.all().delete()
     DailyOrder.objects.all().delete()
+    StandingOrderRun.objects.all().delete()
     StandingOrder.objects.all().delete()
     Recipe.objects.all().delete()
     Product.objects.all().delete()

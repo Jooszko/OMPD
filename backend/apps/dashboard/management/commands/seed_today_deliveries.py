@@ -5,6 +5,7 @@ from django.db import transaction
 
 from clients.models import Client
 from orders.models import DailyOrder, StandingOrder
+from orders.standing import mark_standing_days
 from products.models import Product
 from dashboard.seed.orders import close_past_orders, create_daily_orders, start_today_orders
 
@@ -46,6 +47,7 @@ class Command(BaseCommand):
         created_count = create_daily_orders(clients, products, standing_orders, [today])
         started_count = start_today_orders(today)
         tomorrow_count = create_daily_orders(clients, products, standing_orders, [today + timedelta(days=1)], today)
+        mark_standing_days(today, today + timedelta(days=1))
 
         self.stdout.write(self.style.SUCCESS(
             f'Gotowe: {created_count} nowych zamówień na {today}, {started_count} ruszyło do realizacji, '

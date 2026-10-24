@@ -116,3 +116,11 @@ class ProductReturn(TimeStampedModel):
 
     def __str__(self):
         return f'{self.return_date} - {self.client.name}: zwrot {self.product.name} x{self.quantity}'
+
+
+class StandingOrderRun(models.Model):
+    order_date = models.DateField(primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Zamówienia ze stałych na {self.order_date}'

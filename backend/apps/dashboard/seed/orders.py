@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from clients.models import Client
 from orders.models import DailyOrder, ProductReturn, StandingOrder
-from dashboard.seed.dates import is_holiday
+from common.holidays import is_holiday
 
 EVERY_DAY = (0, 1, 2, 3, 4, 5, 6)
 MON_TO_SAT = (0, 1, 2, 3, 4, 5)

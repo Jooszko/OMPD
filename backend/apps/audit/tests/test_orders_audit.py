@@ -1,6 +1,8 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from audit.models import AuditEntry
@@ -9,7 +11,8 @@ from orders.models import DailyOrder
 from products.models import Product
 from users.models import User
 
-ORDER_DATE = '2026-10-12'
+ORDER_DAY = timezone.localdate() + timedelta(days=2)
+ORDER_DATE = ORDER_DAY.isoformat()
 
 
 def change_rows(entry):
@@ -39,7 +42,7 @@ class OrderAuditTests(TestCase):
 
         entry = AuditEntry.objects.get(category='orders')
         self.assertEqual(entry.action, 'order.created')
-        self.assertEqual((entry.actor, entry.object_label), (self.baker, 'Sklep Pod Lipą, 12.10.2026'))
+        self.assertEqual((entry.actor, entry.object_label), (self.baker, f'Sklep Pod Lipą, {ORDER_DAY:%d.%m.%Y}'))
         self.assertEqual(change_rows(entry), [('Status', None, 'Zaplanowane'), ('Chleb', None, '10 szt. × 4.50 zł')])
 
     def test_editing_shows_changed_and_added_items(self):
@@ -59,14 +62,14 @@ class OrderAuditTests(TestCase):
 
         self.assertEqual(AuditEntry.objects.filter(category='orders').count(), 1)
 
-    def test_resaving_delivered_order_reveals_status_reset(self):
+    def test_delivered_order_cannot_be_resaved(self):
         self.save_order([self.item(self.bread, 10)])
         DailyOrder.objects.update(status='delivered')
 
-        self.save_order([self.item(self.bread, 10)])
+        response = self.save_order([self.item(self.bread, 12)])
 
-        entry = AuditEntry.objects.get(action='order.updated')
-        self.assertEqual(change_rows(entry), [('Status', 'Dostarczone', 'Zaplanowane')])
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(AuditEntry.objects.filter(action='order.updated').exists())
 
     def test_deleting_order_records_what_was_ordered(self):
         self.save_order([self.item(self.bread, 10)])
