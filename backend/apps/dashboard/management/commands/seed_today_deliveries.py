@@ -1,78 +1,53 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from clients.models import Route
-from orders.models import DailyOrder
+from clients.models import Client
+from orders.models import DailyOrder, StandingOrder
 from products.models import Product
-from dashboard.seed.orders import seed_delivery_fields
-
-STATUS_CYCLE = ['planned', 'in_production', 'in_delivery', 'delivered']
+from dashboard.seed.orders import close_past_orders, create_daily_orders, start_today_orders
 
 
 class Command(BaseCommand):
     help = (
-        'Dosypuje dzisiejsze zamówienia (DailyOrder) do aktywnych tras, żeby moduł '
-        'logistyki miał co pokazać podczas ręcznego testowania (bez pełnego re-seedu).'
+        'Tworzy zamówienia na dziś i jutro z zamówień stałych, rusza z dzisiejszymi dostawami '
+        'i zamyka niedokończone z poprzednich dni (codzienne odświeżenie serwera demo, bez pełnego re-seedu).'
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--per-route',
-            type=int,
-            default=3,
-            help='Ilu klientom na trasę przydzielić dzisiejsze zamówienie (domyślnie 3)',
+            '--date',
+            type=date.fromisoformat,
+            default=None,
+            help='Dzień, dla którego utworzyć zamówienia, w formacie RRRR-MM-DD (domyślnie dzisiaj)',
         )
         parser.add_argument(
             '--clear-today',
             action='store_true',
-            help='Usuń wszystkie istniejące dzisiejsze zamówienia przed dosypaniem nowych',
+            help='Usuń wszystkie istniejące zamówienia z tego dnia przed utworzeniem nowych',
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        today = date.today()
-        per_route = options['per_route']
+        today = options['date'] or date.today()
+
+        standing_orders = list(StandingOrder.objects.filter(is_active=True))
+        if not standing_orders:
+            raise CommandError('Brak zamówień stałych — najpierw uruchom `python manage.py seed_dashboard`.')
 
         if options['clear_today']:
             deleted, _ = DailyOrder.objects.filter(order_date=today).delete()
-            self.stdout.write(f'Usunięto {deleted} dzisiejszych zamówień.')
+            self.stdout.write(f'Usunięto {deleted} zamówień z dnia {today}.')
 
-        products = list(Product.objects.all())
-        if not products:
-            raise CommandError('Brak produktów w bazie — najpierw uruchom `python manage.py seed_dashboard`.')
-
-        routes = list(Route.objects.filter(is_active=True).prefetch_related('clients'))
-        if not routes:
-            raise CommandError('Brak aktywnych tras — najpierw uruchom `python manage.py seed_dashboard`.')
-
-        created_count = 0
-        touched_routes = 0
-        for route in routes:
-            clients = list(route.clients.filter(is_active=True).order_by('client_id')[:per_route])
-            if not clients:
-                continue
-            touched_routes += 1
-            for i, client in enumerate(clients):
-                product = products[(client.client_id + i) % len(products)]
-                status = STATUS_CYCLE[(client.client_id + i) % len(STATUS_CYCLE)]
-                _, created = DailyOrder.objects.get_or_create(
-                    client=client,
-                    product=product,
-                    order_date=today,
-                    defaults={
-                        'quantity': 5 + (i * 3),
-                        'price_at_sale': product.base_price,
-                        'status': status,
-                        **seed_delivery_fields(status, today, client.client_id),
-                        'assigned_route': route,
-                        'assigned_driver': route.driver,
-                    },
-                )
-                if created:
-                    created_count += 1
+        closed_count = close_past_orders(today)
+        clients = list(Client.objects.filter(is_active=True).order_by('client_id'))
+        products = {product.name: product for product in Product.objects.all()}
+        created_count = create_daily_orders(clients, products, standing_orders, [today])
+        started_count = start_today_orders(today)
+        tomorrow_count = create_daily_orders(clients, products, standing_orders, [today + timedelta(days=1)], today)
 
         self.stdout.write(self.style.SUCCESS(
-            f'Gotowe: {created_count} nowych zamówień na dziś ({today}) w {touched_routes} trasach.'
+            f'Gotowe: {created_count} nowych zamówień na {today}, {started_count} ruszyło do realizacji, '
+            f'{tomorrow_count} na jutro, zamknięto {closed_count} zaległych z poprzednich dni.'
         ))

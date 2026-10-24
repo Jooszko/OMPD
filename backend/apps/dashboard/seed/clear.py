@@ -7,7 +7,7 @@ from finance.models import (
     SupplyOrder,
     SupplyOrderItem,
 )
-from orders.models import DailyOrder, StandingOrder
+from orders.models import DailyOrder, DeliveryProof, StandingOrder
 from production.models import Dough, Mixer, ProductionPlan
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from users.models import Notification, User
@@ -16,6 +16,8 @@ from dashboard.seed.users import SEED_USERNAMES
 
 
 def clear_all():
+    for proof in DeliveryProof.objects.all():
+        proof.image.delete(save=False)
     DailyFinancialReport.objects.all().delete()
     Expense.objects.all().delete()
     SupplyOrderItem.objects.all().delete()

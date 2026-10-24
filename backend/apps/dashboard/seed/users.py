@@ -5,7 +5,8 @@ from django.utils import timezone
 
 from users.models import Notification, User
 
-SEED_PASSWORD = 'bakery2026'
+DEFAULT_SEED_PASSWORD = 'bakery2026'
+DEMO_USERNAMES = ('mklukowski', 'akrawczyk', 'jnowak')
 
 USER_DATA = [
     # (username, full_name, role, email, is_active)
@@ -55,7 +56,7 @@ def seed_last_login(role, index, is_active, now=None):
     return moment - timedelta(days=1) if moment > now else moment
 
 
-def create_users():
+def create_users(password=DEFAULT_SEED_PASSWORD, demo=False):
     result = {'admins': [], 'bakers': [], 'drivers': []}
     for index, (username, full_name, role, email, is_active) in enumerate(USER_DATA):
         user, created = User.objects.get_or_create(
@@ -68,8 +69,13 @@ def create_users():
             },
         )
         if created:
-            user.set_password(SEED_PASSWORD)
+            user.set_password(password)
             user.last_login = seed_last_login(role, index, is_active)
+            user.save()
+        if demo:
+            user.is_active = username in DEMO_USERNAMES
+            if user.is_active:
+                user.set_password(password)
             user.save()
         result[ROLE_TO_KEY[role]].append(user)
     return result

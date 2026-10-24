@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.test import TestCase
 
 from clients.models import Client, Route
@@ -40,3 +42,23 @@ class SeedClientsTests(TestCase):
         create_routes(self.drivers)
 
         self.assertEqual(Route.objects.count(), 6)
+
+    def test_every_client_has_its_own_address_and_location(self):
+        routes = create_routes(self.drivers)
+
+        clients = create_clients(routes)
+
+        self.assertEqual(len({c.address for c in clients}), 40)
+        self.assertTrue(all(c.latitude is not None and c.longitude is not None for c in clients))
+
+    def test_clients_on_one_route_are_close_to_each_other(self):
+        routes = create_routes(self.drivers)
+        create_clients(routes)
+
+        for route in routes:
+            clients = list(route.clients.all())
+            latitudes = [c.latitude for c in clients]
+            longitudes = [c.longitude for c in clients]
+            self.assertGreaterEqual(len(clients), 6)
+            self.assertLess(max(latitudes) - min(latitudes), Decimal('0.2'), route.route_name)
+            self.assertLess(max(longitudes) - min(longitudes), Decimal('0.25'), route.route_name)
