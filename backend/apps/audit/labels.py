@@ -27,6 +27,7 @@ ACTIONS = {
         'order.created': 'Nowe zamówienie',
         'order.updated': 'Zmiana zamówienia',
         'order.deleted': 'Usunięcie zamówienia',
+        'order.created_from_standing': 'Zamówienia ze stałych',
         'standing_order.created': 'Nowe zamówienie stałe',
         'standing_order.updated': 'Zmiana zamówienia stałego',
         'standing_order.deleted': 'Usunięcie zamówienia stałego',

@@ -19,8 +19,8 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('heading', { name: 'Trasy dziś' }).click();
     await page.getByRole('heading', { name: 'Ostatnio w systemie' }).click();
     await page.getByRole('navigation').getByRole('link', { name: 'Zamówienia' }).click();
-    await page.getByRole('heading', { name: 'Zarządzanie Zamówieniami' }).click();
-    await page.getByRole('heading', { name: 'Sumaryczna produkcja na dzi' }).click();
+    await page.getByRole('heading', { name: 'Zamówienia', exact: true }).click();
+    await page.getByRole('tab', { name: 'Dzień' }).click();
     await page.getByRole('link', { name: 'Tablica produkcji' }).click();
     await page.getByText('Tablica produkcyjna').click();
     await page.getByRole('navigation').getByRole('link', { name: 'Planowanie produkcji' }).click();
