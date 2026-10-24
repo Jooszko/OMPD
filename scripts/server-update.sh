@@ -9,4 +9,6 @@ git fetch --quiet origin main || exit 1
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] && exit 0
 
 echo "=== $(date) aktualizacja do $(git rev-parse --short origin/main) ==="
-git merge --ff-only origin/main && docker compose up --build -d && docker image prune -f
+OLD=$(git rev-parse HEAD)
+git merge --ff-only origin/main && docker compose up --build -d && docker image prune -f || exit 1
+git diff --quiet "$OLD" HEAD -- Caddyfile || docker compose restart caddy
