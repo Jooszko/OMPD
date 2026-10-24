@@ -52,7 +52,24 @@ System oparty jest na architekturze klient-serwer, co zapewnia skalowalność i 
 ## 🐳 Uruchomienie w Dockerze
 1. Skopiuj `.env.docker.example` jako `.env.docker` i uzupełnij wartości.
 2. `docker compose up --build -d` – aplikacja pod http://localhost:8080
-3. Dane testowe: `docker compose exec backend python manage.py seed_dashboard`
+3. Dane testowe: `docker compose exec backend python manage.py seed_dashboard --clear --password 'TwojeHaslo'`
+
+---
+
+## 🧪 Dane testowe (seed)
+Komendy uruchamiamy w `backend/` (lokalnie) albo przez `docker compose exec backend ...` (Docker / serwer).
+
+| Komenda | Co robi |
+|---|---|
+| `python manage.py seed_dashboard --clear` | Czyści bazę i tworzy pół roku historii piekarni: 40 klientów z prawdziwymi adresami na 6 trasach, zamówienia stałe i dzienne (dni tygodnia, święta, sezon), zwroty, dowody dostaw, plany produkcji, wydatki i zamknięte dni w finansach. Ok. 15 s. |
+| `python manage.py seed_today_deliveries` | Szybkie odświeżenie bez kasowania: zamyka zaległe dostawy, tworzy zamówienia na dziś i jutro. Na serwerze uruchamia ją cron codziennie o 5:00. |
+
+Opcje `seed_dashboard`:
+* `--days 30` – krótsza historia (domyślnie 180 dni),
+* `--password 'Haslo'` – hasło wszystkich kont testowych; przy `DEBUG=True` domyślnie `bakery2026`, przy `DEBUG=False` hasło jest wymagane (albo zmienna `SEED_PASSWORD`),
+* `--demo` – aktywne zostają tylko konta do pokazu: `mklukowski` (admin), `akrawczyk` (piekarz), `jnowak` (kierowca).
+
+Serwer demo po zmianach w seedzie: `seed_dashboard --clear --demo --password '...'`.
 
 Serwer demo (https://bakery.rauhvin.pl) sam pobiera zmiany z `main` co 10 minut i po każdym starcie maszyny (`scripts/server-update.sh`).
 

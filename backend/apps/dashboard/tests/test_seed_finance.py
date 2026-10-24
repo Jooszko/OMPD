@@ -1,15 +1,17 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.test import TestCase
 
 from clients.models import Client, Route
-from finance.models import DailyFinancialReport, Expense
+from finance.models import DailyFinancialReport, Expense, RecurringExpense
+from finance.recurring import materialize_due_expenses
 from orders.models import DailyOrder
 from products.models import Product
 from users.models import User
 from dashboard.seed.dates import build_date_range
-from dashboard.seed.finance import create_expenses, create_financial_reports
+from dashboard.seed.finance import create_expenses, create_financial_reports, create_recurring_costs
 
 
 class SeedFinanceTests(TestCase):
@@ -81,6 +83,25 @@ class SeedFinanceTests(TestCase):
 
         self.assertEqual(DailyFinancialReport.objects.count(), len(self.date_range) - 1)
 
+    def test_last_days_stay_open_and_closed_ones_show_who_and_when(self):
+        create_financial_reports(self.date_range, self.admin, open_days=2)
+
+        closed = set(DailyFinancialReport.objects.values_list('report_date', flat=True))
+        self.assertEqual(len(closed), len(self.date_range) - 3)
+        self.assertFalse({self.date_range[-3], self.date_range[-2]} & closed)
+        report = DailyFinancialReport.objects.get(report_date=self.date_range[0])
+        self.assertEqual(report.generated_by, self.admin)
+        self.assertEqual(report.created_at, datetime(2026, 6, 9, 19, 30, tzinfo=ZoneInfo('Europe/Warsaw')))
+
+    def test_monthly_costs_become_recurring_templates(self):
+        create_expenses(self.date_range, self.admin)
+
+        self.assertEqual(create_recurring_costs(self.date_range, self.admin), 6)
+
+        self.assertEqual(materialize_due_expenses(today=self.date_range[-1]), 0)
+        rent = RecurringExpense.objects.get(category='rent')
+        self.assertEqual(rent.amount, Expense.objects.get(category='rent').amount)
+        self.assertEqual(create_recurring_costs(self.date_range, self.admin), 0)
 
 class SeedExpenseProportionTests(TestCase):
     def test_operating_costs_are_about_half_of_sales(self):

@@ -1,9 +1,12 @@
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from finance.closings import live_day
-from finance.models import DailyFinancialReport, Expense
+from finance.models import DailyFinancialReport, Expense, RecurringExpense
 from orders.models import DailyOrder
+
+from dashboard.seed.orders import SEED_TIMEZONE
 
 FALLBACK_MONTHLY_REVENUE = Decimal('20000')
 
@@ -34,6 +37,8 @@ OTHER_DESCRIPTIONS = [
 OTHER_EVERY_DAYS = 6
 OTHER_SHARE = Decimal('0.025')
 
+UNCLOSED_DAYS = 2
+CLOSING_TIME = time(19, 30)
 
 def _monthly_revenue(date_range):
     total = (
@@ -51,6 +56,10 @@ def _monthly_revenue(date_range):
 
 def _whole(amount, step=Decimal('1')):
     return max(step, (amount / step).quantize(Decimal('1')) * step)
+
+def _monthly_amount(monthly, category, share):
+    step = Decimal('10') if category in ('rent', 'salary') else Decimal('1')
+    return _whole(monthly * share, step)
 
 
 def _add(category, expense_date, description, amount, admin_user):
@@ -71,9 +80,9 @@ def create_expenses(date_range, admin_user):
         month_label = f'{MONTH_NAMES[day.month - 1]} {day.year}'
         for category, description, day_of_month, share in MONTHLY_COSTS:
             if day.day == day_of_month:
-                step = Decimal('10') if category in ('rent', 'salary') else Decimal('1')
                 created_count += _add(
-                    category, day, f'{description} - {month_label}', _whole(monthly * share, step), admin_user,
+                    category, day, f'{description} - {month_label}', _monthly_amount(monthly, category, share),
+                    admin_user,
                 )
 
         ordinal = day.toordinal()
@@ -92,12 +101,30 @@ def create_expenses(date_range, admin_user):
     return created_count
 
 
-def create_financial_reports(date_range):
-    """Closes every past day of the seed range with its real numbers; today stays open."""
+def create_recurring_costs(date_range, admin_user):
+    monthly = _monthly_revenue(date_range)
     created_count = 0
-    for report_date in date_range[:-1]:
+    for category, description, day_of_month, share in MONTHLY_COSTS:
+        _, created = RecurringExpense.objects.get_or_create(
+            category=category,
+            description=description,
+            day_of_month=day_of_month,
+            defaults={
+                'amount': _monthly_amount(monthly, category, share),
+                'last_generated_on': date_range[-1],
+                'created_by': admin_user,
+            },
+        )
+        created_count += int(created)
+    return created_count
+
+
+def create_financial_reports(date_range, closed_by=None, open_days=0):
+    """Closes the past days of the seed range with their real numbers; today and `open_days` before it stay open."""
+    created_count = 0
+    for report_date in date_range[:len(date_range) - 1 - open_days]:
         result = live_day(report_date)
-        _, created = DailyFinancialReport.objects.get_or_create(
+        report, created = DailyFinancialReport.objects.get_or_create(
             report_date=report_date,
             defaults={
                 'total_revenue': result['revenue'],
@@ -105,8 +132,11 @@ def create_financial_reports(date_range):
                 'total_operating_expenses': result['operating_expenses'],
                 'net_profit': result['net_profit'],
                 'is_finalized': True,
-                'generated_by': None,
+                'generated_by': closed_by,
             },
         )
-        created_count += int(created)
+        if created:
+            closed_at = datetime.combine(report_date + timedelta(days=1), CLOSING_TIME, tzinfo=SEED_TIMEZONE)
+            DailyFinancialReport.objects.filter(pk=report.pk).update(created_at=closed_at, updated_at=closed_at)
+            created_count += 1
     return created_count
