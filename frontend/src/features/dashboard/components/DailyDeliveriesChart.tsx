@@ -3,12 +3,12 @@ import type { DeliveryStatsDay } from '../../../services/api';
 import { niceTicks } from '../lib/statsFormat';
 
 const SERIES = [
-  { key: 'delivered', label: 'Dostarczone', color: '#047857' },
-  { key: 'failed', label: 'Nieudane', color: '#fb7185' },
-  { key: 'pending', label: 'W toku', color: '#b45309' },
+  { key: 'delivered', label: 'Dostarczone', color: '#2e8b4e' },
+  { key: 'failed', label: 'Nieudane', color: '#c62828' },
+  { key: 'pending', label: 'W toku', color: '#e08a00' },
 ] as const;
 
-const GRID_COLOR = '#c5c1c1';
+const GRID_COLOR = '#e2dcda';
 const MAX_X_LABELS = 7;
 
 function shortDate(isoDate: string) {
@@ -45,7 +45,7 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="m-0 p-0 list-none flex flex-wrap gap-4 text-xs font-semibold text-gray-600">
+      <ul className="m-0 p-0 list-none flex flex-wrap gap-4 text-[13px] font-bold text-[#4a4543]">
         {SERIES.map((series) => (
           <li key={series.key} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-[3px]" style={{ background: series.color }} aria-hidden />
@@ -62,7 +62,7 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
               className="absolute left-0 right-0 border-t"
               style={{ bottom: `${(tick / top) * 100}%`, borderColor: GRID_COLOR }}
             >
-              <span className="absolute -left-9 w-7 -translate-y-1/2 text-right text-[10px] text-gray-500 tabular-nums">
+              <span className="absolute -left-9 w-7 -translate-y-1/2 text-right text-[10px] text-[#5f5a58] tabular-nums">
                 {tick}
               </span>
             </div>
@@ -114,14 +114,14 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
               transform: `translateX(-${activeShare}%)`,
             }}
           >
-            <p className="m-0 mb-1 text-[11px] font-semibold text-gray-500 first-letter:uppercase">
+            <p className="m-0 mb-1 text-[11px] font-semibold text-[#5f5a58] first-letter:uppercase">
               {longDate(active.date)}
             </p>
             {SERIES.map((series) => (
               <p key={series.key} className="m-0 flex items-center gap-2 text-xs">
                 <span className="w-3 h-0.5 rounded" style={{ background: series.color }} aria-hidden />
                 <strong className="text-bakery-dark tabular-nums">{active[series.key]}</strong>
-                <span className="text-gray-500">{series.label}</span>
+                <span className="text-[#5f5a58]">{series.label}</span>
               </p>
             ))}
           </div>
@@ -129,7 +129,7 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
 
         <div className="absolute left-9 right-0 bottom-0 h-5 flex gap-[2px]" aria-hidden>
           {days.map((day, index) => (
-            <div key={day.date} className="flex-1 text-center text-[10px] text-gray-500 whitespace-nowrap">
+            <div key={day.date} className="flex-1 text-center text-[10px] text-[#5f5a58] whitespace-nowrap">
               {index % labelEvery === 0 ? shortDate(day.date) : ''}
             </div>
           ))}
@@ -137,11 +137,11 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
       </div>
 
       <details className="text-xs">
-        <summary className="cursor-pointer font-semibold text-gray-600">Pokaż dane w tabeli</summary>
+        <summary className="cursor-pointer font-extrabold text-[#4a4543]">Pokaż dane w tabeli</summary>
         <div className="mt-2 max-h-64 overflow-y-auto">
           <table className="w-full text-left tabular-nums">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-gray-500">
+              <tr className="text-[10px] uppercase tracking-wider text-[#5f5a58]">
                 <th className="py-1 pr-3 font-bold">Dzień</th>
                 {SERIES.map((series) => (
                   <th key={series.key} className="py-1 pr-3 font-bold text-right">
@@ -152,7 +152,7 @@ export function DailyDeliveriesChart({ days }: { days: DeliveryStatsDay[] }) {
             </thead>
             <tbody>
               {days.map((day) => (
-                <tr key={day.date} className="border-t border-bakery-btnBorder">
+                <tr key={day.date} className="border-t border-[#eee9e7]">
                   <td className="py-1 pr-3 first-letter:uppercase">{longDate(day.date)}</td>
                   {SERIES.map((series) => (
                     <td key={series.key} className="py-1 pr-3 text-right">

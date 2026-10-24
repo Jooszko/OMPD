@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Truck, User, AlertTriangle, Eye, Inbox } from 'lucide-react';
+import { AlertTriangle, Eye, Lock, Truck } from 'lucide-react';
 import {
   ApiError,
   fetchLogistics,
@@ -16,8 +16,7 @@ import { DriverRouteView } from '../components/DriverRouteView';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { type ProblemTarget } from '../components/ReportProblemDialog';
 import { FAILURE_REASON_LABELS } from '../lib/logisticsStatus';
-import { DayNavigator, HistoryNotice } from '../components/DayNavigator';
-import { formatDayLabel } from '../lib/dateFormat';
+import { DateNav } from '../../orders/components/DateNav';
 import { compressImage, ImageProcessingError } from '../lib/imageCompression';
 import { applyReturnQuantities, type ReturnQuantities } from '../lib/returns';
 import { isNetworkError, loadCached, saveCached } from '../../../services/offlineCache';
@@ -39,6 +38,15 @@ import {
 import { FailedActionsPanel } from '../components/FailedActionsPanel';
 
 const AUTO_REFRESH_MS = 60_000;
+const PAGE = 'w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark';
+const TITLE = 'm-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]';
+const CARD = 'rounded-[14px] border border-bakery-btnBorder bg-bakery-card shadow-sm';
+const ALERT = 'm-0 px-4 py-3 rounded-xl bg-[#fbdcdc] text-sm font-semibold text-[#991b1b]';
+
+function isStopDelivered(stop: { orders: LogisticsOrder[] }) {
+  const active = stop.orders.filter((order) => order.status !== 'cancelled');
+  return active.length > 0 && active.every((order) => order.status === 'delivered');
+}
 
 export default function Logistics() {
   const [data, setData] = useState<LogisticsData | null>(null);
@@ -573,18 +581,23 @@ export default function Logistics() {
 
   if (loading) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
-        <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
-        <p>Ładowanie danych...</p>
+      <div className={PAGE}>
+        <h1 className={TITLE}>Logistyka i trasy</h1>
+        <div
+          aria-label="Wczytywanie tras"
+          className="h-[420px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse"
+        />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-0 py-0 sm:px-8 sm:py-6 text-bakery-dark">
-        <h1 className="text-2xl font-bold mb-2">Logistyka i Trasy</h1>
-        <p className="text-red-600">Błąd połączenia z serwerem: {error}</p>
+      <div className={PAGE}>
+        <h1 className={TITLE}>Logistyka i trasy</h1>
+        <p role="alert" className={ALERT}>
+          Błąd połączenia z serwerem: {error}
+        </p>
       </div>
     );
   }
@@ -644,15 +657,32 @@ export default function Logistics() {
   const routes = data.routes;
   const unassigned = data.unassigned;
   const isHistory = data.date !== data.today;
-  const deliveriesToday =
-    routes.reduce((sum, r) => sum + r.stops.filter((s) => s.orders.length > 0).length, 0) + unassigned.length;
+  const activeStops = [...routes.flatMap((route) => route.stops), ...unassigned].filter(
+    (stop) => stop.orders.length > 0
+  );
   const problemStops = [
     ...routes.flatMap((route) => route.stops.map((stop) => ({ stop, routeName: route.route_name }))),
     ...unassigned.map((stop) => ({ stop, routeName: 'Bez trasy' })),
   ].filter(({ stop }) => stop.orders.some((o) => o.status === 'failed'));
+  const tiles = [
+    { label: 'Przystanki', value: activeStops.length, hint: `na ${routes.length} trasach`, color: '' },
+    {
+      label: 'Dostarczone',
+      value: activeStops.filter(isStopDelivered).length,
+      hint: 'przystanków',
+      color: 'text-[#1f5f33]',
+    },
+    {
+      label: 'W trasie',
+      value: activeStops.filter((stop) => stop.orders.some((o) => o.status === 'in_delivery')).length,
+      hint: 'przystanków',
+      color: 'text-[#1d4f91]',
+    },
+    { label: 'Problemy', value: problemStops.length, hint: 'nieudane dostawy', color: 'text-[#b91c1c]' },
+  ];
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
+    <div className={PAGE}>
       {(!isOnline || isStale || pendingCount > 0) && (
         <OfflineBanner
           isOnline={isOnline}
@@ -667,31 +697,20 @@ export default function Logistics() {
         onDismiss={handleDismissFailed}
         onDismissAll={handleDismissAllFailed}
       />
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Logistyka i Trasy</h1>
-          <p className="text-xs text-gray-500 font-medium first-letter:uppercase">
-            {isHistory ? 'Historia dostaw' : 'Plan dostaw na dziś'}: {formatDayLabel(data.date)} — {deliveriesToday}{' '}
-            {deliveriesToday === 1 ? 'dostawa' : 'dostaw(y)'} w {routes.length}{' '}
-            {routes.length === 1 ? 'trasie' : 'trasach'}.
-          </p>
-          <div className="mt-2 flex flex-col gap-2">
-            <DayNavigator date={data.date} today={data.today} onChangeDate={setSelectedDate} />
-            {isHistory && <HistoryNotice />}
-          </div>
-        </div>
 
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className={TITLE}>Logistyka i trasy</h1>
+          <p className="m-0 text-sm text-[#4a4543]">Przebieg dostaw na trasach – statusy, potwierdzenia i zwroty.</p>
+        </div>
         {data.drivers.length > 0 && (
-          <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
-            <Eye className="w-4 h-4" />
-            Podgląd jako kierowca:
+          <label className="flex items-center gap-2 text-[13px] font-extrabold text-[#3d3937]">
+            <Eye aria-hidden className="w-4 h-4" />
+            Podgląd jako kierowca
             <select
               defaultValue=""
-              onChange={(e) => {
-                const id = e.target.value ? Number(e.target.value) : null;
-                setPreviewDriverId(id);
-              }}
-              className="bg-white border border-bakery-btnBorder rounded px-2 py-1 text-xs cursor-pointer outline-none focus:border-bakery-accent"
+              onChange={(e) => setPreviewDriverId(e.target.value ? Number(e.target.value) : null)}
+              className="h-11 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-bold outline-none focus:border-bakery-accent"
             >
               <option value="" disabled>
                 Wybierz kierowcę…
@@ -706,19 +725,43 @@ export default function Logistics() {
         )}
       </div>
 
-      <hr className="border-0 border-t border-bakery-border my-1" />
+      <DateNav
+        date={data.date}
+        today={data.today}
+        max={data.today}
+        onChange={(next) => setSelectedDate(next >= data.today ? null : next)}
+      />
+
+      {isHistory && (
+        <p className="m-0 flex items-center gap-2.5 px-4 py-3 rounded-[14px] bg-[#e6e1df] text-sm font-bold text-[#3d3937]">
+          <Lock aria-hidden className="w-5 h-5 shrink-0" />
+          Miniony dzień – podgląd tylko do odczytu, statusów nie można zmieniać.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {tiles.map((tile) => (
+          <div key={tile.label} className={`${CARD} px-4 py-3.5 flex flex-col gap-1.5`}>
+            <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">{tile.label}</span>
+            <span className={`font-display text-[26px] leading-none font-extrabold tabular-nums ${tile.color}`}>
+              {tile.value}
+            </span>
+            <span className="text-xs font-bold text-[#5f5a58]">{tile.hint}</span>
+          </div>
+        ))}
+      </div>
 
       {problemStops.length > 0 && (
-        <div className="bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex flex-col gap-2">
-          <p className="m-0 flex items-center gap-2 text-sm font-bold text-rose-800">
-            <AlertTriangle className="w-4 h-4 text-rose-600" /> Problemy z dostawą ({problemStops.length})
+        <div className="flex flex-col gap-1.5 px-4 py-3 rounded-[14px] bg-[#fbdcdc] text-[#7f1d1d]">
+          <p className="m-0 flex items-center gap-2 text-sm font-extrabold">
+            <AlertTriangle aria-hidden className="w-5 h-5" /> Nieudane dostawy ({problemStops.length})
           </p>
-          <ul className="m-0 p-0 list-none flex flex-col gap-1">
+          <ul className="m-0 pl-7 list-none flex flex-col gap-0.5 text-[13px] font-semibold">
             {problemStops.map(({ stop, routeName }) => {
               const failedOrder = stop.orders.find((o) => o.status === 'failed');
               return (
-                <li key={stop.client_id} className="text-xs text-rose-900">
-                  <span className="font-bold">{stop.name}</span> · {routeName}
+                <li key={stop.client_id}>
+                  <span className="font-extrabold">{stop.name}</span> · {routeName}
                   {failedOrder?.failure_reason && ` · ${FAILURE_REASON_LABELS[failedOrder.failure_reason]}`}
                 </li>
               );
@@ -728,71 +771,84 @@ export default function Logistics() {
       )}
 
       {routes.length === 0 && unassigned.length === 0 ? (
-        <div className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-sm p-8 flex flex-col items-center gap-2 text-center text-gray-500 text-sm font-semibold italic">
-          <Truck className="w-6 h-6 text-gray-400" />
+        <p className={`${CARD} m-0 px-5 py-8 text-center text-sm font-semibold text-[#5f5a58]`}>
           Brak skonfigurowanych aktywnych tras.
-        </div>
+        </p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {routes.map((route) => (
-            <div
-              key={route.route_id}
-              className="bg-bakery-inactive rounded-xl border border-bakery-btnBorder shadow-md flex flex-col overflow-hidden"
-            >
-              <div className="bg-bakery-dark text-white p-3.5 flex items-center justify-between gap-2 shrink-0">
-                <span className="text-sm font-bold flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-bakery-accent" /> {route.route_name}
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold flex items-center gap-1.5 text-gray-300">
-                    <User className="w-3.5 h-3.5" />
-                    {route.driver ? route.driver.full_name : 'Brak kierowcy'}
+        <div className="flex flex-col gap-4">
+          {routes.map((route) => {
+            const withOrders = route.stops.filter((stop) => stop.orders.length > 0);
+            const idle = route.stops.filter((stop) => stop.orders.length === 0);
+            const done = withOrders.filter(isStopDelivered).length;
+            return (
+              <section key={route.route_id} className={`${CARD} overflow-hidden flex flex-col`}>
+                <header className="px-4 py-3 bg-bakery-dark text-white flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex flex-col gap-0.5">
+                    <span className="inline-flex items-center gap-2 text-[15px] font-extrabold">
+                      <Truck aria-hidden className="w-4 h-4 text-bakery-accent" />
+                      {route.route_name}
+                    </span>
+                    <span className="text-xs font-bold text-[#cfc9c7]">
+                      {route.driver ? route.driver.full_name : 'Brak kierowcy'} · {done}/{withOrders.length} dostarczone
+                    </span>
                   </span>
                   {route.driver && (
                     <button
+                      type="button"
                       onClick={() => setPreviewDriverId(route.driver!.user_id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-bakery-accent text-black rounded-lg shadow-xs transition active:scale-[0.98]"
+                      className="inline-flex items-center gap-1.5 min-h-9 px-3 rounded-[10px] bg-bakery-accent text-bakery-dark text-[12px] font-extrabold hover:brightness-95"
                     >
-                      <Eye className="w-3 h-3" /> Podgląd
+                      <Eye aria-hidden className="w-4 h-4" /> Widok kierowcy
                     </button>
                   )}
-                </div>
-              </div>
-
-              <div className="p-3 flex flex-col gap-2">
-                {route.stops.length === 0 ? (
-                  <div className="flex flex-col items-center gap-1.5 text-gray-500 text-xs font-semibold italic text-center py-6">
-                    <Inbox className="w-5 h-5 text-gray-400" />
-                    Brak dostaw na tej trasie dzisiaj.
-                  </div>
-                ) : (
-                  route.stops.map((stop) => (
-                    <StopCard
-                      key={stop.client_id}
-                      stop={stop}
-                      onAdvance={handleAdvance}
-                      updatingId={updatingId}
-                      readOnly={isHistory}
-                      onDeleteProof={handleDeleteProof}
-                      onSaveReturns={handleSaveReturns}
+                </header>
+                {withOrders.length > 0 && (
+                  <span aria-hidden className="h-1.5 bg-[#e6e1df]">
+                    <span
+                      className="block h-full bg-[#2e8b4e]"
+                      style={{ width: `${(done / withOrders.length) * 100}%` }}
                     />
-                  ))
+                  </span>
                 )}
-              </div>
-            </div>
-          ))}
+                <div className="p-3 flex flex-col gap-2.5">
+                  {withOrders.length === 0 ? (
+                    <p className="m-0 py-5 text-center text-[13px] font-semibold text-[#5f5a58]">
+                      Brak dostaw na tej trasie w tym dniu.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                      {withOrders.map((stop) => (
+                        <StopCard
+                          key={stop.client_id}
+                          stop={stop}
+                          onAdvance={handleAdvance}
+                          updatingId={updatingId}
+                          readOnly={isHistory}
+                          onDeleteProof={handleDeleteProof}
+                          onSaveReturns={handleSaveReturns}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {idle.length > 0 && (
+                    <p className="m-0 px-1 text-[12px] font-semibold text-[#8a8482]">
+                      Bez dostawy: {idle.map((stop) => stop.name).join(', ')}
+                    </p>
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
       {unassigned.length > 0 && (
-        <div className="bg-bakery-inactive rounded-xl border border-amber-400 shadow-md overflow-hidden">
-          <div className="bg-amber-50 border-b border-amber-300 p-3.5 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-bold text-amber-800">
-              Klienci bez przypisanej trasy ({unassigned.length})
-            </span>
-          </div>
-          <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+        <section className={`${CARD} overflow-hidden`}>
+          <header className="px-4 py-3 bg-[#fbe5bd] flex items-center gap-2 text-sm font-extrabold text-[#5c3300]">
+            <AlertTriangle aria-hidden className="w-4 h-4" />
+            Klienci bez przypisanej trasy ({unassigned.length})
+          </header>
+          <div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2.5">
             {unassigned.map((stop) => (
               <StopCard
                 key={stop.client_id}
@@ -805,7 +861,7 @@ export default function Logistics() {
               />
             ))}
           </div>
-        </div>
+        </section>
       )}
       <ActionToast toast={toast} onClose={closeToast} onRefresh={() => refreshData()} />
     </div>
