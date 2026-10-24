@@ -6,31 +6,57 @@ const STEP_BUTTON =
   'size-11 shrink-0 inline-flex items-center justify-center rounded-xl border border-bakery-btnBorder bg-bakery-card text-bakery-dark hover:border-[#8f8a88]';
 const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
 
-export function DateNav({ date, today, onChange }: { date: string; today: string; onChange: (date: string) => void }) {
+export function DateNav({
+  date,
+  today,
+  max,
+  onChange,
+}: {
+  date: string;
+  today: string;
+  max?: string;
+  onChange: (date: string) => void;
+}) {
   const pickerRef = useRef<HTMLInputElement>(null);
   const relative = relativeDayLabel(date, today);
   const tomorrow = shiftIsoDate(today, 1);
+  const quickDays = [
+    { value: today, label: 'Dziś' },
+    { value: tomorrow, label: 'Jutro' },
+  ].filter((option) => !max || option.value <= max);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-2">
-        <button type="button" aria-label="Poprzedni dzień" onClick={() => onChange(shiftIsoDate(date, -1))} className={STEP_BUTTON}>
+      <div className="w-full sm:w-auto flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Poprzedni dzień"
+          onClick={() => onChange(shiftIsoDate(date, -1))}
+          className={STEP_BUTTON}
+        >
           <ChevronLeft aria-hidden className="w-5 h-5" />
         </button>
-        <div className="min-w-[200px] flex flex-col items-center leading-tight">
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">{relative ?? 'Wybrany dzień'}</span>
-          <span className="font-display text-xl font-extrabold first-letter:uppercase">{formatDayHeading(date)}</span>
+        <div className="flex-1 sm:flex-none sm:min-w-[200px] flex flex-col items-center text-center leading-tight">
+          <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">
+            {relative ?? 'Wybrany dzień'}
+          </span>
+          <span className="font-display text-base sm:text-xl font-extrabold text-balance first-letter:uppercase">
+            {formatDayHeading(date)}
+          </span>
         </div>
-        <button type="button" aria-label="Następny dzień" onClick={() => onChange(shiftIsoDate(date, 1))} className={STEP_BUTTON}>
+        <button
+          type="button"
+          aria-label="Następny dzień"
+          onClick={() => onChange(shiftIsoDate(date, 1))}
+          disabled={!!max && date >= max}
+          className={`${STEP_BUTTON} disabled:opacity-40`}
+        >
           <ChevronRight aria-hidden className="w-5 h-5" />
         </button>
       </div>
 
       <div className="flex items-center gap-2">
-        {[
-          { value: today, label: 'Dziś' },
-          { value: tomorrow, label: 'Jutro' },
-        ].map((option) => (
+        {quickDays.map((option) => (
           <button
             key={option.label}
             type="button"
@@ -66,6 +92,7 @@ export function DateNav({ date, today, onChange }: { date: string; today: string
             tabIndex={-1}
             aria-label="Wybierz dzień"
             value={date}
+            max={max}
             onChange={(event) => event.target.value && onChange(event.target.value)}
             className="absolute inset-0 opacity-0 pointer-events-none"
           />

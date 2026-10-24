@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import {
   fetchAuditEntries,
   fetchAuditFilterOptions,
@@ -9,19 +9,29 @@ import {
   type AuditPage,
   type AuditQuery,
 } from '../../../services/api';
-import { toIsoDate } from '../lib/dateFormat';
+import { shiftIsoDate, toIsoDate } from '../lib/dateFormat';
 import { formatEntryCount, groupEntriesByDay } from '../lib/auditFormat';
 import { AuditEntryItem } from '../components/AuditEntryItem';
 
 const PAGE_SIZE = 50;
 const SEARCH_DELAY_MS = 400;
 
-const LABEL_CLASS = 'flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-500';
-const FIELD_CLASS =
-  'px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-bakery-dark bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent';
-const PAGER_BUTTON_CLASS =
-  'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-bakery-dark bg-white border border-bakery-btnBorder rounded-lg hover:bg-bakery-inactive disabled:opacity-40 disabled:pointer-events-none';
+const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
+const CHIP_ACTIVE = 'bg-bakery-dark border-bakery-dark text-white';
+const CHIP_IDLE = 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]';
+const DATE_FIELD =
+  'h-10 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none focus:border-bakery-accent';
+const SELECT =
+  'h-11 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-bold outline-none focus:border-bakery-accent';
+const PAGER_BUTTON =
+  'inline-flex items-center gap-1.5 min-h-10 px-3.5 rounded-xl border border-bakery-btnBorder bg-bakery-card text-[13px] font-extrabold disabled:opacity-40';
+const ALERT = 'm-0 px-4 py-3 rounded-xl bg-[#fbdcdc] text-sm font-semibold text-[#991b1b]';
 
+const RANGE_PRESETS: { label: string; range: (today: string) => { dateFrom: string; dateTo: string } }[] = [
+  { label: 'Dziś', range: (today) => ({ dateFrom: today, dateTo: today }) },
+  { label: '7 dni', range: (today) => ({ dateFrom: shiftIsoDate(today, -6), dateTo: today }) },
+  { label: '30 dni', range: (today) => ({ dateFrom: shiftIsoDate(today, -29), dateTo: today }) },
+];
 interface Filters {
   category: string;
   action: string;
@@ -138,186 +148,210 @@ export default function AuditLogPage() {
     options?.actions.filter((action) => !filters.category || action.category === filters.category) ?? [];
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
-      <div>
-        <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Dziennik zmian</h1>
-        <p className="text-xs text-gray-500 font-medium">
-          Kto, kiedy i co zmienił w systemie: konta i logowania, klienci, produkty, zamówienia, finanse i dostawy.
-          Wpisów nie można edytować ani usuwać.
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark">
+      <div className="flex flex-col gap-1">
+        <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]">Dziennik zmian</h1>
+        <p className="m-0 text-sm text-[#4a4543]">
+          Kto, kiedy i co zmienił w systemie. Wpisów nie można edytować ani usuwać.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className={LABEL_CLASS}>
-          Kategoria
-          <select
-            value={filters.category}
-            onChange={(e) => changeFilter('category', e.target.value)}
-            className={FIELD_CLASS}
-          >
-            <option value="">Wszystkie</option>
-            {options?.categories.map((category) => (
-              <option key={category.value} value={category.value}>
+      <section className="flex flex-col gap-3 px-4 py-3.5 rounded-[14px] border border-bakery-btnBorder bg-bakery-card shadow-sm">
+        <div role="group" aria-label="Kategoria" className="flex flex-wrap gap-2">
+          {[{ value: '', label: 'Wszystko' }, ...(options?.categories ?? [])].map((category) => {
+            const active = filters.category === category.value;
+            return (
+              <button
+                key={category.value || 'all'}
+                type="button"
+                aria-pressed={active}
+                onClick={() => changeFilter('category', category.value)}
+                className={`${CHIP} ${active ? CHIP_ACTIVE : CHIP_IDLE}`}
+              >
                 {category.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={LABEL_CLASS}>
-          Rodzaj zdarzenia
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {RANGE_PRESETS.map((preset) => {
+            const range = preset.range(today);
+            const active = filters.dateFrom === range.dateFrom && filters.dateTo === range.dateTo;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  setFilters((previous) => ({ ...previous, ...range }));
+                  setPage(1);
+                }}
+                className={`${CHIP} ${active ? CHIP_ACTIVE : CHIP_IDLE}`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+          <span className="flex items-center gap-2 text-[13px] font-bold">
+            <input
+              type="date"
+              aria-label="Od"
+              value={filters.dateFrom}
+              max={today}
+              onChange={(e) => changeFilter('dateFrom', e.target.value)}
+              className={DATE_FIELD}
+            />
+            –
+            <input
+              type="date"
+              aria-label="Do"
+              value={filters.dateTo}
+              max={today}
+              onChange={(e) => changeFilter('dateTo', e.target.value)}
+              className={DATE_FIELD}
+            />
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <label className="relative block flex-1 min-w-[220px]">
+            <span className="sr-only">Szukaj</span>
+            <Search
+              aria-hidden
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#8a8482]"
+            />
+            <input
+              type="search"
+              value={searchInput}
+              placeholder="Szukaj w opisie, obiekcie lub osobie…"
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full h-11 pl-11 pr-4 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[15px] font-semibold outline-none focus:border-bakery-accent"
+            />
+          </label>
           <select
+            aria-label="Rodzaj zdarzenia"
             value={filters.action}
             onChange={(e) => changeFilter('action', e.target.value)}
-            className={FIELD_CLASS}
+            className={SELECT}
           >
-            <option value="">Wszystkie</option>
+            <option value="">Wszystkie zdarzenia</option>
             {actionOptions.map((action) => (
               <option key={action.value} value={action.value}>
                 {action.label}
               </option>
             ))}
           </select>
-        </label>
-        <label className={LABEL_CLASS}>
-          Osoba
-          <select value={filters.actor} onChange={(e) => changeFilter('actor', e.target.value)} className={FIELD_CLASS}>
-            <option value="">Wszyscy</option>
+          <select
+            aria-label="Osoba"
+            value={filters.actor}
+            onChange={(e) => changeFilter('actor', e.target.value)}
+            className={SELECT}
+          >
+            <option value="">Wszystkie osoby</option>
             {options?.actors.map((actor) => (
               <option key={actor.id} value={String(actor.id)}>
                 {actor.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className={LABEL_CLASS}>
-          Od
-          <input
-            type="date"
-            value={filters.dateFrom}
-            max={today}
-            onChange={(e) => changeFilter('dateFrom', e.target.value)}
-            className={FIELD_CLASS}
-          />
-        </label>
-        <label className={LABEL_CLASS}>
-          Do
-          <input
-            type="date"
-            value={filters.dateTo}
-            max={today}
-            onChange={(e) => changeFilter('dateTo', e.target.value)}
-            className={FIELD_CLASS}
-          />
-        </label>
-        <label className={`${LABEL_CLASS} flex-1 min-w-[200px]`}>
-          Szukaj
-          <input
-            type="search"
-            value={searchInput}
-            placeholder="Opis, obiekt lub osoba"
-            onChange={(e) => setSearchInput(e.target.value)}
-            className={FIELD_CLASS}
-          />
-        </label>
-        {hasFilters && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="px-3 py-1.5 text-xs font-bold text-bakery-dark bg-white border border-bakery-btnBorder rounded-lg hover:bg-bakery-inactive"
-          >
-            Wyczyść filtry
-          </button>
-        )}
-      </div>
+        </div>
 
-      {objectFilter && (
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-          <span className="text-gray-500">Historia obiektu:</span>
-          <span className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 bg-bakery-dark text-white rounded-full">
-            {objectFilter.label}
+        {objectFilter && (
+          <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold">
+            <span className="text-[#5f5a58]">Historia obiektu:</span>
+            <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-full bg-bakery-dark text-white">
+              {objectFilter.label}
+              <button
+                type="button"
+                onClick={() => {
+                  setObjectFilter(null);
+                  setPage(1);
+                }}
+                aria-label="Pokaż wpisy wszystkich obiektów"
+                className="p-1 rounded-full hover:bg-white/20"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            </span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-bold text-[#4a4543]">
+          <span>{data ? formatEntryCount(data.count) : 'Wczytywanie…'}</span>
+          {hasFilters && (
             <button
               type="button"
-              onClick={() => {
-                setObjectFilter(null);
-                setPage(1);
-              }}
-              aria-label="Pokaż wpisy wszystkich obiektów"
-              className="p-0.5 rounded-full hover:bg-white/20"
+              onClick={clearFilters}
+              className="underline underline-offset-2 hover:text-bakery-dark"
             >
-              <X className="w-3.5 h-3.5" aria-hidden />
+              Wyczyść filtry
             </button>
-          </span>
-        </div>
-      )}
-
-      <hr className="border-0 border-t border-bakery-border my-1" />
-
-      {rangeError && <p className="m-0 text-sm font-semibold text-rose-700">{rangeError}</p>}
-      {!rangeError && current?.error && (
-        <p className="m-0 text-sm font-semibold text-rose-700">Nie udało się pobrać dziennika: {current.error}</p>
-      )}
-      {!rangeError && !current && !data && (
-        <div className="flex flex-col gap-3" aria-label="Wczytywanie dziennika">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-20 rounded border border-bakery-btnBorder bg-bakery-inactive animate-pulse" />
-          ))}
-        </div>
-      )}
-
-      {!rangeError && data && (
-        <div
-          className={`flex flex-col gap-4 transition-opacity ${isRefetching ? 'opacity-50' : ''}`}
-          aria-busy={isRefetching}
-        >
-          {data.results.length === 0 ? (
-            <p className="m-0 text-sm font-semibold text-gray-500 italic">Brak wpisów dla wybranych filtrów.</p>
-          ) : (
-            groupEntriesByDay(data.results).map((group) => (
-              <section
-                key={group.day}
-                className="bg-bakery-inactive border border-bakery-btnBorder rounded shadow-sm px-4 py-2"
-              >
-                <h2 className="m-0 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                  {group.label}
-                </h2>
-                <ul className="m-0 p-0 list-none">
-                  {group.entries.map((entry) => (
-                    <AuditEntryItem key={entry.entry_id} entry={entry} onShowHistory={showHistory} />
-                  ))}
-                </ul>
-              </section>
-            ))
           )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-gray-500">
-            <span>
-              {formatEntryCount(data.count)}
-              {totalPages > 1 && ` · strona ${page} z ${totalPages}`}
-            </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((value) => value - 1)}
-                  disabled={!data.previous || isRefetching}
-                  className={PAGER_BUTTON_CLASS}
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" aria-hidden />
-                  Nowsze
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((value) => value + 1)}
-                  disabled={!data.next || isRefetching}
-                  className={PAGER_BUTTON_CLASS}
-                >
-                  Starsze
-                  <ChevronRight className="w-3.5 h-3.5" aria-hidden />
-                </button>
-              </div>
-            )}
-          </div>
         </div>
+      </section>
+
+      {rangeError && <p className={ALERT}>{rangeError}</p>}
+      {!rangeError && current?.error && <p className={ALERT}>Nie udało się pobrać dziennika: {current.error}</p>}
+      {!rangeError && !current && !data && (
+        <div
+          aria-label="Wczytywanie dziennika"
+          className="h-[420px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse"
+        />
+      )}
+
+      {!rangeError && data && data.results.length === 0 && (
+        <p className="m-0 px-5 py-8 rounded-[14px] border border-bakery-btnBorder bg-bakery-card text-center text-sm font-semibold text-[#5f5a58]">
+          Brak wpisów dla wybranych filtrów.
+        </p>
+      )}
+
+      {!rangeError && data && data.results.length > 0 && (
+        <section
+          aria-busy={isRefetching}
+          className={`bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden transition-opacity ${
+            isRefetching ? 'opacity-60' : ''
+          }`}
+        >
+          {groupEntriesByDay(data.results).map((group) => (
+            <div key={group.day} role="group" aria-label={group.label}>
+              <h2 className="m-0 px-4 md:px-5 py-2.5 bg-[#efebe9] border-t border-[#e2dcda] text-xs font-extrabold uppercase tracking-[0.06em] text-[#3d3937]">
+                {group.label}
+              </h2>
+              <ul className="m-0 p-0 list-none">
+                {group.entries.map((entry) => (
+                  <AuditEntryItem key={entry.entry_id} entry={entry} onShowHistory={showHistory} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {!rangeError && data && totalPages > 1 && (
+        <nav aria-label="Strony dziennika" className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPage((value) => value - 1)}
+            disabled={!data.previous || isRefetching}
+            className={PAGER_BUTTON}
+          >
+            <ChevronLeft className="w-4 h-4" aria-hidden />
+            Nowsze
+          </button>
+          <span className="text-[13px] font-bold tabular-nums">
+            Strona {page} z {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((value) => value + 1)}
+            disabled={!data.next || isRefetching}
+            className={PAGER_BUTTON}
+          >
+            Starsze
+            <ChevronRight className="w-4 h-4" aria-hidden />
+          </button>
+        </nav>
       )}
     </div>
   );

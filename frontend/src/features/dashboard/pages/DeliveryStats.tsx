@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { AlertTriangle, CircleCheck, Hourglass, Percent } from 'lucide-react';
 import { fetchDeliveryStats, type DeliveryStats } from '../../../services/api';
 import { shiftIsoDate, toIsoDate } from '../lib/dateFormat';
 import { formatPercent } from '../lib/statsFormat';
@@ -9,13 +8,12 @@ import { DriversTable } from '../components/DriversTable';
 import { ProofCoverage } from '../components/ProofCoverage';
 
 const PRESETS = [7, 30, 90] as const;
-
-const TILE_TONES = {
-  emerald: 'bg-emerald-100 border-emerald-200 text-emerald-700',
-  rose: 'bg-rose-100 border-rose-200 text-rose-700',
-  slate: 'bg-slate-100 border-slate-200 text-slate-700',
-  amber: 'bg-amber-100 border-amber-200 text-amber-700',
-};
+const PROBLEM_BAR_COLOR = '#c62828';
+const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
+const DATE_FIELD =
+  'h-10 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none focus:border-bakery-accent';
+const CARD = 'rounded-[14px] border border-bakery-btnBorder bg-bakery-card shadow-sm';
+const ALERT = 'm-0 px-4 py-3 rounded-xl bg-[#fbdcdc] text-sm font-semibold text-[#991b1b]';
 
 interface LoadedStats {
   key: string;
@@ -28,34 +26,15 @@ function presetRange(days: number) {
   return { start: shiftIsoDate(end, -(days - 1)), end };
 }
 
-function StatTile({
-  icon,
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  hint?: string;
-  tone: keyof typeof TILE_TONES;
-}) {
+function StatTile({ label, value, hint, color = '' }: { label: string; value: string; hint: string; color?: string }) {
   return (
-    <div className="bg-bakery-inactive border border-bakery-btnBorder p-4 rounded shadow-sm flex items-center gap-4">
-      <div className={`w-10 h-10 border rounded-lg flex items-center justify-center shrink-0 ${TILE_TONES[tone]}`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <span className="text-[10px] font-bold text-gray-500 uppercase block tracking-wider">{label}</span>
-        <p className="text-xl font-black text-bakery-dark font-mono m-0">{value}</p>
-        {hint && <p className="m-0 text-[11px] text-gray-500 font-medium">{hint}</p>}
-      </div>
+    <div className={`${CARD} px-4 py-3.5 flex flex-col gap-1.5`}>
+      <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">{label}</span>
+      <span className={`font-display text-[26px] leading-none font-extrabold tabular-nums ${color}`}>{value}</span>
+      <span className="text-xs font-bold text-[#5f5a58]">{hint}</span>
     </div>
   );
 }
-
-const PROBLEM_BAR_COLOR = '#e11d48';
 
 function ChartCard({
   title,
@@ -69,12 +48,10 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <section
-      className={`bg-bakery-inactive border border-bakery-btnBorder rounded shadow-sm p-4 flex flex-col gap-3 ${className}`}
-    >
-      <div>
-        <h2 className="m-0 text-sm font-bold text-bakery-dark">{title}</h2>
-        {subtitle && <p className="m-0 text-[11px] text-gray-500 font-medium">{subtitle}</p>}
+    <section className={`${CARD} px-4 sm:px-5 py-4 flex flex-col gap-3.5 ${className}`}>
+      <div className="flex flex-col gap-0.5">
+        <h2 className="m-0 text-[15px] font-extrabold">{title}</h2>
+        {subtitle && <p className="m-0 text-xs font-semibold text-[#5f5a58]">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -123,108 +100,95 @@ export default function DeliveryStatsPage() {
   const isEmpty = stats !== null && handled + stats.summary.pending === 0;
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
-      <div>
-        <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Statystyki dostaw</h1>
-        <p className="text-xs text-gray-500 font-medium">
-          Skuteczność dostaw, przyczyny problemów i praca kierowców w wybranym okresie. Liczone są przystanki (klient w
-          danym dniu), a nie pojedyncze pozycje zamówień.
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark">
+      <div className="flex flex-col gap-1">
+        <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]">
+          Statystyki dostaw
+        </h1>
+        <p className="m-0 text-sm text-[#4a4543]">
+          Skuteczność dostaw, przyczyny problemów i praca kierowców. Liczone są przystanki (klient w danym dniu), a nie
+          pojedyncze pozycje zamówień.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <section className={`${CARD} px-4 py-3.5 flex flex-wrap items-center gap-2`}>
         {PRESETS.map((days) => (
           <button
             key={days}
             type="button"
             onClick={() => choosePreset(days)}
             aria-pressed={activePreset === days}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition active:scale-[0.98] ${
+            className={`${CHIP} ${
               activePreset === days
-                ? 'bg-bakery-dark text-white border-bakery-dark'
-                : 'bg-white text-bakery-dark border-bakery-btnBorder hover:bg-bakery-inactive'
+                ? 'bg-bakery-dark border-bakery-dark text-white'
+                : 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]'
             }`}
           >
             {days} dni
           </button>
         ))}
-        <span className="mx-1 text-xs text-gray-400" aria-hidden>
-          |
-        </span>
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
-          od
+        <span className="flex items-center gap-2 text-[13px] font-bold">
           <input
             type="date"
+            aria-label="Od"
             value={range.start}
             max={today}
             onChange={(e) => changeDate('start', e.target.value)}
-            className="px-2 py-1 text-xs font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent"
+            className={DATE_FIELD}
           />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
-          do
+          –
           <input
             type="date"
+            aria-label="Do"
             value={range.end}
             max={today}
             onChange={(e) => changeDate('end', e.target.value)}
-            className="px-2 py-1 text-xs font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent"
+            className={DATE_FIELD}
           />
-        </label>
-      </div>
+        </span>
+      </section>
 
-      <hr className="border-0 border-t border-bakery-border my-1" />
-
-      {rangeError && <p className="m-0 text-sm font-semibold text-rose-700">{rangeError}</p>}
-      {!rangeError && current?.error && (
-        <p className="m-0 text-sm font-semibold text-rose-700">Nie udało się pobrać statystyk: {current.error}</p>
-      )}
+      {rangeError && <p className={ALERT}>{rangeError}</p>}
+      {!rangeError && current?.error && <p className={ALERT}>Nie udało się pobrać statystyk: {current.error}</p>}
       {!rangeError && !current && !stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="Wczytywanie statystyk">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Wczytywanie statystyk">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-[76px] rounded border border-bakery-btnBorder bg-bakery-inactive animate-pulse" />
+            <div
+              key={i}
+              className="h-[100px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse"
+            />
           ))}
         </div>
       )}
 
       {stats && (
         <div
-          className={`flex flex-col gap-5 transition-opacity ${isRefetching ? 'opacity-50' : ''}`}
+          className={`flex flex-col gap-4 transition-opacity ${isRefetching ? 'opacity-60' : ''}`}
           aria-busy={isRefetching}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <StatTile
-              icon={<Percent className="w-6 h-6" />}
               label="Skuteczność"
               value={formatPercent(stats.summary.success_rate)}
-              hint={`${stats.summary.delivered} z ${handled} obsłużonych przystanków`}
-              tone="emerald"
+              hint={`${stats.summary.delivered} z ${handled} obsłużonych`}
+              color="text-[#1f5f33]"
             />
+            <StatTile label="Dostarczone" value={String(stats.summary.delivered)} hint="przystanków" />
+            <StatTile label="Nieudane" value={String(stats.summary.failed)} hint="przystanków" color="text-[#b91c1c]" />
             <StatTile
-              icon={<CircleCheck className="w-6 h-6" />}
-              label="Dostarczone"
-              value={String(stats.summary.delivered)}
-              tone="slate"
-            />
-            <StatTile
-              icon={<AlertTriangle className="w-6 h-6" />}
-              label="Nieudane"
-              value={String(stats.summary.failed)}
-              tone="rose"
-            />
-            <StatTile
-              icon={<Hourglass className="w-6 h-6" />}
               label="W toku"
               value={String(stats.summary.pending)}
-              hint="jeszcze nieobsłużone (np. dzisiejsze)"
-              tone="amber"
+              hint="jeszcze nieobsłużone"
+              color="text-[#9a5b00]"
             />
           </div>
 
           {isEmpty ? (
-            <p className="m-0 text-sm font-semibold text-gray-500 italic">Brak dostaw w wybranym okresie.</p>
+            <p className={`${CARD} m-0 px-5 py-8 text-center text-sm font-semibold text-[#5f5a58]`}>
+              Brak dostaw w wybranym okresie.
+            </p>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ChartCard
                 title="Przystanki dziennie"
                 subtitle="Najedź na dzień albo użyj strzałek, aby zobaczyć liczby."
