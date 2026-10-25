@@ -14,10 +14,11 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
-from users.views import ChangeInitialPasswordView, LoginView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from users.views import ChangeInitialPasswordView, LoginView, LogoutView, RefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,7 +33,14 @@ urlpatterns = [
     path('api/audit/', include('audit.urls')),
 
     path('api/auth/login/', LoginView.as_view(), name ='token_obtain_pair'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name ='token_refresh'),
-    path('api/auth/logout/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    path('api/auth/refresh/', RefreshView.as_view(), name ='token_refresh'),
+    path('api/auth/logout/', LogoutView.as_view(), name='token_blacklist'),
     path('api/auth/change-password/', ChangeInitialPasswordView.as_view(), name='change-initial-password'),
 ]
+
+if settings.API_DOCS_ENABLED:
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='api-schema'),
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-docs'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='api-schema'), name='api-redoc'),
+    ]

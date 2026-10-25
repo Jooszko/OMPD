@@ -3,6 +3,8 @@ from decimal import Decimal
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport, RecurringExpense
@@ -26,6 +28,13 @@ from .recurring import (
     recurring_label,
     recurring_state,
     serialize_recurring,
+)
+from common.openapi import error_response
+from .openapi import (
+    STATEMENT_PARAMS, CloseDayInputSerializer, ClosingDaySerializer, ExpenseInputSerializer, ExpenseSerializer,
+    ExpenseUpdateSerializer, OverviewSerializer, ProfitabilitySerializer, RecurringExpenseSerializer,
+    RecurringListSerializer, RecurringUpdateSerializer, StatementSerializer, range_params,
+    PriceInputSerializer, PriceResultSerializer, SupplierInputSerializer,
 )
 
 SUPPLIER_AUDIT_LABELS = {
@@ -99,11 +108,25 @@ def _supplier_catalog_error(products_data):
 
 class SupplierListView(APIView):
     permission_classes = [AdminOnly]
+
+    @extend_schema(
+        summary='Lista dostawców',
+        description='Dostawcy z asortymentem: surowce, ostatnie ceny i czy surowiec jest nadal przypisany.',
+        responses={200: SupplierSerializer(many=True)},
+    )
     def get(self, request):
         suppliers = Supplier.objects.all().prefetch_related('ingredients_catalog__ingredient')
         serializer = SupplierSerializer(suppliers, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Dodanie dostawcy',
+        request=SupplierInputSerializer,
+        responses={
+            201: SupplierSerializer,
+            400: OpenApiResponse(description='Błędy walidacji pól albo {"error": …} przy błędnym asortymencie.'),
+        },
+    )
     def post(self, request):
         products_data = request.data.pop('products', [])
         catalog_error = _supplier_catalog_error(products_data)
@@ -128,6 +151,17 @@ class SupplierListView(APIView):
 
 class SupplierDetailView(APIView):
     permission_classes = [AdminOnly]
+
+    @extend_schema(
+        summary='Zmiana dostawcy i jego asortymentu',
+        description='Zmienia tylko przesłane pola. Surowce, których nie ma na liście products, zostają odpięte.',
+        request=SupplierInputSerializer,
+        responses={
+            200: SupplierSerializer,
+            400: OpenApiResponse(description='Błędy walidacji pól albo {"error": …} przy błędnym asortymencie.'),
+            404: OpenApiResponse(description='Nie znaleziono dostawcy.'),
+        },
+    )
     def put(self, request, pk):
         supplier = get_object_or_404(Supplier, pk=pk)
 
@@ -157,6 +191,12 @@ class SupplierDetailView(APIView):
 class ExpenseListCreateView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Wydatki z okresu',
+        description='Najpierw dopisuje zaległe wydatki cykliczne, potem zwraca wydatki od najnowszych.',
+        parameters=range_params(30),
+        responses={200: ExpenseSerializer(many=True), 400: error_response('Błędny okres.')},
+    )
     def get(self, request):
         period, error = _parse_period(request.query_params)
         if error:
@@ -170,6 +210,12 @@ class ExpenseListCreateView(APIView):
         )
         return Response([serialize_expense(expense) for expense in expenses])
 
+    @extend_schema(
+        summary='Dodanie wydatku',
+        description='Z repeat_monthly = true tworzy też wydatek cykliczny, który będzie dopisywany co miesiąc.',
+        request=ExpenseInputSerializer,
+        responses={201: ExpenseSerializer, 400: error_response('Błędna kategoria, kwota, data lub dzień miesiąca.')},
+    )
     def post(self, request):
         fields, error = parse_expense(request.data)
         if error:
@@ -210,6 +256,11 @@ class ExpenseListCreateView(APIView):
 class ExpenseDetailView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Zmiana wydatku',
+        request=ExpenseUpdateSerializer,
+        responses={200: ExpenseSerializer, 400: error_response('Błędne dane wydatku.'), 404: OpenApiResponse(description='Nie znaleziono.'),},
+    )
     def patch(self, request, pk):
         expense = get_object_or_404(Expense.objects.select_related('created_by'), pk=pk)
         fields, error = parse_expense(request.data, partial=True)
@@ -231,6 +282,10 @@ class ExpenseDetailView(APIView):
                 )
         return Response(serialize_expense(expense))
 
+    @extend_schema(
+        summary='Usunięcie wydatku',
+        responses={204: OpenApiResponse(description='Usunięto.'), 404: OpenApiResponse(description='Nie znaleziono.'),},
+    )
     def delete(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
         with transaction.atomic():
@@ -249,6 +304,11 @@ class ExpenseDetailView(APIView):
 class RecurringExpenseListView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Wydatki cykliczne',
+        description='Szablony wydatków dopisywanych co miesiąc, z najbliższą i poprzednią datą.',
+        responses={200: RecurringListSerializer},
+    )
     def get(self, request):
         materialize_due_expenses()
         today = date_cls.today()
@@ -262,6 +322,12 @@ class RecurringExpenseListView(APIView):
 class RecurringExpenseDetailView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Zmiana lub wstrzymanie wydatku cyklicznego',
+        description='Zmiana dotyczy kolejnych miesięcy – wydatki dodane wcześniej zostają bez zmian.',
+        request=RecurringUpdateSerializer,
+        responses={200: RecurringExpenseSerializer, 400: error_response('Błędne dane.'), 404: OpenApiResponse(description='Nie znaleziono.'),},
+    )
     def patch(self, request, pk):
         template = get_object_or_404(RecurringExpense, pk=pk)
         fields, error = parse_recurring_changes(request.data)
@@ -289,6 +355,11 @@ class RecurringExpenseDetailView(APIView):
                 )
         return Response(serialize_recurring(template, date_cls.today()))
 
+    @extend_schema(
+        summary='Usunięcie wydatku cyklicznego',
+        description='Dodane wcześniej wydatki zostają.',
+        responses={204: OpenApiResponse(description='Usunięto.'), 404: OpenApiResponse(description='Nie znaleziono.'),},
+    )
     def delete(self, request, pk):
         template = get_object_or_404(RecurringExpense, pk=pk)
         with transaction.atomic():
@@ -308,7 +379,6 @@ MAX_PERIOD_DAYS = 366
 
 
 def _parse_period(params, default_days=30):
-    """(start, end) from ?start=&end=, by default the last `default_days` days ending today."""
     try:
         end = date_cls.fromisoformat(params['end']) if params.get('end') else date_cls.today()
         start = date_cls.fromisoformat(params['start']) if params.get('start') else end - timedelta(days=default_days - 1)
@@ -324,6 +394,12 @@ def _parse_period(params, default_days=30):
 class FinanceOverviewView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Przegląd finansów',
+        description='Sumy okresu z porównaniem do poprzedniego, wynik dzień po dniu, struktura kosztów i najlepsi klienci.',
+        parameters=range_params(30),
+        responses={200: OverviewSerializer, 400: error_response('Błędny okres.')},
+    )
     def get(self, request):
         period, error = _parse_period(request.query_params)
         if error:
@@ -334,6 +410,12 @@ class FinanceOverviewView(APIView):
 class ProfitabilityView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Rentowność produktów',
+        description='Koszt surowców i marża każdego produktu oraz surowce, którym brakuje ceny u dostawcy.',
+        parameters=range_params(30),
+        responses={200: ProfitabilitySerializer, 400: error_response('Błędny okres.')},
+    )
     def get(self, request):
         period, error = _parse_period(request.query_params)
         if error:
@@ -344,6 +426,16 @@ class ProfitabilityView(APIView):
 class SupplierIngredientPriceView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Zmiana ceny surowca u dostawcy',
+        description='Cena służy do liczenia kosztu surowców i rentowności produktów.',
+        request=PriceInputSerializer,
+        responses={
+            200: PriceResultSerializer,
+            400: error_response('Nieprawidłowa cena.'),
+            404: OpenApiResponse(description='Nie znaleziono pozycji asortymentu.'),
+        },
+    )
     def patch(self, request, pk):
         item = get_object_or_404(SupplierIngredient.objects.select_related('supplier', 'ingredient'), pk=pk)
         price, error = parse_price(request.data.get('last_price'))
@@ -384,6 +476,12 @@ def _statement_period(params):
 class StatementView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Rachunek zysków i strat',
+        description='Zestawienie za miesiąc, kwartał albo rok z porównaniem do poprzedniego okresu i trendem.',
+        parameters=STATEMENT_PARAMS,
+        responses={200: StatementSerializer, 400: error_response('Błędny rodzaj okresu lub data.')},
+    )
     def get(self, request):
         period, error = _statement_period(request.query_params)
         if error:
@@ -395,6 +493,22 @@ class StatementView(APIView):
 class FinanceExportView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Eksport CSV dla księgowej',
+        parameters=[
+            OpenApiParameter(
+                'kind', str, OpenApiParameter.PATH, enum=list(EXPORTS),
+                description='statement – rachunek zysków i strat, expenses – wydatki, clients – sprzedaż wg klientów, '
+                            'closings – zamknięcia dni.',
+            ),
+            *STATEMENT_PARAMS,
+        ],
+        responses={
+            (200, 'text/csv'): OpenApiResponse(OpenApiTypes.BINARY, description='Plik CSV (UTF-8, separator ;).'),
+            400: error_response('Błędny rodzaj okresu lub data.'),
+            404: error_response('Nieznany rodzaj eksportu.'),
+        },
+    )
     def get(self, request, kind):
         if kind not in EXPORTS:
             return Response({'error': 'Nieznany rodzaj eksportu.'}, status=status.HTTP_404_NOT_FOUND)
@@ -418,6 +532,12 @@ def _report_amounts(report):
 class ClosingListView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Zamknięcia dni',
+        description='Każdy dzień okresu (najwyżej 92) z wynikiem liczonym na bieżąco i – dla zamkniętych – zapisanym.',
+        parameters=range_params(14),
+        responses={200: ClosingDaySerializer(many=True), 400: error_response('Błędny okres.')},
+    )
     def get(self, request):
         period, error = _parse_period(request.query_params, default_days=14)
         if error:
@@ -433,6 +553,15 @@ class ClosingListView(APIView):
         materialize_due_expenses()
         return Response(build_closings(start, end))
 
+    @extend_schema(
+        summary='Zamknięcie dnia',
+        description='Zapisuje na stałe przychód, koszty i zysk minionego dnia.',
+        request=CloseDayInputSerializer,
+        responses={
+            201: ClosingDaySerializer,
+            400: error_response('Błędna data, dzień z przyszłości albo już zamknięty.'),
+        },
+    )
     def post(self, request):
         try:
             day = date_cls.fromisoformat(str(request.data.get('date')))
@@ -458,6 +587,16 @@ class ClosingListView(APIView):
 class ClosingDetailView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Ponowne otwarcie dnia',
+        description='Usuwa zapisane kwoty – dzień znowu liczy się na bieżąco.',
+        parameters=[OpenApiParameter('day', OpenApiTypes.DATE, OpenApiParameter.PATH)],
+        responses={
+            204: OpenApiResponse(description='Otwarto ponownie.'),
+            400: error_response('Błędna data.'),
+            404: OpenApiResponse(description='Ten dzień nie był zamknięty.'),
+        },
+    )
     def delete(self, request, day):
         try:
             parsed_day = date_cls.fromisoformat(day)

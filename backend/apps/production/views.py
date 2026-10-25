@@ -7,12 +7,19 @@ from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 
 from products.models import Ingredient, Product
 
 from . import audit as production_audit
 from .models import BatchStageLog, Dough, Mixer, ProductBakeSpec, ProductionBatch, ProductionPlan, WasteRecord
 from .serializers import BakeSpecSerializer, DoughSerializer, MixerSerializer
+from common.openapi import error_response
+from .openapi import (
+    DELIVERY_DATE_PARAM, FORBIDDEN, FORM_ERROR, NOT_FOUND, BakeSpecRowSerializer, BatchActionResultSerializer,
+    DeliveryDateInputSerializer, ProductionBoardSerializer, ProductionPlanSerializer, ProductionSettingsSerializer,
+    StageInputSerializer, WasteInputSerializer, WasteResultSerializer,
+)
 from .services.lifecycle import (
     BatchActionError,
     StaleStageError,
@@ -157,6 +164,15 @@ class ProductionPlanView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Plan produkcji',
+        description=(
+            'Zapotrzebowanie z zamówień rozpisane na ciasta, dzieże i odważenia surowców, z bilansem magazynu. '
+            'Po zatwierdzeniu planu – zapisane dzieże i zmiany zamówień od tego momentu.'
+        ),
+        parameters=[DELIVERY_DATE_PARAM],
+        responses={200: ProductionPlanSerializer, 400: error_response('Błędny format daty.'), 403: FORBIDDEN},
+    )
     def get(self, request):
         if request.user.role not in PRODUCTION_ROLES:
             return _forbidden()
@@ -173,6 +189,17 @@ class ProductionPlanView(APIView):
             'order_changes': changes,
         })
 
+    @extend_schema(
+        summary='Zatwierdzenie planu produkcji',
+        description='Zapisuje plan i tworzy dzieże na tablicy produkcji. Tylko kierownik, dopóki produkcja nie ruszyła.',
+        request=DeliveryDateInputSerializer,
+        responses={
+            201: ProductionPlanSerializer,
+            400: error_response('Błędna data albo planu nie da się wyliczyć.'),
+            403: FORBIDDEN,
+            409: error_response('Produkcja według tego planu już ruszyła.'),
+        },
+    )
     def post(self, request):
         if request.user.role != 'admin':
             return Response(
@@ -205,6 +232,12 @@ class ProductionBoardView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Tablica produkcji',
+        description='Wszystkie dzieże zatwierdzonego planu z etapami, odważeniami i stratami oraz pokrycie zamówień.',
+        parameters=[DELIVERY_DATE_PARAM],
+        responses={200: ProductionBoardSerializer, 400: error_response('Błędny format daty.'), 403: FORBIDDEN},
+    )
     def get(self, request):
         if request.user.role not in PRODUCTION_ROLES:
             return _forbidden()
@@ -252,12 +285,34 @@ class _BatchActionView(APIView):
             **extra,
         })
 
-
+@extend_schema_view(post=extend_schema(
+    summary='Rozpoczęcie etapu dzieży',
+    description='Piekarz bierze dzieżę do pracy na bieżącym etapie.',
+    request=StageInputSerializer,
+    responses={
+        200: BatchActionResultSerializer,
+        400: error_response('Akcja niemożliwa na tym etapie albo błędne dane.'),
+        403: FORBIDDEN,
+        404: error_response('Nie znaleziono dzieży.'),
+        409: error_response('Dzieża jest już na innym etapie – odśwież tablicę.'),
+    },
+))
 class BatchStartStageView(_BatchActionView):
     def perform(self, request, pk):
         start_stage(pk, request.user, expected_stage=request.data.get('stage'))
 
-
+@extend_schema_view(post=extend_schema(
+    summary='Zakończenie etapu dzieży',
+    description='Kończy bieżący etap i przesuwa dzieżę na następny.',
+    request=StageInputSerializer,
+    responses={
+        200: BatchActionResultSerializer,
+        400: error_response('Akcja niemożliwa na tym etapie albo błędne dane.'),
+        403: FORBIDDEN,
+        404: error_response('Nie znaleziono dzieży.'),
+        409: error_response('Dzieża jest już na innym etapie – odśwież tablicę.'),
+    },
+))
 class BatchAdvanceStageView(_BatchActionView):
     def perform(self, request, pk):
         advanced = advance_stage(pk, request.user, expected_stage=request.data.get('stage'))
@@ -265,7 +320,18 @@ class BatchAdvanceStageView(_BatchActionView):
         batch = ProductionBatch.objects.select_related('dough', 'plan').get(pk=pk)
         production_audit.stage_completed(request, batch, finished_stage)
 
-
+@extend_schema_view(post=extend_schema(
+    summary='Zapisanie strat w dzieży',
+    description='Zapisuje zepsute sztuki wyrobu i zwraca, ilu sztuk zabraknie do zamówień.',
+    request=WasteInputSerializer,
+    responses={
+        200: WasteResultSerializer,
+        400: error_response('Akcja niemożliwa na tym etapie albo błędne dane.'),
+        403: FORBIDDEN,
+        404: error_response('Nie znaleziono dzieży.'),
+        409: error_response('Dzieża jest już na innym etapie – odśwież tablicę.'),
+    },
+))
 class BatchWasteView(_BatchActionView):
     def perform(self, request, pk):
         try:
@@ -334,6 +400,11 @@ class ProductionSettingsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Ustawienia produkcji',
+        description='Mieszałki, ciasta z recepturami, parametry wypieku wyrobów i lista surowców w jednym zapytaniu.',
+        responses={200: ProductionSettingsSerializer, 403: FORBIDDEN},
+    )
     def get(self, request):
         if request.user.role not in PRODUCTION_ROLES:
             return _forbidden()
@@ -352,6 +423,11 @@ class ProductionSettingsView(APIView):
 class MixerListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Dodanie mieszałki',
+        request=MixerSerializer,
+        responses={201: MixerSerializer, 400: FORM_ERROR, 403: FORBIDDEN},
+    )
     def post(self, request):
         if denied := _only_admin(request):
             return denied
@@ -369,6 +445,12 @@ class MixerDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zmiana lub wyłączenie mieszałki',
+        description='Mieszałek się nie usuwa – wyłącza się je polem is_active.',
+        request=MixerSerializer,
+        responses={200: MixerSerializer, 400: FORM_ERROR, 403: FORBIDDEN, 404: NOT_FOUND},
+    )
     def patch(self, request, pk):
         if denied := _only_admin(request):
             return denied
@@ -386,6 +468,12 @@ class MixerDetailView(APIView):
 class DoughListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Dodanie ciasta',
+        description='Ciasto z recepturą na 1 kg, czasami mieszania i garowania oraz zapasem na straty.',
+        request=DoughSerializer,
+        responses={201: DoughSerializer, 400: FORM_ERROR, 403: FORBIDDEN},
+    )
     def post(self, request):
         if denied := _only_admin(request):
             return denied
@@ -401,6 +489,11 @@ class DoughListView(APIView):
 class DoughDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zmiana ciasta',
+        request=DoughSerializer,
+        responses={200: DoughSerializer, 400: FORM_ERROR, 403: FORBIDDEN, 404: NOT_FOUND},
+    )
     def patch(self, request, pk):
         if denied := _only_admin(request):
             return denied
@@ -414,6 +507,15 @@ class DoughDetailView(APIView):
             production_audit.dough_saved(request, dough, before)
         return Response(DoughSerializer(_dough_queryset().get(pk=dough.pk)).data)
 
+    @extend_schema(
+        summary='Usunięcie ciasta',
+        responses={
+            204: OpenApiResponse(description='Usunięto.'),
+            403: FORBIDDEN,
+            404: NOT_FOUND,
+            409: error_response('Ciasto jest używane przez wyroby lub zapisane plany.'),
+        },
+    )
     def delete(self, request, pk):
         if denied := _only_admin(request):
             return denied
@@ -437,6 +539,12 @@ class BakeSpecDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Parametry wypieku wyrobu',
+        description='Tworzy albo nadpisuje ciasto, wagę kęsa i parametry pieca dla wyrobu – od tej chwili jest planowany.',
+        request=BakeSpecSerializer,
+        responses={200: BakeSpecRowSerializer, 400: FORM_ERROR, 403: FORBIDDEN, 404: NOT_FOUND},
+    )
     def put(self, request, product_id):
         if denied := _only_admin(request):
             return denied
@@ -452,6 +560,11 @@ class BakeSpecDetailView(APIView):
         product = Product.objects.select_related('bake_spec__dough').get(pk=product.pk)
         return Response(_bake_spec_row(product))
 
+    @extend_schema(
+        summary='Wyłączenie wyrobu z planowania',
+        description='Usuwa parametry wypieku – wyrób przestaje trafiać do planu produkcji.',
+        responses={204: OpenApiResponse(description='Gotowe.'), 403: FORBIDDEN},
+    )
     def delete(self, request, product_id):
         if denied := _only_admin(request):
             return denied

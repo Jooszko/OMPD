@@ -52,7 +52,7 @@ class StaffUserSerializer(UserSerializer):
         fields = UserSerializer.Meta.fields + ['last_login', 'date_joined', 'routes']
         read_only_fields = UserSerializer.Meta.read_only_fields + ['last_login', 'date_joined']
 
-    def get_routes(self, user):
+    def get_routes(self, user) -> list[str]:
         return sorted(route.route_name for route in user.routes.all() if route.is_active)
 
 class NotificationSerializer(serializers.ModelSerializer):

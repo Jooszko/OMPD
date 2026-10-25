@@ -53,7 +53,7 @@ class DoughSerializer(serializers.ModelSerializer):
             'proofing_time_min', 'mixing_instructions', 'ingredients', 'products_count',
         ]
 
-    def get_products_count(self, dough):
+    def get_products_count(self, dough) -> int:
         return dough.bake_specs.count()
 
     def validate_name(self, value):

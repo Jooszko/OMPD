@@ -3,12 +3,17 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from audit.services import field_changes, record_event
 from users.permissions import AdminOnly, AdminOrBaker
 from .models import Ingredient, IngredientStock, Product, Recipe
 from .serializers import IngredientSerializer, ProductSerializer
+from common.openapi import error_response
+from .openapi import RecipeCreateSerializer, RecipeSerializer, RecipeUpdateSerializer
 
 PRODUCT_AUDIT_LABELS = {'name': 'Nazwa', 'category': 'Kategoria', 'base_price': 'Cena'}
+VALIDATION_ERROR = OpenApiResponse(description='Błędy walidacji: słownik pole → lista komunikatów.')
+NOT_FOUND = OpenApiResponse(description='Nie znaleziono produktu.')
 
 
 def _product_state(product):
@@ -38,11 +43,21 @@ class IngredientListView(APIView):
             return [AdminOnly()]
         return [AdminOrBaker()]
 
+    @extend_schema(
+        summary='Lista surowców',
+        responses={200: IngredientSerializer(many=True)},
+    )
     def get(self, request):
         ingredients = Ingredient.objects.all().order_by('name')
         serializer = IngredientSerializer(ingredients, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Dodanie surowca',
+        description='Tworzy też pusty stan magazynowy surowca. Tylko administrator.',
+        request=IngredientSerializer,
+        responses={201: IngredientSerializer, 400: VALIDATION_ERROR},
+    )
     def post(self, request):
         serializer = IngredientSerializer(data=request.data)
         if not serializer.is_valid():
@@ -65,6 +80,11 @@ class IngredientListView(APIView):
 
 class ProductListView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Lista produktów',
+        responses={200: ProductSerializer(many=True)},
+    )
     def get(self, request):
         products = Product.objects.all().order_by('name')
         serializer = ProductSerializer(products, many=True)
@@ -73,6 +93,13 @@ class ProductListView(APIView):
 
 class ProductDetailView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Zmiana produktu',
+        description='Zmienia tylko przesłane pola, np. samą cenę.',
+        request=ProductSerializer,
+        responses={200: ProductSerializer, 400: VALIDATION_ERROR, 404: NOT_FOUND},
+    )
     def patch(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
         serializer = ProductSerializer(product, data=request.data, partial=True)
@@ -117,6 +144,12 @@ def _serialize_recipe(product):
 
 class RecipeListCreateView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Receptury produktów',
+        description='Produkty, które mają recepturę, ze składem na jedną sztukę.',
+        responses={200: RecipeSerializer(many=True)},
+    )
     def get(self, request):
         products = (
             Product.objects
@@ -127,6 +160,12 @@ class RecipeListCreateView(APIView):
         )
         return Response([_serialize_recipe(p) for p in products], status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Nowy produkt z recepturą',
+        description='Tworzy produkt (z ceną 0 do uzupełnienia) razem z recepturą.',
+        request=RecipeCreateSerializer,
+        responses={201: RecipeSerializer, 400: error_response('Brak nazwy lub składników.')},
+    )
     def post(self, request):
         name = request.data.get('name', '').strip()
         category = request.data.get('category', 'other')
@@ -157,6 +196,16 @@ class RecipeListCreateView(APIView):
 
 class RecipeDetailView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Zmiana receptury',
+        request=RecipeUpdateSerializer,
+        responses={
+            200: RecipeSerializer,
+            400: error_response('Receptura bez składników.'),
+            404: NOT_FOUND,
+        },
+    )
     def put(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
         items = request.data.get('items', [])
@@ -185,6 +234,11 @@ class RecipeDetailView(APIView):
 
         return Response(_serialize_recipe(product), status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Usunięcie receptury',
+        description='Usuwa tylko recepturę – produkt zostaje.',
+        responses={204: OpenApiResponse(description='Usunięto.'), 404: NOT_FOUND},
+    )
     def delete(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
         with transaction.atomic():

@@ -3,13 +3,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from .models import User, Notification
 from .serializers import UserSerializer, NotificationSerializer, StaffUserSerializer
 from .permissions import IsAdminRole, IsAdminRoleOrReadOnly
 from django.core.cache import cache
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import password_validation
 from django.contrib.auth.models import update_last_login
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -17,10 +19,20 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .tokens import revoke_refresh_tokens
 from django.db import transaction
 from audit.services import field_changes, record_event
+from common.openapi import error_response
+from .openapi import (
+    VALIDATION_ERROR, ChangePasswordInputSerializer, LoginErrorSerializer, LoginInputSerializer, LoginResultSerializer,
+    NotificationListSerializer, SendMessageInputSerializer, TokenPairSerializer,
+)
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zalogowany użytkownik',
+        description='Działa także przed zmianą hasła tymczasowego, żeby aplikacja wiedziała, kogo poprosić o nowe hasło.',
+        responses={200: UserSerializer},
+    )
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -28,12 +40,23 @@ class CurrentUserView(APIView):
 class UserListCreateView(APIView):
     permission_classes = [IsAdminRoleOrReadOnly]
 
+    @extend_schema(
+        summary='Lista pracowników',
+        description='Administrator dostaje pełne dane kont (daty, trasy kierowców), pozostali – podstawowe.',
+        responses={200: StaffUserSerializer(many=True)},
+    )
     def get(self, request):
         users = User.objects.order_by('full_name')
         if request.user.role == 'admin':
             return Response(StaffUserSerializer(users.prefetch_related('routes'), many=True).data)
         return Response(UserSerializer(users, many=True).data)
 
+    @extend_schema(
+        summary='Założenie konta pracownika',
+        description='Podane hasło jest tymczasowe – pracownik musi je zmienić przy pierwszym logowaniu.',
+        request=UserSerializer,
+        responses={201: UserSerializer, 400: VALIDATION_ERROR},
+    )
     def post(self, request):
         serializer = UserSerializer(data=request.data)
         if not serializer.is_valid():
@@ -67,6 +90,19 @@ def _user_state(user):
 class UserDetailView(APIView):
     permission_classes = [IsAdminRole]
 
+    @extend_schema(
+        summary='Zmiana konta pracownika',
+        description=(
+            'Zmienia tylko przesłane pola. Nowe hasło jest tymczasowe i wylogowuje pracownika ze wszystkich '
+            'urządzeń. Administrator nie może odebrać sobie roli ani wyłączyć własnego konta.'
+        ),
+        request=UserSerializer,
+        responses={
+            200: StaffUserSerializer,
+            400: VALIDATION_ERROR,
+            404: OpenApiResponse(description='Nie znaleziono konta.'),
+        },
+    )
     def put(self, request, pk):
         user = get_object_or_404(User, pk=pk)
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
@@ -104,6 +140,14 @@ class UserDetailView(APIView):
                 )
         return Response(StaffUserSerializer(saved).data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Usunięcie konta pracownika',
+        responses={
+            204: OpenApiResponse(description='Usunięto.'),
+            400: error_response('Próba usunięcia własnego konta.'),
+            404: OpenApiResponse(description='Nie znaleziono konta.'),
+        },
+    )
     def delete(self, request, pk):
         user = get_object_or_404(User, pk=pk)
         if user.pk == request.user.pk:
@@ -119,6 +163,10 @@ class UserDetailView(APIView):
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Moje powiadomienia',
+        responses={200: NotificationListSerializer},
+    )
     def get(self, request):
         notifications = Notification.objects.filter(user=request.user).select_related('sender')[:200]
         serializer = NotificationSerializer(notifications, many=True)
@@ -131,6 +179,11 @@ class NotificationListView(APIView):
 class NotificationMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Oznaczenie powiadomienia jako przeczytane',
+        request=None,
+        responses={200: NotificationSerializer, 404: OpenApiResponse(description='Nie znaleziono powiadomienia.')},
+    )
     def patch(self, request, pk):
         notification = get_object_or_404(Notification, pk=pk, user=request.user)
         notification.is_read = True
@@ -141,6 +194,11 @@ class NotificationMarkReadView(APIView):
 class NotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Oznaczenie wszystkich powiadomień jako przeczytane',
+        request=None,
+        responses={204: OpenApiResponse(description='Gotowe.')},
+    )
     def patch(self, request):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -149,6 +207,15 @@ class NotificationMarkAllReadView(APIView):
 class SendMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Wysłanie wiadomości do pracownika',
+        request=SendMessageInputSerializer,
+        responses={
+            201: NotificationSerializer,
+            400: error_response('Brak odbiorcy, tytułu lub treści albo wiadomość do siebie.'),
+            404: OpenApiResponse(description='Nie znaleziono odbiorcy.'),
+        },
+    )
     def post(self, request):
         recipient_id = request.data.get('recipient_id')
         title = request.data.get('title', '').strip()
@@ -188,6 +255,20 @@ class LoginView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login'
 
+    @extend_schema(
+        summary='Logowanie',
+        description=(
+            'Zwraca parę tokenów JWT. Po 5 nieudanych próbach login jest blokowany na 5 minut. '
+            'Wywołanie nie wymaga tokenu.'
+        ),
+        request=LoginInputSerializer,
+        responses={
+            200: LoginResultSerializer,
+            401: OpenApiResponse(LoginErrorSerializer, description='Zły login lub hasło.'),
+            403: OpenApiResponse(LoginErrorSerializer, description='Konto wyłączone.'),
+            429: OpenApiResponse(LoginErrorSerializer, description='Za dużo nieudanych prób.'),
+        },
+    )
     def post(self, request, *args, **kwargs):
         username = str(request.data.get('username') or '').strip()
         password = str(request.data.get('password') or '')
@@ -255,6 +336,19 @@ class LoginView(TokenObtainPairView):
 class ChangeInitialPasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Ustawienie własnego hasła po pierwszym logowaniu',
+        description=(
+            'Dostępne tylko z hasłem tymczasowym. Unieważnia wcześniejsze tokeny i zwraca nową parę. '
+            'Później hasło może zmienić tylko kierownik.'
+        ),
+        request=ChangePasswordInputSerializer,
+        responses={
+            200: TokenPairSerializer,
+            400: VALIDATION_ERROR,
+            403: error_response('Konto nie ma hasła tymczasowego.'),
+        },
+    )
     def post(self, request):
         user = request.user
         if not user.must_change_password:
@@ -288,3 +382,21 @@ class ChangeInitialPasswordView(APIView):
 
         refresh = RefreshToken.for_user(user)
         return Response({'access': str(refresh.access_token), 'refresh': str(refresh)})
+
+
+@extend_schema_view(post=extend_schema(
+    summary='Odświeżenie tokenu dostępu',
+    description='Wymienia token odświeżania na nową parę tokenów – stary token odświeżania przestaje działać.',
+    responses={200: TokenPairSerializer, 401: OpenApiResponse(description='Token odświeżania wygasł albo jest unieważniony.')},
+))
+class RefreshView(TokenRefreshView):
+    pass
+
+
+@extend_schema_view(post=extend_schema(
+    summary='Wylogowanie',
+    description='Unieważnia token odświeżania, więc nie da się nim już uzyskać nowego tokenu dostępu.',
+    responses={200: OpenApiResponse(OpenApiTypes.OBJECT, description='Pusta odpowiedź {}.')},
+))
+class LogoutView(TokenBlacklistView):
+    pass
