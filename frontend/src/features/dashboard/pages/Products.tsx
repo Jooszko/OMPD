@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Edit, Trash2, Tag, BookOpen, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, BookOpen, X, AlertTriangle } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
+import { ActionToast, type ActionToastData } from '../components/ActionToast';
+import { Modal } from '../components/Modal';
 import {
   fetchProducts,
   fetchIngredients,
   fetchRecipes,
   createRecipe,
   updateRecipe,
-  deleteRecipe,
+  deleteProduct,
   updateProductPrice,
   type AppProduct,
   type AppIngredient,
@@ -36,6 +38,7 @@ export default function ProductsPanel() {
   const [ingredients, setIngredients] = useState<AppIngredient[]>([]);
   const [recipes, setRecipes] = useState<AppRecipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [toast, setToast] = useState<ActionToastData | null>(null);
 
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isEditingPrice, setIsEditingPrice] = useState(false);
@@ -44,6 +47,8 @@ export default function ProductsPanel() {
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
   const [recipeModalMode, setRecipeModalMode] = useState<'add' | 'edit'>('add');
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [productPendingDeletion, setProductPendingDeletion] = useState<AppProduct | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
 
   const [recipeProductName, setRecipeProductName] = useState<string>('');
   const [recipeProductCategory, setRecipeProductCategory] = useState<string>('bread');
@@ -51,6 +56,8 @@ export default function ProductsPanel() {
   const [recipeItems, setRecipeItems] = useState<DraftItem[]>([]);
   const [selectedIngredientId, setSelectedIngredientId] = useState<number | null>(null);
   const [ingredientAmount, setIngredientAmount] = useState<string>('');
+
+  const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,9 +84,10 @@ export default function ProductsPanel() {
     loadData();
   }, []);
 
-  const handleStartEditPrice = () => {
-    const prod = products.find(p => p.product_id === selectedProductId);
+  const handleStartEditPrice = (productId: number) => {
+    const prod = products.find(p => p.product_id === productId);
     if (prod) {
+      setSelectedProductId(productId);
       setNewPrice(parseFloat(prod.base_price).toFixed(2));
       setIsEditingPrice(true);
     }
@@ -87,8 +95,8 @@ export default function ProductsPanel() {
 
   const handleSavePrice = async () => {
     const parsedPrice = parseFloat(newPrice);
-    if (isNaN(parsedPrice) || parsedPrice < 0 || !selectedProductId) {
-      alert('Cena nie może być mniejsza niż zero.');
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0 || !selectedProductId) {
+      setToast({ text: 'Cena musi być większa od zera.' });
       return;
     }
     try {
@@ -96,9 +104,10 @@ export default function ProductsPanel() {
       setProducts(products.map(p => p.product_id === selectedProductId ? updated : p));
       setIsEditingPrice(false);
       setSelectedProductId(null);
+      setToast({ variant: 'success', text: 'Cena produktu została zaktualizowana.' });
     } catch (error) {
       console.error('Błąd podczas aktualizacji ceny:', error);
-      alert('Nie udało się zapisać nowej ceny.');
+      setToast({ text: 'Nie udało się zapisać nowej ceny.' });
     }
   };
 
@@ -122,11 +131,11 @@ export default function ProductsPanel() {
   const handleAddItemToRecipe = () => {
     const amt = parseFloat(ingredientAmount);
     if (isNaN(amt) || amt <= 0 || !selectedIngredientId) {
-      alert('Wpisz poprawną ilość surowca.');
+      setToast({ text: 'Wpisz poprawną ilość surowca.' });
       return;
     }
     if (recipeItems.some(item => item.ingredient_id === selectedIngredientId)) {
-      alert('Ten składnik znajduje się już na liście. Usuń go najpierw, aby zmienić ilość.');
+      setToast({ text: 'Ten składnik znajduje się już na liście. Usuń go najpierw, aby zmienić ilość.' });
       return;
     }
     setRecipeItems([...recipeItems, { ingredient_id: selectedIngredientId, amount: amt }]);
@@ -139,12 +148,12 @@ export default function ProductsPanel() {
 
   const handleSaveRecipe = async () => {
     if (recipeModalMode === 'add' && (!recipeProductName.trim() || !recipeProductCategory.trim())) {
-      alert('Nazwa produktu oraz kategoria nie mogą być puste.');
+      setToast({ text: 'Nazwa produktu oraz kategoria nie mogą być puste.' });
       return;
     }
 
     if (recipeItems.length === 0) {
-      alert('Receptura musi zawierać co najmniej jeden składnik.');
+      setToast({ text: 'Receptura musi zawierać co najmniej jeden składnik.' });
       return;
     }
 
@@ -163,153 +172,190 @@ export default function ProductsPanel() {
         setRecipes(recipes.map(r => r.product_id === editingProductId ? updated : r));
       }
       setIsRecipeModalOpen(false);
+      setToast({ variant: 'success', text: 'Receptura została zapisana.' });
     } catch (error) {
       console.error('Błąd podczas zapisu receptury:', error);
-      alert('Nie udało się zapisać receptury.');
+      setToast({ text: 'Nie udało się zapisać receptury.' });
     }
   };
 
-  const handleDeleteRecipe = async (productId: number) => {
-    if (confirm('Czy na pewno chcesz bezpowrotnie usunąć tę recepturę?')) {
-      try {
-        await deleteRecipe(productId);
-        setRecipes(recipes.filter(r => r.product_id !== productId));
-      } catch (error) {
-        console.error('Błąd podczas usuwania receptury:', error);
-        alert('Nie udało się usunąć receptury.');
-      }
+  const handleConfirmDeleteProduct = async () => {
+    if (!productPendingDeletion) return;
+
+    try {
+      await deleteProduct(productPendingDeletion.product_id);
+      setProducts(current => current.filter(product => product.product_id !== productPendingDeletion.product_id));
+      setRecipes(current => current.filter(recipe => recipe.product_id !== productPendingDeletion.product_id));
+      setSelectedProductId(null);
+      setIsEditingPrice(false);
+      setProductPendingDeletion(null);
+      setToast({ variant: 'success', text: 'Produkt i jego receptura zostały usunięte.' });
+    } catch (error) {
+      console.error('Błąd podczas usuwania produktu:', error);
+      const message = error instanceof Error ? error.message : 'Nie udało się usunąć produktu.';
+      setToast({ text: message });
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-8 py-6 flex flex-col gap-5 text-bakery-dark">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5 font-auth text-bakery-dark">
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="m-0 mb-1 text-2xl font-bold tracking-tight text-bakery-dark">Zarządzanie Produktami</h1>
-          <p className="text-xs text-gray-500 font-medium">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]">Zarządzanie produktami</h1>
+          <p className="m-0 text-sm text-[#4a4543]">
             {currentRole === 'baker'
               ? 'Zarządzanie recepturami technologicznymi.'
               : 'Ustalanie cennika bazowego oraz zarządzanie recepturami technologicznymi.'}
           </p>
         </div>
 
-        <div className="flex bg-bakery-inactive p-1 rounded border border-bakery-btnBorder shadow-sm">
+        <div role="tablist" aria-label="Widok produktów" className="flex gap-1 p-1 rounded-xl border border-bakery-btnBorder bg-bakery-card">
           {currentRole !== 'baker' && (
             <button
+              type="button"
+              role="tab"
+              aria-selected={visibleTab === 'ceny'}
               onClick={() => setActiveTab('ceny')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${visibleTab === 'ceny' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
+              className={`inline-flex items-center gap-2 min-h-10 px-3.5 rounded-[10px] text-[13px] font-extrabold transition-colors ${visibleTab === 'ceny' ? 'bg-bakery-dark text-white' : 'text-bakery-dark hover:bg-[#efebe9]'}`}
             >
-              <div className="flex items-center gap-2"><Tag className="w-3.5 h-3.5" /> Cennik bazowy</div>
+              <Tag aria-hidden className={`w-4 h-4 ${visibleTab === 'ceny' ? 'text-bakery-accent' : ''}`} /> Cennik bazowy
             </button>
           )}
           <button
+            type="button"
+            role="tab"
+            aria-selected={visibleTab === 'receptury'}
             onClick={() => setActiveTab('receptury')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded transition-all ${visibleTab === 'receptury' ? 'bg-bakery-dark text-white shadow-xs' : 'text-bakery-dark hover:bg-bakery-rowBg'}`}
+            className={`inline-flex items-center gap-2 min-h-10 px-3.5 rounded-[10px] text-[13px] font-extrabold transition-colors ${visibleTab === 'receptury' ? 'bg-bakery-dark text-white' : 'text-bakery-dark hover:bg-[#efebe9]'}`}
           >
-            <div className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /> Receptury</div>
+            <BookOpen aria-hidden className={`w-4 h-4 ${visibleTab === 'receptury' ? 'text-bakery-accent' : ''}`} /> Receptury
           </button>
         </div>
       </div>
 
-      <hr className="border-0 border-t border-bakery-border my-1" />
-
       {visibleTab === 'ceny' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
+        <div className="flex flex-col w-full">
+            <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[70vh] max-h-[700px] min-h-[360px] flex flex-col overflow-hidden">
               <DashboardListScrollbar className="products-table-scrollbar flex-1 min-h-0" contentClassName="pr-2">
                 {isLoading ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-semibold">Ładowanie danych z bazy...</div>
+                  <div role="status" className="absolute inset-0 flex items-center justify-center text-sm text-[#5f5a58] font-semibold">Ładowanie danych z bazy...</div>
                 ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-bakery-inactive z-10">
-                    <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider">
-                      <th className="py-2 px-3 w-12 text-center h-8">Wybór</th>
-                      <th className="py-2 px-3 h-8">ID</th>
-                      <th className="py-2 px-3 h-8">Nazwa Produktu</th>
-                      <th className="py-2 px-3 h-8">Kategoria</th>
-                      <th className="py-2 px-3 text-right h-8">Cena bazowa</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                    {products.map((product) => (
-                      <tr key={product.product_id} className={`bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder ${selectedProductId === product.product_id ? 'bg-[#c9c3c3]' : ''}`}>
-                        <td className="py-2 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedProductId === product.product_id}
-                            onChange={() => {
-                              setSelectedProductId(selectedProductId === product.product_id ? null : product.product_id);
-                              setIsEditingPrice(false);
-                            }}
-                            className="rounded border-bakery-border text-bakery-dark focus:ring-bakery-accent w-4 h-4 accent-bakery-dark cursor-pointer"
-                          />
-                        </td>
-                        <td className="py-2 px-3 font-mono text-xs text-gray-500">#{product.product_id}</td>
-                        <td className="py-2 px-3 font-semibold text-bakery-dark">{product.name}</td>
-                        <td className="py-2 px-3 text-xs font-semibold text-gray-600">{CATEGORY_LABELS[product.category] ?? product.category}</td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-blue-950">{parseFloat(product.base_price).toFixed(2)} PLN</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  products.length === 0 ? (
+                    <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak produktów w cenniku.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead className="dashboard-list-table-header">
+                        <tr className="text-[11px] font-extrabold text-bakery-dark uppercase tracking-wider">
+                          <th className="py-3 px-4">ID</th>
+                          <th className="py-3 px-4">Nazwa produktu</th>
+                          <th className="py-3 px-4">Kategoria</th>
+                          <th className="py-3 px-4 text-right">Cena bazowa</th>
+                          <th className="py-3 px-4 text-center">Akcje</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e6e1df] text-sm">
+                        {products.map((product) => (
+                          <tr key={product.product_id} className="bg-white transition-colors hover:bg-[#efebe9]">
+                            <td className="py-3 px-4 font-mono text-xs text-[#77716e]">#{product.product_id}</td>
+                            <td className="py-3 px-4 font-bold text-bakery-dark">{product.name}</td>
+                            <td className="py-3 px-4 text-[13px] font-semibold text-[#5f5a58]">{CATEGORY_LABELS[product.category] ?? product.category}</td>
+                            <td className="py-3 px-4 text-right font-mono font-extrabold text-bakery-dark">
+                              {parseFloat(product.base_price).toFixed(2)} zł
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditPrice(product.product_id)}
+                                  aria-label={`Edytuj cenę produktu ${product.name}`}
+                                  className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors"
+                                >
+                                  <Edit aria-hidden className="w-4 h-4" />
+                                </button>
+                                {currentRole === 'admin' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setProductPendingDeletion(product)}
+                                    aria-label={`Usuń produkt ${product.name}`}
+                                    className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-red-700 hover:text-white border border-red-200 text-red-700 transition-colors"
+                                  >
+                                    <Trash2 aria-hidden className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
                 )}
               </DashboardListScrollbar>
             </div>
+        </div>
+      )}
 
-            <div className="flex gap-2 items-center bg-bakery-inactive p-3 rounded border border-bakery-btnBorder shadow-sm">
+      {isEditingPrice && selectedProductId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-price-dialog-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-bakery-btnBorder bg-bakery-card font-auth shadow-2xl"
+          >
+            <div className="flex items-center justify-between bg-bakery-dark px-5 py-4 text-white">
+              <h2 id="product-price-dialog-title" className="m-0 text-sm font-extrabold uppercase tracking-wider">
+                Edycja ceny bazowej
+              </h2>
               <button
-                onClick={handleStartEditPrice}
-                disabled={!selectedProductId}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
+                type="button"
+                aria-label="Zamknij"
+                onClick={() => setIsEditingPrice(false)}
+                className="rounded-lg p-1 text-gray-300 transition hover:bg-white/10 hover:text-white"
               >
-                <Edit className="w-4 h-4 text-bakery-accent" /> Modyfikuj Cenę
+                <X className="h-5 w-5" />
               </button>
-              {!selectedProductId && (
-                <span className="text-[10px] text-gray-500 font-semibold ml-2 italic">Zaznacz produkt w tabeli powyżej, aby dokonać korekty ceny. Usunięcie pozycji jest zablokowane.</span>
-              )}
             </div>
-          </div>
-
-          <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm p-4 flex flex-col h-[400px] overflow-hidden">
-            <div className="border-b border-bakery-btnBorder pb-3 shrink-0">
-              <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500">Edycja wartości</h2>
-              <p className="text-[11px] text-gray-500 font-medium">Wprowadzanie zmian w cenniku handlowym przedsiębiorstwa.</p>
+            <div className="flex flex-col gap-4 p-5">
+              <div>
+                <span className="mb-1 block text-xs font-extrabold text-[#5f5a58]">Produkt</span>
+                <p className="m-0 text-sm font-bold text-bakery-dark">
+                  {products.find(product => product.product_id === selectedProductId)?.name}
+                </p>
+              </div>
+              <div>
+                <label htmlFor="product-base-price" className="mb-1.5 block text-xs font-extrabold text-[#4a4543]">
+                  Nowa cena podstawowa (zł)
+                </label>
+                <input
+                  id="product-base-price"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  className="min-h-11 w-full rounded-xl border border-bakery-btnBorder bg-white px-3.5 text-sm font-bold text-bakery-dark outline-none focus:border-bakery-accent"
+                />
+              </div>
             </div>
-
-            <div className="flex-1 mt-4">
-              {isEditingPrice && selectedProductId ? (
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Wybrany produkt</span>
-                    <p className="font-bold text-bakery-dark text-sm">{products.find(p => p.product_id === selectedProductId)?.name}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nowa cena podstawowa (PLN)</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newPrice}
-                      onChange={(e) => setNewPrice(e.target.value)}
-                      className="w-full mt-1 border border-bakery-btnBorder rounded p-2 text-sm bg-bakery-rowBg text-bakery-dark font-mono font-bold outline-none focus:border-bakery-accent"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button onClick={handleSavePrice} className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded transition shadow-xs">
-                      Zatwierdź
-                    </button>
-                    <button onClick={() => setIsEditingPrice(false)} className="px-4 py-2 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder text-bakery-dark rounded transition">
-                      Anuluj
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-24 text-center text-gray-500 text-xs font-semibold italic">
-                  Wybierz produkt i kliknij „Modyfikuj Cenę”, aby otworzyć panel edycyjny.
-                </div>
-              )}
+            <div className="flex justify-end gap-2 border-t border-[#e6e1df] bg-bakery-card p-3">
+              <button
+                type="button"
+                onClick={() => setIsEditingPrice(false)}
+                className="min-h-10 rounded-xl border border-bakery-btnBorder bg-white px-4 text-[13px] font-extrabold text-bakery-dark transition-colors hover:bg-[#efebe9]"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePrice}
+                className="min-h-10 rounded-xl bg-bakery-dark px-4 text-[13px] font-extrabold text-white transition-colors hover:bg-[#2e2e2e]"
+              >
+                Zapisz cenę
+              </button>
             </div>
           </div>
         </div>
@@ -319,68 +365,71 @@ export default function ProductsPanel() {
         <div className="flex flex-col gap-4 w-full">
           {currentRole !== 'baker' && (
             <div className="flex justify-start">
-              <button onClick={handleOpenAddRecipe} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs">
+              <button type="button" onClick={handleOpenAddRecipe} className="inline-flex items-center gap-2 min-h-11 px-[18px] rounded-xl bg-bakery-dark hover:bg-[#2e2e2e] text-white text-sm font-extrabold transition-colors">
                 <Plus className="w-4 h-4 text-bakery-accent" /> Zdefiniuj nową recepturę
               </button>
             </div>
           )}
 
-          <div className="bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm overflow-hidden w-full">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-bakery-btnBorder text-[10px] font-bold text-bakery-dark uppercase tracking-wider bg-bakery-inactive">
-                  <th className="py-3 px-4">Produkt końcowy</th>
-                  <th className="py-3 px-4">Kategoria</th>
-                  <th className="py-3 px-4">Liczba użytych surowców</th>
-                  <th className="py-3 px-4">Skład szczegółowy receptury</th>
-                  {currentRole !== 'baker' && <th className="py-3 px-4 text-center w-32">Akcje</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-bakery-btnBorder text-sm">
-                {recipes.map((recipe) => (
-                  <tr key={recipe.product_id} className="bg-bakery-rowBg hover:bg-bakery-inactive transition border-b border-bakery-btnBorder">
-                    <td className="py-3 px-4 font-bold text-bakery-dark">{recipe.name}</td>
-                    <td className="py-3 px-4 text-xs font-semibold text-gray-600">{CATEGORY_LABELS[recipe.category] ?? recipe.category}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-center text-blue-950 w-44">{recipe.items.length} składn.</td>
-                    <td className="py-3 px-4 text-xs">
-                      <div className="flex flex-wrap gap-1.5">
-                        {recipe.items.map((item, index) => (
-                          <span key={index} className="bg-bakery-inactive border border-bakery-btnBorder px-2 py-0.5 rounded text-gray-700 font-semibold text-[11px]">
-                            {item.ingredient_name}: <span className="text-blue-950 font-bold">{item.amount} {item.unit}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    {currentRole !== 'baker' && (
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex gap-1.5 justify-center">
-                          <button onClick={() => handleOpenEditRecipe(recipe)} className="text-bakery-dark hover:text-white p-1 rounded bg-bakery-inactive hover:bg-bakery-dark border border-bakery-btnBorder text-[11px] font-bold transition-all shadow-2xs">
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteRecipe(recipe.product_id)} className="text-red-700 hover:text-white p-1 rounded bg-red-50 hover:bg-red-700 border border-red-200 text-[11px] font-bold transition-all shadow-2xs">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm overflow-hidden w-full">
+            {recipes.length === 0 ? (
+              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak zdefiniowanych receptur.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left border-collapse">
+                  <thead className="dashboard-list-table-header">
+                    <tr className="text-[11px] font-extrabold text-bakery-dark uppercase tracking-wider">
+                      <th className="py-3 px-4">Produkt końcowy</th>
+                      <th className="py-3 px-4">Kategoria</th>
+                      <th className="py-3 px-4">Liczba użytych surowców</th>
+                      <th className="py-3 px-4">Skład szczegółowy receptury</th>
+                      {currentRole !== 'baker' && <th className="py-3 px-4 text-center w-32">Akcje</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e6e1df] text-sm">
+                    {recipes.map((recipe) => (
+                      <tr key={recipe.product_id} className="bg-white hover:bg-[#efebe9] transition-colors">
+                        <td className="py-3 px-4 font-bold text-bakery-dark">{recipe.name}</td>
+                        <td className="py-3 px-4 text-[13px] font-semibold text-[#5f5a58]">{CATEGORY_LABELS[recipe.category] ?? recipe.category}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-center text-bakery-dark w-44">{recipe.items.length} składn.</td>
+                        <td className="py-3 px-4 text-xs">
+                          <div className="flex flex-wrap gap-1.5">
+                            {recipe.items.map((item, index) => (
+                              <span key={index} className="bg-bakery-card border border-bakery-btnBorder px-2.5 py-1 rounded-lg text-[#4a4543] font-semibold text-[11px]">
+                                {item.ingredient_name}: <span className="text-bakery-dark font-extrabold">{item.amount} {item.unit}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        {currentRole !== 'baker' && (
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex gap-2 justify-center">
+                              <button type="button" aria-label={`Edytuj recepturę: ${recipe.name}`} onClick={() => handleOpenEditRecipe(recipe)} className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors">
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {isRecipeModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
-          <div className="bg-bakery-inactive border border-bakery-border rounded shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[520px]">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] h-[520px] font-auth">
 
-            <div className="bg-bakery-dark text-white p-4 flex justify-between items-center shrink-0">
-              <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+            <div className="bg-bakery-dark text-white px-5 py-4 flex justify-between items-center shrink-0">
+              <h2 className="m-0 text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-bakery-accent" />
                 {recipeModalMode === 'add' ? 'Nowa Karta Technologiczna Receptury' : 'Modyfikacja Składu Receptury'}
               </h2>
-              <button onClick={() => setIsRecipeModalOpen(false)} className="text-gray-400 hover:text-white transition">
+              <button type="button" aria-label="Zamknij" onClick={() => setIsRecipeModalOpen(false)} className="text-gray-400 hover:text-white transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -389,81 +438,81 @@ export default function ProductsPanel() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nazwa wypieku</label>
+                  <label className="text-xs font-extrabold text-[#4a4543] block mb-1.5">Nazwa wypieku</label>
                   {recipeModalMode === 'add' ? (
                     <input
                       type="text"
                       placeholder="np. Chleb Szefa"
                       value={recipeProductName}
                       onChange={(e) => setRecipeProductName(e.target.value)}
-                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent"
+                      className="w-full min-h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent"
                     />
                   ) : (
-                    <p className="p-2 bg-bakery-rowBg border border-bakery-btnBorder rounded text-xs font-bold text-bakery-dark">{recipeProductName}</p>
+                    <p className="m-0 min-h-11 flex items-center px-3.5 bg-white border border-bakery-btnBorder rounded-xl text-sm font-bold text-bakery-dark">{recipeProductName}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Kategoria</label>
+                  <label className="text-xs font-extrabold text-[#4a4543] block mb-1.5">Kategoria</label>
                   {recipeModalMode === 'add' ? (
                     <select
                       value={recipeProductCategory}
                       onChange={(e) => setRecipeProductCategory(e.target.value)}
-                      className="w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none cursor-pointer focus:border-bakery-accent"
+                      className="w-full min-h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none cursor-pointer focus:border-bakery-accent"
                     >
                       {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
                   ) : (
-                    <p className="p-2 bg-bakery-rowBg border border-bakery-btnBorder rounded text-xs font-semibold text-gray-600">{CATEGORY_LABELS[recipeProductCategory] ?? recipeProductCategory}</p>
+                    <p className="m-0 min-h-11 flex items-center px-3.5 bg-white border border-bakery-btnBorder rounded-xl text-sm font-semibold text-[#5f5a58]">{CATEGORY_LABELS[recipeProductCategory] ?? recipeProductCategory}</p>
                   )}
                 </div>
               </div>
 
-              <div className="bg-bakery-rowBg border border-bakery-btnBorder p-3 rounded">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Dodaj komponent / surowiec:</span>
-                <div className="flex gap-2 items-end">
+              <div className="bg-white border border-bakery-btnBorder p-4 rounded-xl">
+                <span className="text-xs font-extrabold text-[#4a4543] block mb-2.5">Dodaj komponent / surowiec</span>
+                <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1">
                     <select
                       value={selectedIngredientId ?? ''}
                       onChange={(e) => setSelectedIngredientId(parseInt(e.target.value))}
-                      className="w-full border border-bakery-btnBorder bg-bakery-inactive text-bakery-dark font-semibold rounded text-xs p-1.5 outline-none"
+                      className="w-full min-h-11 px-3 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent"
                     >
                       {ingredients.map(i => (
                         <option key={i.ingredient_id} value={i.ingredient_id}>{i.name} ({i.unit})</option>
                       ))}
                     </select>
                   </div>
-                  <div className="w-32">
+                  <div className="w-full sm:w-32">
                     <input
                       type="number"
                       step="0.001"
                       placeholder="Ilość"
                       value={ingredientAmount}
                       onChange={(e) => setIngredientAmount(e.target.value)}
-                      className="w-full border border-bakery-btnBorder bg-bakery-inactive text-bakery-dark font-bold font-mono rounded text-xs p-1.5 outline-none text-right"
+                      className="w-full min-h-11 px-3 border border-bakery-btnBorder bg-white text-bakery-dark font-bold font-mono rounded-xl text-sm outline-none text-right focus:border-bakery-accent"
                     />
                   </div>
-                  <button onClick={handleAddItemToRecipe} className="px-3 py-1.5 bg-bakery-dark hover:bg-[#2e2e2e] text-white font-bold text-xs rounded transition flex items-center gap-1">
+                  <button type="button" onClick={handleAddItemToRecipe} className="min-h-11 px-4 rounded-xl bg-bakery-dark hover:bg-[#2e2e2e] text-white font-extrabold text-[13px] transition-colors flex items-center gap-2">
                     <Plus className="w-3.5 h-3.5 text-bakery-accent" /> Dołącz
                   </button>
                 </div>
               </div>
 
               <div className="flex flex-col flex-1 min-h-0">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Składniki przypisane do zestawu:</span>
-                <div className="border border-bakery-btnBorder rounded bg-bakery-rowBg flex-1 min-h-0 overflow-hidden">
-                  <DashboardListScrollbar className="h-full" contentClassName="p-1.5 divide-y divide-bakery-btnBorder">
+                <span className="text-xs font-extrabold text-[#4a4543] block mb-1.5">Składniki przypisane do zestawu</span>
+                <div className="border border-bakery-btnBorder rounded-xl bg-white flex-1 min-h-0 overflow-hidden">
+                  <DashboardListScrollbar className="h-full" contentClassName="p-2 divide-y divide-[#e6e1df]">
                   {recipeItems.length > 0 ? (
                     recipeItems.map((item, idx) => {
                       const ing = ingredients.find(i => i.ingredient_id === item.ingredient_id);
                       return (
-                        <div key={idx} className="py-2 px-2 flex justify-between items-center text-xs">
-                          <span className="font-semibold text-bakery-dark">{ing?.name}</span>
+                        <div key={idx} className="py-2.5 px-2 flex justify-between items-center text-sm">
+                          <span className="font-bold text-bakery-dark">{ing?.name}</span>
                           <div className="flex items-center gap-3">
-                            <span className="font-bold font-mono text-blue-950 text-sm">{item.amount} {ing?.unit}</span>
-                            <button onClick={() => handleRemoveItemFromRecipe(item.ingredient_id)} className="text-red-700 hover:text-red-900 p-0.5 rounded hover:bg-red-50 transition">
+                            <span className="font-extrabold font-mono text-bakery-dark text-sm">{item.amount} {ing?.unit}</span>
+                            <button type="button" aria-label={`Usuń składnik ${ing?.name ?? ''}`} onClick={() => handleRemoveItemFromRecipe(item.ingredient_id)} className="size-8 inline-flex items-center justify-center text-red-700 hover:text-white rounded-lg hover:bg-red-700 transition-colors">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
@@ -471,7 +520,7 @@ export default function ProductsPanel() {
                       );
                     })
                   ) : (
-                    <div className="text-center py-12 text-gray-400 text-xs font-semibold italic">Brak składników w tej karcie. Dodaj surowce powyżej.</div>
+                    <div className="text-center py-12 px-4 text-[#5f5a58] text-sm font-semibold">Brak składników w tej karcie. Dodaj surowce powyżej.</div>
                   )}
                   </DashboardListScrollbar>
                 </div>
@@ -479,8 +528,8 @@ export default function ProductsPanel() {
 
             </div>
 
-            <div className="bg-bakery-rowBg p-3 border-t border-bakery-btnBorder flex justify-end gap-2 shrink-0">
-              <button onClick={handleSaveRecipe} className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded shadow-xs transition">
+            <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex justify-end gap-2 shrink-0">
+              <button type="button" onClick={handleSaveRecipe} className="min-h-10 px-4 rounded-xl text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white transition-colors">
                 Zapisz Recepturę i Produkt
               </button>
             </div>
@@ -489,6 +538,44 @@ export default function ProductsPanel() {
         </div>
       )}
 
+      {productPendingDeletion && (
+        <Modal
+          title="Usunąć produkt?"
+          subtitle="Produkt i jego receptura zostaną usunięte."
+          icon={<AlertTriangle aria-hidden className="h-5 w-5 text-red-700" />}
+          closeDisabled={isDeletingProduct}
+          onClose={() => setProductPendingDeletion(null)}
+        >
+          <p className="m-0 text-sm text-[#4a4543]">
+            Czy na pewno chcesz usunąć produkt{' '}
+            <span className="font-extrabold text-bakery-dark">{productPendingDeletion.name}</span>? Operacja będzie możliwa
+            tylko wtedy, gdy produkt nie jest używany w zamówieniach ani produkcji.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setProductPendingDeletion(null)}
+              disabled={isDeletingProduct}
+              className="min-h-10 px-4 rounded-xl border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark hover:bg-[#efebe9] disabled:opacity-50 transition-colors"
+            >
+              Anuluj
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsDeletingProduct(true);
+                void handleConfirmDeleteProduct();
+              }}
+              disabled={isDeletingProduct}
+              className="min-h-10 px-4 rounded-xl bg-red-700 text-[13px] font-extrabold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+            >
+              {isDeletingProduct ? 'Usuwanie...' : 'Usuń produkt'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      <ActionToast toast={toast} onClose={closeToast} onRefresh={closeToast} />
     </div>
   );
 }

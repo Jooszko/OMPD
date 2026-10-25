@@ -94,6 +94,11 @@ class ProductListView(APIView):
 class ProductDetailView(APIView):
     permission_classes = [AdminOrBaker]
 
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            return [AdminOnly()]
+        return [permission() for permission in self.permission_classes]
+
     @extend_schema(
         summary='Zmiana produktu',
         description='Zmienia tylko przesłane pola, np. samą cenę.',
@@ -122,6 +127,44 @@ class ProductDetailView(APIView):
                     ),
                 )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary='Usunięcie produktu wraz z recepturą',
+        description='Usuwa produkt i jego recepturę, jeśli nie jest używany w zamówieniach ani produkcji.',
+        responses={
+            204: OpenApiResponse(description='Usunięto produkt i recepturę.'),
+            404: NOT_FOUND,
+            409: error_response('Produktu używają zamówienia lub dane produkcyjne.'),
+        },
+    )
+    def delete(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        has_references = any(
+            relation.exists()
+            for relation in (
+                product.standing_orders,
+                product.daily_orders,
+                product.returns,
+                product.plan_lines,
+                product.batch_outputs,
+                product.waste_records,
+            )
+        )
+        if has_references:
+            return Response(
+                {'error': 'Nie można usunąć produktu używanego w zamówieniach lub produkcji.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        with transaction.atomic():
+            record_event(
+                request, category='products', action='product.deleted', obj=product,
+                object_label=product.name,
+                description=f'Usunięto produkt {product.name} wraz z jego recepturą.',
+                changes=[{'field': 'name', 'label': 'Nazwa produktu', 'old': product.name, 'new': None}],
+            )
+            product.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def _serialize_recipe(product):

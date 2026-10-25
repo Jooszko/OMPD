@@ -551,6 +551,18 @@ export async function updateProductPrice(productId: number, basePrice: number): 
   return handleJsonResponse(response);
 }
 
+export async function deleteProduct(productId: number): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/products/${productId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (response.status === 409) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(typeof body.error === 'string' ? body.error : 'Nie można usunąć tego produktu.');
+  }
+  await handleJsonResponse(response);
+}
+
 export async function fetchRecipes(): Promise<AppRecipe[]> {
   const response = await apiFetch(`${API_BASE}/products/recipes/`, { headers: authHeaders() });
   return handleJsonResponse(response);

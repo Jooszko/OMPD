@@ -19,6 +19,7 @@ ACTIONS = {
         'ingredient.created': 'Dodanie składnika',
         'product.updated': 'Zmiana produktu',
         'product.price_changed': 'Zmiana ceny',
+        'product.deleted': 'Usunięcie produktu',
         'recipe.created': 'Dodanie receptury',
         'recipe.updated': 'Zmiana receptury',
         'recipe.deleted': 'Usunięcie receptury',
