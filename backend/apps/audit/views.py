@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 
 from users.models import User
 from users.permissions import AdminOnly
@@ -13,6 +14,7 @@ from users.permissions import AdminOnly
 from .labels import ACTIONS
 from .models import AuditEntry
 from .serializers import AuditEntrySerializer
+from .openapi import AUDIT_FILTERS, AuditFiltersSerializer, AuditPageSerializer
 
 LOCAL_TZ = ZoneInfo('Europe/Warsaw')
 
@@ -84,6 +86,12 @@ def filter_entries(params):
 class AuditEntryListView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Dziennik zmian',
+        description='Wpisy od najnowszych, z filtrami i stronicowaniem.',
+        parameters=AUDIT_FILTERS,
+        responses={200: AuditPageSerializer, 400: OpenApiResponse(description='Błędny filtr (słownik pole → komunikat).')},
+    )
     def get(self, request):
         entries = filter_entries(request.query_params)
         paginator = AuditPagination()
@@ -94,6 +102,11 @@ class AuditEntryListView(APIView):
 class AuditFiltersView(APIView):
     permission_classes = [AdminOnly]
 
+    @extend_schema(
+        summary='Opcje filtrów dziennika zmian',
+        description='Kategorie, wszystkie kody akcji z polskimi nazwami i osoby, które mają wpisy w dzienniku.',
+        responses={200: AuditFiltersSerializer},
+    )
     def get(self, request):
         actors = User.objects.filter(audit_entries__isnull=False).distinct().order_by('full_name')
         return Response({

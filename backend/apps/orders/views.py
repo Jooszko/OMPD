@@ -5,6 +5,8 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from common.openapi import error_response
 from users.permissions import AdminOrBaker
 from products.models import Product
 from .day import LOCKED_STATUSES, build_day
@@ -16,6 +18,11 @@ from .standing import (
 from common.holidays import is_holiday
 from audit.services import field_changes, record_event
 from clients.models import Client
+from .openapi import (
+    DATE_PARAM, DailyOrderGroupSerializer, DailyOrderInputSerializer, MessageSerializer, OrderDaySerializer,
+    OrderHistorySerializer, StandingDueCreatedSerializer, StandingDueInputSerializer, StandingDueSerializer,
+    StandingOrderGroupSerializer, StandingOrderInputSerializer,
+)
 
 DAY_LABELS = {0: 'Pn', 1: 'Wt', 2: 'Śr', 3: 'Czw', 4: 'Pt', 5: 'Sb', 6: 'Nd'}
 STATUS_LABELS = dict(DailyOrder.STATUS_CHOICES)
@@ -105,6 +112,13 @@ def _group_daily_orders(queryset):
 
 class DailyOrdersView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Zamówienia z wybranego dnia',
+        description='Zamówienia dzienne pogrupowane po klientach (jeden przystanek = klient w danym dniu).',
+        parameters=[DATE_PARAM],
+        responses={200: DailyOrderGroupSerializer(many=True), 400: error_response('Błędny format daty.')},
+    )
     def get(self, request):
         date_param = request.query_params.get('date')
         try:
@@ -120,6 +134,20 @@ class DailyOrdersView(APIView):
         )
         return Response(_group_daily_orders(qs), status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Dodanie lub zmiana zamówienia klienta na dzień',
+        description=(
+            'Zapisuje pełny skład zamówienia klienta na dany dzień: dodaje nowe pozycje, zmienia ilości '
+            'i usuwa pozycje, których nie ma na liście. Zmiana trafia do dziennika zmian.'
+        ),
+        request=DailyOrderInputSerializer,
+        responses={
+            201: DailyOrderGroupSerializer(many=True),
+            400: error_response('Brak klienta, produktów albo błędna data.'),
+            404: OpenApiResponse(description='Nie znaleziono klienta lub produktu.'),
+            409: error_response('Miniony dzień albo zamówienie jest już w dostawie.'),
+        },
+    )
     def post(self, request):
         client_id = request.data.get('client_id')
         order_date_str = request.data.get('order_date') or str(timezone.localdate())
@@ -181,6 +209,17 @@ class DailyOrdersView(APIView):
         qs = DailyOrder.objects.filter(order_date=order_date, client=client).select_related('client', 'product')
         return Response(_group_daily_orders(qs), status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        summary='Usunięcie zamówienia klienta z dnia',
+        parameters=[
+            OpenApiParameter('id', str, required=True, description='Identyfikator przystanku: RRRR-MM-DD-id_klienta.'),
+        ],
+        responses={
+            204: OpenApiResponse(description='Usunięto.'),
+            400: error_response('Brak lub błędny identyfikator.'),
+            409: error_response('Miniony dzień albo zamówienie jest już w dostawie.'),
+        },
+    )
     def delete(self, request):
         order_id = request.query_params.get('id')  # format: 'YYYY-MM-DD-client_id'
         if not order_id:
@@ -218,6 +257,20 @@ class DailyOrdersView(APIView):
 class OrderHistoryView(APIView):
     permission_classes = [AdminOrBaker]
 
+    @extend_schema(
+        summary='Historia zamówień',
+        description='Zamówienia z wybranego okresu pogrupowane po przystankach, po 25 na stronę, od najnowszych.',
+        parameters=[
+            OpenApiParameter('date_from', str, description='Początek okresu RRRR-MM-DD (domyślnie 30 dni przed końcem).'),
+            OpenApiParameter('date_to', str, description='Koniec okresu RRRR-MM-DD (domyślnie wczoraj).'),
+            OpenApiParameter('q', str, description='Fragment nazwy klienta.'),
+            OpenApiParameter(
+                'status', str, enum=list(HISTORY_STATUSES), description='open = zamówienia jeszcze niezakończone.',
+            ),
+            OpenApiParameter('page', int, description='Numer strony (od 1).'),
+        ],
+        responses={200: OrderHistorySerializer, 400: error_response('Błędny filtr.')},
+    )
     def get(self, request):
         params = request.query_params
         yesterday = timezone.localdate() - timedelta(days=1)
@@ -237,6 +290,12 @@ class OrderHistoryView(APIView):
 
 class StandingOrdersView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Lista zamówień stałych',
+        description='Aktywne zamówienia stałe pogrupowane po klientach, z dniami tygodnia i składem.',
+        responses={200: StandingOrderGroupSerializer(many=True)},
+    )
     def get(self, request):
         qs = (
             StandingOrder.objects
@@ -294,6 +353,16 @@ class StandingOrdersView(APIView):
 
         return Response(order_list, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Zapis zamówienia stałego klienta',
+        description='Zastępuje całe zamówienie stałe klienta podanym składem i dniami tygodnia.',
+        request=StandingOrderInputSerializer,
+        responses={
+            201: MessageSerializer,
+            400: error_response('Brak klienta, dni lub produktów.'),
+            404: OpenApiResponse(description='Nie znaleziono klienta lub produktu.'),
+        },
+    )
     def post(self, request):
         client_id = request.data.get('client_id')
         days = request.data.get('days', [])
@@ -333,6 +402,15 @@ class StandingOrdersView(APIView):
 
         return Response({'message': 'Harmonogram stały został zapisany.'}, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        summary='Usunięcie zamówienia stałego klienta',
+        parameters=[OpenApiParameter('client_id', int, required=True)],
+        responses={
+            204: OpenApiResponse(description='Usunięto.'),
+            400: error_response('Brak parametru client_id.'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
     def delete(self, request):
         client_id = request.query_params.get('client_id')
         if not client_id:
@@ -359,6 +437,12 @@ class StandingOrdersDueView(APIView):
             'clients': summarize_by_client(standing_orders_due(order_date)),
         }
 
+    @extend_schema(
+        summary='Zamówienia stałe do utworzenia na dzień',
+        description='Klienci z zamówieniem stałym na ten dzień tygodnia, którzy nie mają jeszcze zamówienia dziennego.',
+        parameters=[OpenApiParameter('date', str, required=True, description='Dzień RRRR-MM-DD.')],
+        responses={200: StandingDueSerializer, 400: error_response('Błędny format daty.')},
+    )
     def get(self, request):
         try:
             order_date = date_cls.fromisoformat(request.query_params.get('date') or '')
@@ -366,6 +450,16 @@ class StandingOrdersDueView(APIView):
             return Response({'error': 'Nieprawidłowy format daty.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self._summary(order_date))
 
+    @extend_schema(
+        summary='Utworzenie zamówień dziennych z zamówień stałych',
+        description='Ręczne uruchomienie tego, co serwer robi automatycznie przy pierwszym zapytaniu danego dnia.',
+        request=StandingDueInputSerializer,
+        responses={
+            201: StandingDueCreatedSerializer,
+            400: error_response('Błędny format daty.'),
+            409: error_response('Miniony dzień.'),
+        },
+    )
     def post(self, request):
         try:
             order_date = date_cls.fromisoformat(str(request.data.get('date') or ''))
@@ -394,6 +488,15 @@ class StandingOrdersDueView(APIView):
 class OrderDayView(APIView):
     permission_classes = [AdminOrBaker]
 
+    @extend_schema(
+        summary='Widok dnia zamówień',
+        description=(
+            'Dane zakładki Zamówienia: podsumowanie, produkty do upieczenia, przystanki pogrupowane po trasach '
+            'w kolejności przejazdu, zaległe zamówienia stałe i zmiany względem planu produkcji.'
+        ),
+        parameters=[DATE_PARAM],
+        responses={200: OrderDaySerializer, 400: error_response('Błędny format daty.')},
+    )
     def get(self, request):
         date_param = request.query_params.get('date')
         try:

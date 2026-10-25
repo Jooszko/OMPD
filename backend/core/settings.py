@@ -28,6 +28,7 @@ PRODUCTION_SHIFT_LAG_DAYS = config('PRODUCTION_SHIFT_LAG_DAYS', default=1, cast=
 # and second shift work on the same plan and the board does not switch at midnight.
 PRODUCTION_SHIFT_CUTOFF_HOUR = config('PRODUCTION_SHIFT_CUTOFF_HOUR', default=6, cast=int)
 PRODUCTION_TIMEZONE = config('PRODUCTION_TIMEZONE', default='Europe/Warsaw')
+API_DOCS_ENABLED = config('API_DOCS_ENABLED', default=DEBUG, cast=bool)
 
 AUTO_STANDING_ORDERS = config('AUTO_STANDING_ORDERS', default=True, cast=bool) and 'test' not in sys.argv[1:2]
 
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'drf_spectacular',
     # local apps
     'common',
     'users.apps.UsersConfig',
@@ -146,6 +148,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_THROTTLE_RATES': {
         'login': '20/min',
     },
@@ -158,4 +161,20 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'user_id',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Bakery Flow API',
+    'DESCRIPTION': 'REST API systemu ERP piekarni: zamówienia, produkcja, logistyka dostaw, klienci, finanse i użytkownicy.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'ENUM_NAME_OVERRIDES': {
+        'OrderStatusEnum': 'orders.models.DailyOrder.STATUS_CHOICES',
+        'FailureReasonEnum': 'orders.models.DailyOrder.FAILURE_REASON_CHOICES',
+        'ProofKindEnum': 'orders.models.DeliveryProof.KIND_CHOICES',
+        'ExpenseCategoryEnum': 'finance.models.Expense.CATEGORY_CHOICES',
+        'ProductCategoryEnum': 'products.models.Product.PRODUCT_CATEGORY_CHOICES',
+        'WasteReasonEnum': 'production.models.WasteRecord.REASON_CHOICES',
+    },
 }

@@ -16,5 +16,5 @@ class AuditEntrySerializer(serializers.ModelSerializer):
             'description', 'changes', 'ip_address',
         ]
 
-    def get_action_label(self, entry):
+    def get_action_label(self, entry) -> str:
         return ACTION_LABELS.get(entry.action, entry.action)

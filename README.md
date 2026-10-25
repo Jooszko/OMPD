@@ -75,5 +75,15 @@ Serwer demo (https://bakery.rauhvin.pl) sam pobiera zmiany z `main` co 10 minut 
 
 ---
 
+## 📖 Dokumentacja API
+Przy `DEBUG=True` (lokalnie) backend udostępnia dokumentację generowaną z kodu (drf-spectacular, OpenAPI 3):
+* http://localhost:8000/api/docs/ – Swagger UI: lista endpointów z możliwością wywołania (token z `POST /api/auth/login/` wklejamy w **Authorize**),
+* http://localhost:8000/api/redoc/ – ta sama dokumentacja w wersji do czytania,
+* `python manage.py spectacular --file openapi.yaml` – zapis schematu do pliku.
+
+Na serwerze (`DEBUG=False`) dokumentacja jest wyłączona. Można ją włączyć zmienną `API_DOCS_ENABLED=True`.
+
+---
+
 ## 🚀 Status Projektu
 Projekt jest w fazie rozwoju. Planowana data ukończenia - lato 2026, obrony - przełom roku 2026 i 2027.

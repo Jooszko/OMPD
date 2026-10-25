@@ -37,7 +37,7 @@ class ClientSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['geocoded_at']
 
-    def get_standing_days(self, client):
+    def get_standing_days(self, client) -> list[int]:
         return sorted({order.day_of_week for order in client.standing_orders.all() if order.is_active})
 
     def validate_nip(self, value):

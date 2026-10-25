@@ -14,6 +14,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from PIL import Image, UnidentifiedImageError
 from rest_framework.parsers import MultiPartParser
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 
 from clients.models import Client, Route
 from orders.models import DailyOrder, DeliveryProof, ProductReturn
@@ -28,9 +30,22 @@ from .services.home import build_home
 from .models import ClientAction
 from users.permissions import AdminOrBaker
 from audit.services import field_changes, record_event
+from common.openapi import error_response
+from .openapi import (
+    ACTION_ID_HEADER, DATE_PARAM, OFFLINE_HEADERS, DashboardSerializer, DeliveredStopSerializer,
+    DeliveryStatsSerializer, DirectionsSerializer, HomeSerializer, LogisticsSerializer, NoteInputSerializer,
+    NoteResultSerializer, ProblemInputSerializer, ProblemResultSerializer, ProofSerializer, ProofUploadSerializer,
+    ReturnsInputSerializer, ReturnsResultSerializer, StatusInputSerializer, StatusResultSerializer,
+    WithdrawInputSerializer, WithdrawResultSerializer,
+)
 
 class DashboardView(APIView):
     permission_classes = [AdminOrBaker]
+
+    @extend_schema(
+        summary='Stany magazynowe (stary pulpit)',
+        responses={200: DashboardSerializer},
+    )
 
     def get(self, request):
         warehouse_stock = (
@@ -54,12 +69,39 @@ class DashboardView(APIView):
 class HomeView(APIView):
     permission_classes = [AdminOrBaker]
 
+    @extend_schema(
+        summary='Strona główna',
+        description=(
+            'Dane strony głównej: dzisiejsze zamówienia, postęp tras, bieżąca zmiana produkcji, alerty, '
+            'finanse dnia i ostatnie zmiany. Trasy, finanse i zmiany widzi tylko administrator.'
+        ),
+        responses={200: HomeSerializer},
+    )
+
     def get(self, request):
         return Response(build_home(request.user, timezone.localdate()))
 
 
 class LogisticsView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Trasy i przystanki dnia',
+        description=(
+            'Administrator dostaje wszystkie trasy (albo podgląd jednego kierowcy przez parametr driver), '
+            'kierowca tylko swoje przystanki. Każdy przystanek ma zamówienia, potwierdzenia i zwroty.'
+        ),
+        parameters=[
+            DATE_PARAM,
+            OpenApiParameter('driver', int, description='Id kierowcy do podglądu – tylko administrator.'),
+        ],
+        responses={
+            200: LogisticsSerializer,
+            400: error_response('Błędna data lub id kierowcy.'),
+            403: error_response('Brak dostępu do logistyki.'),
+            404: error_response('Nie znaleziono kierowcy.'),
+        },
+    )
 
     def get(self, request):
         user = request.user
@@ -470,6 +512,22 @@ def _report_failure(request, client, orders_qs):
 class UpdateOrderStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zmiana statusu pozycji zamówienia',
+        description=(
+            'Kierowca może tylko oznaczyć dzisiejszą pozycję w dostawie jako dostarczoną albo cofnąć to '
+            'w ciągu 10 minut. Status „failed” ustawia się przez zgłoszenie problemu.'
+        ),
+        parameters=OFFLINE_HEADERS,
+        request=StatusInputSerializer,
+        responses={
+            200: StatusResultSerializer,
+            400: error_response('Nieprawidłowy status albo czas akcji.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono zamówienia.'),
+        },
+    )
+
     @idempotent_action
     def patch(self, request, pk):
         user = request.user
@@ -554,6 +612,19 @@ class UpdateOrderStatusView(APIView):
 class DeliverStopView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Dostarczenie całego przystanku',
+        description='Oznacza jako dostarczone wszystkie dzisiejsze pozycje klienta, które są w dostawie.',
+        parameters=OFFLINE_HEADERS,
+        request=None,
+        responses={
+            200: DeliveredStopSerializer,
+            400: error_response('Brak pozycji w dostawie albo błędny czas akcji.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
+
     @idempotent_action
     def post(self, request, pk):
         user = request.user
@@ -603,6 +674,19 @@ class DeliverStopView(APIView):
         return Response({'client_id': client.client_id, 'delivered_ids': delivered_ids, 'delivered_at': occurred_at})
 class StopDeliveryNoteView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Notatka do dostawy',
+        description='Zapisuje notatkę (najwyżej 500 znaków) przy dzisiejszych dostarczonych pozycjach klienta.',
+        parameters=[ACTION_ID_HEADER],
+        request=NoteInputSerializer,
+        responses={
+            200: NoteResultSerializer,
+            400: error_response('Za długa notatka albo brak dostarczonych pozycji.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
 
     @idempotent_action
     def post(self, request, pk):
@@ -686,6 +770,22 @@ def _parse_return_items(raw_items):
 
 class StopReturnsView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Zwroty towaru od klienta',
+        description=(
+            'Zapisuje pełną listę zwrotów z ostatniej dostawy do klienta. Ilość zwrotu nie może przekroczyć '
+            'dostarczonej, a produkty spoza listy są usuwane ze zwrotów.'
+        ),
+        parameters=OFFLINE_HEADERS,
+        request=ReturnsInputSerializer,
+        responses={
+            200: ReturnsResultSerializer,
+            400: error_response('Błędna lista zwrotów, data albo brak dostawy.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
 
     @idempotent_action
     def post(self, request, pk):
@@ -779,6 +879,22 @@ class StopReturnsView(APIView):
 class StopDeliveryProofView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
+
+    @extend_schema(
+        summary='Dodanie potwierdzenia dostawy',
+        description=(
+            'Wysyła zdjęcie towaru albo podpis klienta (multipart/form-data) do dzisiejszego dostarczonego '
+            'przystanku. Nowe potwierdzenie tego samego rodzaju zastępuje poprzednie.'
+        ),
+        parameters=[ACTION_ID_HEADER],
+        request={'multipart/form-data': ProofUploadSerializer},
+        responses={
+            201: ProofSerializer,
+            400: error_response('Zły plik, rodzaj albo przystanek nie jest dostarczony.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
 
     @idempotent_action
     def post(self, request, pk):
@@ -874,6 +990,15 @@ class StopDeliveryProofView(APIView):
 class DeliveryProofFileView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Plik potwierdzenia dostawy',
+        responses={
+            (200, 'image/*'): OpenApiResponse(OpenApiTypes.BINARY, description='Obraz potwierdzenia.'),
+            403: error_response('Brak dostępu do potwierdzenia.'),
+            404: error_response('Nie znaleziono potwierdzenia lub pliku.'),
+        },
+    )
+
     def get(self, request, pk):
         user = request.user
 
@@ -905,6 +1030,17 @@ class DeliveryProofFileView(APIView):
 
 class DeliveryProofDetailView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Usunięcie potwierdzenia dostawy',
+        description='Kierowca może usuwać tylko własne dzisiejsze potwierdzenia.',
+        parameters=[ACTION_ID_HEADER],
+        responses={
+            204: OpenApiResponse(description='Usunięto.'),
+            403: error_response('Brak uprawnień do usunięcia.'),
+            404: OpenApiResponse(description='Nie znaleziono potwierdzenia.'),
+        },
+    )
 
     @idempotent_action
     def delete(self, request, pk):
@@ -942,6 +1078,19 @@ class DeliveryProofDetailView(APIView):
 class ReportStopProblemView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zgłoszenie problemu z całym przystankiem',
+        description='Oznacza dzisiejsze pozycje w dostawie jako nieudane i powiadamia administratorów.',
+        parameters=OFFLINE_HEADERS,
+        request=ProblemInputSerializer,
+        responses={
+            200: ProblemResultSerializer,
+            400: error_response('Brak powodu, za długa notatka albo brak pozycji w dostawie.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono klienta.'),
+        },
+    )
+
     @idempotent_action
     def post(self, request, pk):
         user = request.user
@@ -966,6 +1115,18 @@ class ReportStopProblemView(APIView):
 class ReportOrderProblemView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary='Zgłoszenie problemu z jedną pozycją',
+        parameters=OFFLINE_HEADERS,
+        request=ProblemInputSerializer,
+        responses={
+            200: ProblemResultSerializer,
+            400: error_response('Brak powodu, za długa notatka albo pozycja nie jest w dostawie.'),
+            403: error_response('Brak dostępu (rola albo cudzy przystanek).'),
+            404: OpenApiResponse(description='Nie znaleziono zamówienia.'),
+        },
+    )
+
     @idempotent_action
     def post(self, request, pk):
         user = request.user
@@ -988,6 +1149,18 @@ class ReportOrderProblemView(APIView):
 
 class WithdrawProblemView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Wycofanie zgłoszenia problemu',
+        description='Przywraca status „w dostawie”. Kierowca może to zrobić w ciągu 10 minut od zgłoszenia.',
+        parameters=[ACTION_ID_HEADER],
+        request=WithdrawInputSerializer,
+        responses={
+            200: WithdrawResultSerializer,
+            400: error_response('Pusta lista albo zgłoszeń nie można już wycofać.'),
+            403: error_response('Cudze zamówienia albo minął czas na wycofanie.'),
+        },
+    )
 
     @idempotent_action
     def post(self, request):
@@ -1067,6 +1240,22 @@ class WithdrawProblemView(APIView):
 
 class RouteDirectionsView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Przebieg trasy na mapie',
+        description=(
+            'Wyznacza drogę przez przystanki z zamówieniami w danym dniu. Kolejność przystanków jest '
+            'optymalizowana, a wynik z serwisu map jest zapamiętywany w pamięci podręcznej.'
+        ),
+        parameters=[DATE_PARAM],
+        responses={
+            200: DirectionsSerializer,
+            400: error_response('Błędny format daty.'),
+            403: error_response('Brak dostępu do trasy.'),
+            404: OpenApiResponse(description='Nie znaleziono trasy.'),
+            502: error_response('Serwis map nie odpowiedział.'),
+        },
+    )
 
     def get(self, request, pk):
         user = request.user
@@ -1153,6 +1342,20 @@ MAX_STATS_DAYS = 366
 
 class DeliveryStatsView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Statystyki dostaw',
+        description='Skuteczność dostaw, przyczyny problemów, klienci z problemami i porównanie kierowców w okresie.',
+        parameters=[
+            OpenApiParameter('start', OpenApiTypes.DATE, description='Początek okresu (domyślnie 30 dni temu).'),
+            OpenApiParameter('end', OpenApiTypes.DATE, description='Koniec okresu (domyślnie dziś), najwyżej 366 dni.'),
+        ],
+        responses={
+            200: DeliveryStatsSerializer,
+            400: error_response('Błędny okres.'),
+            403: error_response('Tylko administrator.'),
+        },
+    )
 
     def get(self, request):
         if request.user.role != 'admin':
