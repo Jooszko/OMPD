@@ -1082,10 +1082,17 @@ export async function saveSupplier(payload: any, supplierId: number | null = nul
       window.location.reload();
     }
     const errorData = await response.json().catch(() => ({}));
-    const errorMessage =
-      errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0
-        ? JSON.stringify(errorData)
-        : `Błąd serwera: ${response.status}`;
+    const errorMessages =
+      errorData && typeof errorData === 'object'
+        ? Object.values(errorData as Record<string, unknown>).flatMap((value) => {
+            if (typeof value === 'string') return [value];
+            if (Array.isArray(value)) return value.filter((message): message is string => typeof message === 'string');
+            return [];
+          })
+        : [];
+    const errorMessage = errorMessages.length > 0
+      ? errorMessages.join('\n')
+      : `Błąd serwera: ${response.status}`;
     throw new Error(errorMessage);
   }
 

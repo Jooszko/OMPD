@@ -154,7 +154,7 @@ class SupplierDetailView(APIView):
 
     @extend_schema(
         summary='Zmiana dostawcy i jego asortymentu',
-        description='Zmienia tylko przesłane pola. Surowce, których nie ma na liście products, zostają odpięte.',
+        description='Zmienia tylko przesłane pola. Surowce, których nie ma na przesłanej liście products, zostają odpięte.',
         request=SupplierInputSerializer,
         responses={
             200: SupplierSerializer,
@@ -166,10 +166,12 @@ class SupplierDetailView(APIView):
         supplier = get_object_or_404(Supplier, pk=pk)
 
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
-        products_data = data.pop('products', [])
-        catalog_error = _supplier_catalog_error(products_data)
-        if catalog_error:
-            return Response({'error': catalog_error}, status=status.HTTP_400_BAD_REQUEST)
+        products_provided = 'products' in data
+        products_data = data.pop('products') if products_provided else None
+        if products_provided:
+            catalog_error = _supplier_catalog_error(products_data)
+            if catalog_error:
+                return Response({'error': catalog_error}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = SupplierSerializer(supplier, data=data, partial=True)
         if not serializer.is_valid():
@@ -178,8 +180,9 @@ class SupplierDetailView(APIView):
         with transaction.atomic():
             before = _supplier_state(supplier)
             serializer.save()
-            SupplierIngredient.objects.filter(supplier=supplier).update(is_assigned=False)
-            _save_supplier_catalog(supplier, products_data)
+            if products_provided:
+                SupplierIngredient.objects.filter(supplier=supplier).update(is_assigned=False)
+                _save_supplier_catalog(supplier, products_data)
             changes = field_changes(before, _supplier_state(supplier), SUPPLIER_AUDIT_LABELS)
             if changes:
                 record_event(

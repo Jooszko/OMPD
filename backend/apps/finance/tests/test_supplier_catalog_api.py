@@ -99,6 +99,25 @@ class SupplierCatalogApiTests(TestCase):
             '8.75',
         )
 
+    def test_updating_supplier_without_products_keeps_catalog_unchanged(self):
+        ingredient = Ingredient.objects.create(name='Mąka', unit='kg')
+        catalog_item = self.supplier.ingredients_catalog.create(
+            ingredient=ingredient, last_price='8.75', is_assigned=True,
+        )
+
+        response = self.api.put(
+            f'/api/finance/suppliers/{self.supplier.pk}/',
+            {'name': 'Zmieniony dostawca'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        catalog_item.refresh_from_db()
+        self.assertTrue(catalog_item.is_assigned)
+        self.assertEqual(str(catalog_item.last_price), '8.75')
+        self.assertEqual(len(response.data['products']), 1)
+        self.assertTrue(response.data['products'][0]['is_assigned'])
+
     def test_supplier_catalog_rejects_invalid_price(self):
         ingredient = Ingredient.objects.create(name='Mąka', unit='kg')
 
