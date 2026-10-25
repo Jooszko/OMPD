@@ -43,7 +43,7 @@ export function ActionToast({
         <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
       )}
       <div className="flex-1 min-w-0">
-        <p className="m-0 text-sm font-semibold">{toast.text}</p>
+        <p className="m-0 text-sm font-semibold whitespace-pre-line">{toast.text}</p>
         {toast.canRefresh && (
           <button
             type="button"

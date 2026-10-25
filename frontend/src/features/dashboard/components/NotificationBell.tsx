@@ -164,37 +164,41 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
           <div
             ref={panelRef}
             style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
-            className="fixed max-h-96 flex flex-col bg-bakery-inactive border border-bakery-border rounded shadow-xl z-50 overflow-hidden"
+            className="fixed max-h-96 flex flex-col bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-xl z-50 overflow-hidden font-auth text-bakery-dark"
           >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-bakery-btnBorder bg-bakery-dark text-white shrink-0">
-              <span className="text-xs font-bold uppercase tracking-wider">Powiadomienia</span>
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#3d3937] bg-bakery-dark text-white shrink-0">
+              <span className="text-sm font-extrabold uppercase tracking-wide">Powiadomienia</span>
               <button
+                type="button"
                 onClick={handleMarkAll}
                 disabled={unreadCount === 0}
-                className="flex items-center gap-1 text-[10px] font-bold text-bakery-accent hover:text-white disabled:text-gray-500 disabled:cursor-not-allowed transition"
+                className="inline-flex items-center gap-1.5 min-h-8 px-2 rounded-lg text-[11px] font-extrabold text-bakery-accent hover:bg-white/10 hover:text-white disabled:text-gray-500 disabled:hover:bg-transparent disabled:cursor-not-allowed transition"
               >
                 <CheckCheck className="w-3.5 h-3.5" /> Oznacz wszystkie
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-bakery-btnBorder">
+            <div className="flex-1 overflow-y-auto divide-y divide-[#e6e1df]">
               {notifications.length === 0 ? (
-                <p className="p-4 text-center text-xs text-gray-500 font-semibold italic">Brak powiadomień.</p>
+                <p className="m-0 p-5 text-center text-sm text-[#5f5a58] font-semibold">Brak powiadomień.</p>
               ) : (
                 notifications.slice(0, 6).map((n) => (
                   <button
                     key={n.id}
+                    type="button"
                     onClick={() => handleMarkOne(n)}
-                    className={`w-full text-left p-3 flex flex-col gap-0.5 transition hover:bg-bakery-rowBg ${n.is_read ? 'bg-bakery-inactive' : 'bg-bakery-rowBg'}`}
+                    className={`w-full text-left p-4 flex flex-col gap-1 transition hover:bg-bakery-rowBg ${
+                      n.is_read ? 'bg-bakery-card' : 'bg-white'
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-xs font-bold ${n.is_read ? 'text-gray-600' : 'text-bakery-dark'}`}>
+                      <span className={`text-[13px] font-extrabold ${n.is_read ? 'text-[#5f5a58]' : 'text-bakery-dark'}`}>
                         {n.title}
                       </span>
                       {!n.is_read && <span className="w-2 h-2 rounded-full bg-red-600 shrink-0" />}
                     </div>
-                    <p className="text-[11px] text-gray-500 font-medium leading-snug">{n.message}</p>
-                    <span className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                    <p className="m-0 text-xs text-[#4a4543] font-medium leading-snug">{n.message}</p>
+                    <span className="text-[11px] text-[#77716e] font-semibold mt-0.5">
                       {n.sender_name ? `Od: ${n.sender_name}` : 'System'} · {formatRelativeTime(n.created_at)}
                     </span>
                   </button>
@@ -203,8 +207,9 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
             </div>
 
             <button
+              type="button"
               onClick={handleOpenFullPage}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-bakery-dark bg-bakery-rowBg hover:bg-[#dcd8d8] border-t border-bakery-btnBorder transition shrink-0"
+              className="flex items-center justify-center gap-2 min-h-11 px-3 text-xs font-extrabold text-bakery-dark bg-bakery-card hover:bg-[#efebe9] border-t border-bakery-btnBorder transition shrink-0"
             >
               <ExternalLink className="w-3.5 h-3.5" /> Zobacz wszystkie powiadomienia
             </button>

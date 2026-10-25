@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
@@ -24,6 +24,11 @@ interface Supplier {
 }
 
 type SupplierStatusFilter = 'all' | 'active' | 'inactive';
+
+function formatPhoneNumber(value: string): string {
+    const digits = value.replace(/\D/g, '').slice(0, 9);
+    return digits.replace(/(\d{3})(?=\d)/g, '$1-');
+}
 
 export default function SuppliersPanel() {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -53,6 +58,12 @@ export default function SuppliersPanel() {
     const [newProductUnit, setNewProductUnit] = useState('');
     const [newProductPrice, setNewProductPrice] = useState('');
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
+    const closeToast = useCallback(() => setToast(null), []);
+    const closeSupplierModal = () => {
+        setIsModalOpen(false);
+        setProductPrices({});
+    };
 
     useEffect(() => {
         let isMounted = true;
@@ -110,7 +121,7 @@ export default function SuppliersPanel() {
         if (supplier) {
             setModalMode('edit');
             setName(supplier.name);
-            setPhone(supplier.phone);
+            setPhone(formatPhoneNumber(supplier.phone));
             setEmail(supplier.email);
             setAddress(supplier.address);
             setNip(supplier.nip || '');
@@ -138,6 +149,11 @@ export default function SuppliersPanel() {
             setToast({ text: 'Nazwa kontrahenta jest wymagana.' });
             return;
         }
+        const phoneDigits = phone.replace(/\D/g, '');
+        if (phoneDigits && phoneDigits.length !== 9) {
+            setToast({ text: 'Numer telefonu musi zawierać dokładnie 9 cyfr.' });
+            return;
+        }
 
         const productsById = new Map<number, SupplierProduct>();
         for (const product of supplierProducts) {
@@ -155,12 +171,24 @@ export default function SuppliersPanel() {
             }
         }
 
+        const previouslyAssignedProductIds = new Set(
+            suppliers
+                .find(supplier => supplier.supplier_id === selectedSupplierId)
+                ?.products
+                .filter(product => product.is_assigned !== false)
+                .map(product => product.product_id) ?? [],
+        );
+
         for (const product of globalProducts) {
             if (!Object.prototype.hasOwnProperty.call(productPrices, product.product_id) || productsById.has(product.product_id)) {
                 continue;
             }
             const rawPrice = productPrices[product.product_id].trim();
+            const wasPreviouslyAssigned = previouslyAssignedProductIds.has(product.product_id);
             if (!rawPrice) {
+                if (!wasPreviouslyAssigned) {
+                    continue;
+                }
                 productsById.set(product.product_id, { ...product, last_price: null, is_assigned: false });
                 continue;
             }
@@ -176,7 +204,7 @@ export default function SuppliersPanel() {
 
         const payload = {
             name: name.trim(),
-            phone: phone.trim(),
+            phone: formatPhoneNumber(phone),
             email: email.trim(),
             address: address.trim(),
             nip: nip.trim() || null, 
@@ -193,13 +221,13 @@ export default function SuppliersPanel() {
                 setSuppliers(suppliers.map(s => s.supplier_id === selectedSupplierId ? savedData : s));
             }
             
-            setIsModalOpen(false);
+            closeSupplierModal();
             setSelectedSupplierId(null);
             setToast({ variant: 'success', text: 'Kontrahent został pomyślnie zapisany w bazie danych.' });
         } catch (error: unknown) {
             console.error("Błąd podczas zapisu w komponencie:", error);
             const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
-            setToast({ text: `Nie udało się zapisać kontrahenta w bazie. ${errorMessage}` });
+            setToast({ text: `Nie udało się zapisać kontrahenta w bazie.\n${errorMessage}` });
         }
     };
 
@@ -243,8 +271,12 @@ export default function SuppliersPanel() {
             setToast({ text: 'Jednostka miary jest wymagana.' });
             return;
         }
-        if (!trimmedPrice || !Number.isFinite(Number(trimmedPrice)) || Number(trimmedPrice) <= 0) {
-            setToast({ text: 'Cena musi być większa od zera.' });
+        if (trimmedPrice && (
+            !Number.isFinite(Number(trimmedPrice))
+            || Number(trimmedPrice) <= 0
+            || Number(trimmedPrice) > 99999999.99
+        )) {
+            setToast({ text: 'Cena musi być większa od zera i nie może przekraczać 99999999,99.' });
             return;
         }
         if (globalProducts.some(p => p.name.toLowerCase() === `${trimmedName} (${trimmedUnit})`.toLowerCase())) {
@@ -484,7 +516,7 @@ export default function SuppliersPanel() {
                                 <MapPin className="w-4 h-4 text-bakery-accent" />
                                 {modalMode === 'add' ? 'Nowa Kartoteka Kontrahenta' : `Edycja firmy: ${suppliers.find(s => s.supplier_id === selectedSupplierId)?.name}`}
                             </h2>
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition">
+                            <button type="button" onClick={closeSupplierModal} className="text-gray-400 hover:text-white transition">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -505,7 +537,7 @@ export default function SuppliersPanel() {
                                 </div>
                                 <div>
                                     <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Telefon kontaktowy</label>
-                                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-bold rounded-xl text-sm outline-none focus:border-bakery-accent font-mono" />
+                                    <input type="tel" value={phone} onChange={(e) => setPhone(formatPhoneNumber(e.target.value))} inputMode="numeric" maxLength={11} placeholder="123-456-789" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-bold rounded-xl text-sm outline-none focus:border-bakery-accent font-mono" />
                                 </div>
                                 <div className="sm:col-span-2">
                                     <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Adres e-mail</label>
@@ -653,7 +685,7 @@ export default function SuppliersPanel() {
                             <button type="submit" className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition">
                                 Zapisz Kartotekę
                             </button>
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed]">
+                            <button type="button" onClick={closeSupplierModal} className="min-h-10 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl transition hover:bg-[#f3efed]">
                                 Anuluj
                             </button>
                         </div>
@@ -690,10 +722,12 @@ export default function SuppliersPanel() {
                                 </select>
                             </label>
                             <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
-                                Cena u dostawcy (zł/{newProductUnit || 'jednostkę'}) *
-                                <input type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="np. 12,50" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" required />
+                                Cena u dostawcy (zł/{newProductUnit || 'jednostkę'}) — opcjonalnie
+                                <input type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="np. 12,50" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" />
                             </label>
-                            <span className="text-[10px] text-gray-400 font-medium block">Składnik zostanie zapisany na stałe w bazie surowców.</span>
+                            <span className="text-[10px] text-gray-400 font-medium block">
+                                Składnik zostanie zapisany na stałe w bazie surowców. Cena u tego dostawcy zapisze się dopiero po zapisaniu kartoteki.
+                            </span>
                         </div>
 
                         <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex flex-wrap justify-end gap-2 shrink-0">
@@ -709,7 +743,7 @@ export default function SuppliersPanel() {
                 </div>
             )}
 
-            <ActionToast toast={toast} onClose={() => setToast(null)} onRefresh={() => setToast(null)} />
+            <ActionToast toast={toast} onClose={closeToast} onRefresh={closeToast} />
         </div>
     );
 }

@@ -29,7 +29,7 @@ class FinanceAuditTests(TestCase):
         entry = AuditEntry.objects.get(action='supplier.created')
         rows = change_rows(entry)
         self.assertIn(('Nazwa', None, 'Młyn Kowalski'), rows)
-        self.assertIn(('Asortyment', None, 'Mąka, Woda'), rows)
+        self.assertIn(('Asortyment i ceny', None, 'Mąka, Woda'), rows)
         self.assertNotIn('Telefon', [label for label, _, _ in rows])
 
     def test_supplier_edit_shows_changed_data_and_catalog(self):
@@ -44,7 +44,13 @@ class FinanceAuditTests(TestCase):
         )
 
         entry = AuditEntry.objects.get(action='supplier.updated')
-        self.assertEqual(change_rows(entry), [('Telefon', '', '500600700'), ('Asortyment', 'Mąka, Woda', 'Mąka')])
+        self.assertEqual(
+            change_rows(entry),
+            [
+                ('Telefon', '', '500600700'),
+                ('Asortyment i ceny', 'Mąka, Woda', 'Mąka, Woda (nieprzypisany)'),
+            ],
+        )
 
     def test_new_expense_is_described_with_amount(self):
         self.api.post(
