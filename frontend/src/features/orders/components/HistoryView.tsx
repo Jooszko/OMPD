@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, MapPin, Search } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, MapPin, Search } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { fetchOrderHistory, type OrderHistoryPage, type OrderHistoryStop } from '../../../services/api';
 import { apiErrorMessage } from '../../users/lib/staff';
 import { HISTORY_PRESETS, HISTORY_STATUSES, groupByDate, type HistoryFilters } from '../lib/history';
@@ -8,7 +9,12 @@ import { StatusBadge } from './DayRoutes';
 
 const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
 const DATE_FIELD =
-  'h-10 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none focus:border-bakery-accent';
+  'inline-flex h-10 items-center gap-2 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
+
+function formatDate(iso: string): string {
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+}
 
 function HistoryRow({ stop }: { stop: OrderHistoryStop }) {
   const [open, setOpen] = useState(false);
@@ -114,25 +120,29 @@ export function HistoryView({ today }: { today: string }) {
               </button>
             );
           })}
-          <span className="flex items-center gap-2 text-[13px] font-bold">
-            <input
-              type="date"
-              aria-label="Od"
+          <div className="flex items-center gap-2 text-[13px] font-bold">
+            <CalendarPicker
               value={filters.date_from}
               max={filters.date_to}
-              onChange={(event) => event.target.value && update({ date_from: event.target.value })}
-              className={DATE_FIELD}
-            />
+              onChange={(date) => update({ date_from: date })}
+              label="Wybierz datę początkową"
+              triggerClassName={DATE_FIELD}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(filters.date_from)}
+            </CalendarPicker>
             –
-            <input
-              type="date"
-              aria-label="Do"
+            <CalendarPicker
               value={filters.date_to}
               min={filters.date_from}
-              onChange={(event) => event.target.value && update({ date_to: event.target.value })}
-              className={DATE_FIELD}
-            />
-          </span>
+              onChange={(date) => update({ date_to: date })}
+              label="Wybierz datę końcową"
+              triggerClassName={DATE_FIELD}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(filters.date_to)}
+            </CalendarPicker>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3">
           <label className="relative block flex-1 min-w-[220px]">

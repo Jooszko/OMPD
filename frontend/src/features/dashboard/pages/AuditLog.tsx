@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import {
   fetchAuditEntries,
   fetchAuditFilterOptions,
@@ -20,7 +21,7 @@ const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whi
 const CHIP_ACTIVE = 'bg-bakery-dark border-bakery-dark text-white';
 const CHIP_IDLE = 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]';
 const DATE_FIELD =
-  'h-10 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none focus:border-bakery-accent';
+  'inline-flex h-10 items-center gap-2 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
 const SELECT =
   'h-11 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-bold outline-none focus:border-bakery-accent';
 const PAGER_BUTTON =
@@ -32,6 +33,13 @@ const RANGE_PRESETS: { label: string; range: (today: string) => { dateFrom: stri
   { label: '7 dni', range: (today) => ({ dateFrom: shiftIsoDate(today, -6), dateTo: today }) },
   { label: '30 dni', range: (today) => ({ dateFrom: shiftIsoDate(today, -29), dateTo: today }) },
 ];
+
+function formatDate(iso: string): string {
+  if (!iso) return 'dd.mm.rrrr';
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+}
+
 interface Filters {
   category: string;
   action: string;
@@ -193,25 +201,29 @@ export default function AuditLogPage() {
               </button>
             );
           })}
-          <span className="flex items-center gap-2 text-[13px] font-bold">
-            <input
-              type="date"
-              aria-label="Od"
+          <div className="flex items-center gap-2 text-[13px] font-bold">
+            <CalendarPicker
               value={filters.dateFrom}
               max={today}
-              onChange={(e) => changeFilter('dateFrom', e.target.value)}
-              className={DATE_FIELD}
-            />
+              onChange={(date) => changeFilter('dateFrom', date)}
+              label="Wybierz datę początkową"
+              triggerClassName={DATE_FIELD}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(filters.dateFrom)}
+            </CalendarPicker>
             –
-            <input
-              type="date"
-              aria-label="Do"
+            <CalendarPicker
               value={filters.dateTo}
               max={today}
-              onChange={(e) => changeFilter('dateTo', e.target.value)}
-              className={DATE_FIELD}
-            />
-          </span>
+              onChange={(date) => changeFilter('dateTo', date)}
+              label="Wybierz datę końcową"
+              triggerClassName={DATE_FIELD}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(filters.dateTo)}
+            </CalendarPicker>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">

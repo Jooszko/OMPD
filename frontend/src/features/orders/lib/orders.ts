@@ -36,6 +36,18 @@ export function shiftIsoDate(iso: string, days: number): string {
   return toIsoDate(date);
 }
 
+export function monthCalendarDates(iso: string): string[] {
+  const [year, month] = iso.split('-').map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  firstDay.setDate(firstDay.getDate() - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(firstDay);
+    date.setDate(firstDay.getDate() + index);
+    return toIsoDate(date);
+  });
+}
+
 export function daysBetween(fromIso: string, toIso: string): number {
   const [fromYear, fromMonth, fromDay] = fromIso.split('-').map(Number);
   const [toYear, toMonth, toDay] = toIso.split('-').map(Number);

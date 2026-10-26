@@ -5,6 +5,7 @@ import {
   filterRoutes,
   formatDayHeading,
   isIsoDate,
+  monthCalendarDates,
   normalizeText,
   plural,
   relativeDayLabel,
@@ -61,6 +62,14 @@ describe('dates', () => {
 
   it('formats the heading in Polish', () => {
     expect(formatDayHeading('2026-10-25')).toBe('niedziela, 25 października');
+  });
+
+  it('builds a Monday-first six-week calendar grid', () => {
+    const dates = monthCalendarDates('2026-10-25');
+    expect(dates).toHaveLength(42);
+    expect(dates[0]).toBe('2026-09-28');
+    expect(dates[3]).toBe('2026-10-01');
+    expect(dates[41]).toBe('2026-11-08');
   });
 
   it('accepts only real ISO dates from the URL', () => {

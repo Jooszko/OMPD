@@ -1,10 +1,12 @@
-import { useRef } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { formatDayHeading, relativeDayLabel, shiftIsoDate } from '../lib/orders';
 
 const STEP_BUTTON =
   'size-11 shrink-0 inline-flex items-center justify-center rounded-xl border border-bakery-btnBorder bg-bakery-card text-bakery-dark hover:border-[#8f8a88]';
 const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
+const CALENDAR_BUTTON =
+  'inline-flex items-center gap-2 min-h-10 px-3.5 rounded-full border border-bakery-btnBorder bg-bakery-card text-[13px] font-extrabold hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
 
 export function DateNav({
   date,
@@ -17,14 +19,12 @@ export function DateNav({
   max?: string;
   onChange: (date: string) => void;
 }) {
-  const pickerRef = useRef<HTMLInputElement>(null);
   const relative = relativeDayLabel(date, today);
   const tomorrow = shiftIsoDate(today, 1);
   const quickDays = [
     { value: today, label: 'Dziś' },
     { value: tomorrow, label: 'Jutro' },
   ].filter((option) => !max || option.value <= max);
-
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="w-full sm:w-auto flex items-center gap-2">
@@ -71,32 +71,16 @@ export function DateNav({
             {option.label}
           </button>
         ))}
-        <span className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                pickerRef.current?.showPicker();
-              } catch {
-                pickerRef.current?.focus();
-              }
-            }}
-            className="inline-flex items-center gap-2 min-h-10 px-3.5 rounded-full border border-bakery-btnBorder bg-bakery-card text-[13px] font-extrabold hover:border-[#8f8a88]"
-          >
-            <CalendarDays aria-hidden className="w-4 h-4" />
-            Kalendarz
-          </button>
-          <input
-            ref={pickerRef}
-            type="date"
-            tabIndex={-1}
-            aria-label="Wybierz dzień"
-            value={date}
-            max={max}
-            onChange={(event) => event.target.value && onChange(event.target.value)}
-            className="absolute inset-0 opacity-0 pointer-events-none"
-          />
-        </span>
+        <CalendarPicker
+          value={date}
+          max={max}
+          onChange={onChange}
+          label="Wybierz dzień"
+          triggerClassName={CALENDAR_BUTTON}
+        >
+          <CalendarDays aria-hidden className="w-4 h-4" />
+          Kalendarz
+        </CalendarPicker>
       </div>
     </div>
   );

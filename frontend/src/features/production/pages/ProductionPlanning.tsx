@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, ChevronRight, Factory, Info, Lock, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Factory, Info, Lock, RefreshCw } from 'lucide-react';
 import {
   fetchProductionBoard,
   fetchProductionPlan,
@@ -12,6 +12,7 @@ import {
 } from '../../../services/api';
 import { Modal } from '../../dashboard/components/Modal';
 import { formatDayLabel, formatTime, shiftIsoDate } from '../../dashboard/lib/dateFormat';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { CoveragePanel } from '../components/CoveragePanel';
 import { formatAmount, formatKg } from '../lib/productionStage';
 
@@ -20,6 +21,13 @@ type UserRole = 'admin' | 'baker' | 'driver';
 const CARD = 'bg-bakery-inactive rounded border border-bakery-btnBorder shadow-sm';
 const NAV_BUTTON =
   'inline-flex items-center justify-center w-9 h-9 bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive active:scale-[0.98]';
+const DATE_BUTTON =
+  'inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
+
+function formatShortDate(iso: string): string {
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+}
 
 function DoughCard({ dough }: { dough: PlanPreviewDough }) {
   return (
@@ -252,15 +260,20 @@ export default function ProductionPlanning() {
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <label className="flex items-center gap-2 text-xs font-bold">
-          Dostawa:
-          <input
-            type="date"
-            value={preview?.delivery_date ?? ''}
-            onChange={(e) => e.target.value && setDeliveryDate(e.target.value)}
-            className="px-2 py-1 text-xs font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent"
-          />
-        </label>
+        <div className="flex items-center gap-2 text-xs font-bold">
+          <span>Dostawa:</span>
+          {preview && (
+            <CalendarPicker
+              value={preview.delivery_date}
+              onChange={setDeliveryDate}
+              label="Wybierz datę dostawy"
+              triggerClassName={DATE_BUTTON}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatShortDate(preview.delivery_date)}
+            </CalendarPicker>
+          )}
+        </div>
         <button
           type="button"
           className={NAV_BUTTON}
