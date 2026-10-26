@@ -1,11 +1,18 @@
 import { useState } from 'react';
+import { CalendarDays } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { toIsoDate } from '../../dashboard/lib/dateFormat';
 import { PERIOD_PRESETS, presetPeriod, type FinancePeriod } from '../lib/period';
 
 const SEGMENT_CLASS =
   'h-9 flex-1 sm:flex-none px-2 sm:px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap transition';
 const DATE_CLASS =
-  'h-9 px-2.5 text-[13px] font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none focus:border-bakery-accent';
+  'inline-flex h-9 items-center gap-2 px-2.5 text-[13px] font-semibold bg-white border border-bakery-btnBorder rounded-lg outline-none hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
+
+function formatDate(iso: string): string {
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+}
 
 export function PeriodPicker({ value, onChange }: { value: FinancePeriod; onChange: (period: FinancePeriod) => void }) {
   const [draft, setDraft] = useState({ start: value.start, end: value.end });
@@ -55,26 +62,32 @@ export function PeriodPicker({ value, onChange }: { value: FinancePeriod; onChan
 
       {isCustom && (
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs font-bold text-[#4a4543]">
-            od
-            <input
-              type="date"
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#4a4543]">
+            <span>od</span>
+            <CalendarPicker
               value={draft.start}
               max={today}
-              onChange={(e) => changeDraft('start', e.target.value)}
-              className={DATE_CLASS}
-            />
-          </label>
-          <label className="flex items-center gap-1.5 text-xs font-bold text-[#4a4543]">
-            do
-            <input
-              type="date"
+              onChange={(date) => changeDraft('start', date)}
+              label="Wybierz datę początkową"
+              triggerClassName={DATE_CLASS}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(draft.start)}
+            </CalendarPicker>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#4a4543]">
+            <span>do</span>
+            <CalendarPicker
               value={draft.end}
               max={today}
-              onChange={(e) => changeDraft('end', e.target.value)}
-              className={DATE_CLASS}
-            />
-          </label>
+              onChange={(date) => changeDraft('end', date)}
+              label="Wybierz datę końcową"
+              triggerClassName={DATE_CLASS}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+              {formatDate(draft.end)}
+            </CalendarPicker>
+          </div>
           {draftError && <span className="text-xs font-semibold text-rose-700">{draftError}</span>}
         </div>
       )}

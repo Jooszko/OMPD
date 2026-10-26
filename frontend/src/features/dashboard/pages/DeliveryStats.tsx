@@ -1,4 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { CalendarDays } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { fetchDeliveryStats, type DeliveryStats } from '../../../services/api';
 import { shiftIsoDate, toIsoDate } from '../lib/dateFormat';
 import { formatPercent } from '../lib/statsFormat';
@@ -11,7 +13,7 @@ const PRESETS = [7, 30, 90] as const;
 const PROBLEM_BAR_COLOR = '#c62828';
 const CHIP = 'min-h-10 px-3.5 rounded-full border text-[13px] font-extrabold whitespace-nowrap';
 const DATE_FIELD =
-  'h-10 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none focus:border-bakery-accent';
+  'inline-flex h-10 items-center gap-2 px-3 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[14px] font-semibold outline-none hover:border-[#8f8a88] focus-visible:outline-2 focus-visible:outline-bakery-accent';
 const CARD = 'rounded-[14px] border border-bakery-btnBorder bg-bakery-card shadow-sm';
 const ALERT = 'm-0 px-4 py-3 rounded-xl bg-[#fbdcdc] text-sm font-semibold text-[#991b1b]';
 
@@ -24,6 +26,11 @@ interface LoadedStats {
 function presetRange(days: number) {
   const end = toIsoDate(new Date());
   return { start: shiftIsoDate(end, -(days - 1)), end };
+}
+
+function formatDate(iso: string): string {
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
 }
 
 function StatTile({ label, value, hint, color = '' }: { label: string; value: string; hint: string; color?: string }) {
@@ -127,25 +134,30 @@ export default function DeliveryStatsPage() {
             {days} dni
           </button>
         ))}
-        <span className="flex items-center gap-2 text-[13px] font-bold">
-          <input
-            type="date"
-            aria-label="Od"
+        <div className="flex items-center gap-2 text-[13px] font-bold">
+          <CalendarPicker
             value={range.start}
-            max={today}
-            onChange={(e) => changeDate('start', e.target.value)}
-            className={DATE_FIELD}
-          />
+            max={range.end}
+            onChange={(date) => changeDate('start', date)}
+            label="Wybierz datę początkową"
+            triggerClassName={DATE_FIELD}
+          >
+            <CalendarDays aria-hidden className="size-4" />
+            {formatDate(range.start)}
+          </CalendarPicker>
           –
-          <input
-            type="date"
-            aria-label="Do"
+          <CalendarPicker
             value={range.end}
+            min={range.start}
             max={today}
-            onChange={(e) => changeDate('end', e.target.value)}
-            className={DATE_FIELD}
-          />
-        </span>
+            onChange={(date) => changeDate('end', date)}
+            label="Wybierz datę końcową"
+            triggerClassName={DATE_FIELD}
+          >
+            <CalendarDays aria-hidden className="size-4" />
+            {formatDate(range.end)}
+          </CalendarPicker>
+        </div>
       </section>
 
       {rangeError && <p className={ALERT}>{rangeError}</p>}
