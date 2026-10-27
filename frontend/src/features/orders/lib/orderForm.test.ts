@@ -67,10 +67,19 @@ describe('prefill', () => {
     expect(itemsFromStop(stop)).toEqual([{ product_id: 1, product_name: 'Chleb', price: 4.2, qty: 10 }]);
   });
 
-  it('takes the standing basket only on its days', () => {
-    const groups = [{ client_id: 7, days_ids: [0, 1, 2, 3, 4], items: [{ product_id: 2, product_name: 'Bułka', qty: 80, price: 0.8 }] }];
+  it('takes the standing basket of that weekday only', () => {
+    const groups = [
+      {
+        client_id: 7,
+        schedule: [
+          { day: 1, items: [{ product_id: 2, product_name: 'Bułka', qty: 80, price: 0.8 }] },
+          { day: 4, items: [{ product_id: 1, product_name: 'Chleb', qty: 5, price: 4.5 }] },
+        ],
+      },
+    ];
 
     expect(standingItemsFor(groups, 7, 1)).toEqual([{ product_id: 2, product_name: 'Bułka', price: 0.8, qty: 80 }]);
+    expect(standingItemsFor(groups, 7, 4)).toEqual([{ product_id: 1, product_name: 'Chleb', price: 4.5, qty: 5 }]);
     expect(standingItemsFor(groups, 7, 6)).toEqual([]);
   });
 });

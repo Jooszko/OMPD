@@ -10,6 +10,8 @@ export const DAY_PRESETS: { label: string; days: number[] }[] = [
   { label: 'Codziennie', days: [0, 1, 2, 3, 4, 5, 6] },
 ];
 
+export type DayBaskets = Record<number, FormItem[]>;
+
 export interface StandingRouteGroup {
   routeId: number;
   routeName: string;
@@ -21,16 +23,13 @@ export function toggleDay(days: number[], day: number): number[] {
   return days.includes(day) ? days.filter((value) => value !== day) : [...days, day].sort((a, b) => a - b);
 }
 
-export function weeklyTotals(order: Pick<StandingOrderGroup, 'days_ids' | 'total_quantity' | 'total_amount'>) {
-  return {
-    pieces: order.total_quantity * order.days_ids.length,
-    value: order.total_amount * order.days_ids.length,
-  };
+export function weeklyTotals(order: Pick<StandingOrderGroup, 'weekly_quantity' | 'weekly_amount'>) {
+  return { pieces: order.weekly_quantity, value: order.weekly_amount };
 }
 
 export function dayLoad(orders: StandingOrderGroup[]): number[] {
   const load = [0, 0, 0, 0, 0, 0, 0];
-  orders.forEach((order) => order.days_ids.forEach((day) => (load[day] += order.total_quantity)));
+  orders.forEach((order) => order.schedule.forEach((entry) => (load[entry.day] += entry.total_quantity)));
   return load;
 }
 
@@ -54,18 +53,43 @@ export function groupStandingByRoute(orders: StandingOrderGroup[]): StandingRout
   return [...groups.values()].sort((a, b) => a.routeName.localeCompare(b.routeName, 'pl', { numeric: true }));
 }
 
-export function itemsFromStanding(order: StandingOrderGroup): FormItem[] {
-  return order.items.map((item) => ({
-    product_id: item.product_id,
-    product_name: item.product_name,
-    price: item.price,
-    qty: item.qty,
+export function basketsFromStanding(order: StandingOrderGroup): DayBaskets {
+  return Object.fromEntries(
+    order.schedule.map((entry) => [
+      entry.day,
+      entry.items.map((item) => ({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        price: item.price,
+        qty: item.qty,
+      })),
+    ])
+  );
+}
+
+export function copyBasket(baskets: DayBaskets, from: number, days: number[]): DayBaskets {
+  const source = baskets[from] ?? [];
+  return { ...baskets, ...Object.fromEntries(days.map((day) => [day, source.map((item) => ({ ...item }))])) };
+}
+
+export function fillMissingBaskets(baskets: DayBaskets, from: number | null, days: number[]): DayBaskets {
+  const missing = days.filter((day) => !baskets[day]);
+  return from === null || missing.length === 0 ? baskets : copyBasket(baskets, from, missing);
+}
+
+export function scheduleFromBaskets(days: number[], baskets: DayBaskets) {
+  return days.map((day) => ({
+    day,
+    items: (baskets[day] ?? [])
+      .filter((item) => item.qty > 0)
+      .map((item) => ({ product_id: item.product_id, qty: item.qty })),
   }));
 }
 
-export function standingFormError(clientId: number | null, days: number[], items: FormItem[]): string | null {
+export function standingFormError(clientId: number | null, days: number[], baskets: DayBaskets): string | null {
   if (clientId === null) return 'Wybierz klienta.';
   if (days.length === 0) return 'Zaznacz przynajmniej jeden dzień dostaw.';
-  if (!items.some((item) => item.qty > 0)) return 'Dodaj przynajmniej jeden produkt z ilością większą od zera.';
+  const empty = days.filter((day) => !(baskets[day] ?? []).some((item) => item.qty > 0));
+  if (empty.length > 0) return `Dodaj produkty na: ${empty.map((day) => WEEKDAY_LABELS[day]).join(', ')}.`;
   return null;
 }

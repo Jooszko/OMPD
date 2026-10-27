@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Info, Trash2, X } from 'lucide-react';
+import { Copy, Info, Trash2, X } from 'lucide-react';
 import {
   deleteStandingOrder,
   fetchClients,
@@ -13,12 +13,24 @@ import {
 import { useDialogFocus } from '../../dashboard/components/useDialogFocus';
 import { ERROR_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
-import type { FormItem } from '../lib/orderForm';
-import { DAY_PRESETS, WEEKDAY_LABELS, itemsFromStanding, standingFormError, toggleDay } from '../lib/standing';
+import { itemsTotals, type FormItem } from '../lib/orderForm';
+import { formatPieces } from '../lib/orders';
+import {
+  DAY_PRESETS,
+  WEEKDAY_LABELS,
+  basketsFromStanding,
+  copyBasket,
+  fillMissingBaskets,
+  scheduleFromBaskets,
+  standingFormError,
+  toggleDay,
+  type DayBaskets,
+} from '../lib/standing';
 import { ClientPicker } from './ClientPicker';
 import { ItemsEditor } from './ItemsEditor';
 
 const CHIP = 'min-h-9 px-3 rounded-full border text-[13px] font-extrabold';
+const DEFAULT_DAYS = [0, 1, 2, 3, 4, 5];
 
 export function StandingPanel({
   orders,
@@ -36,8 +48,10 @@ export function StandingPanel({
   const [data, setData] = useState<{ clients: AppClient[]; products: AppProduct[] } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [clientId, setClientId] = useState<number | null>(editing?.client_id ?? null);
-  const [days, setDays] = useState<number[]>(editing?.days_ids ?? [0, 1, 2, 3, 4, 5]);
-  const [items, setItems] = useState<FormItem[]>(editing ? itemsFromStanding(editing) : []);
+  const [days, setDays] = useState<number[]>(editing?.days_ids ?? DEFAULT_DAYS);
+  const [baskets, setBaskets] = useState<DayBaskets>(editing ? basketsFromStanding(editing) : {});
+  const [sameForAll, setSameForAll] = useState(editing?.same_every_day ?? true);
+  const [activeDay, setActiveDay] = useState<number | null>(editing?.days_ids[0] ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -58,13 +72,39 @@ export function StandingPanel({
   }, []);
 
   const existing = editing ?? orders.find((order) => order.client_id === clientId) ?? null;
+  const current = activeDay !== null && days.includes(activeDay) ? activeDay : (days[0] ?? null);
+  const items = current === null ? [] : (baskets[current] ?? []);
 
   const chooseClient = (id: number) => {
     const order = orders.find((entry) => entry.client_id === id);
     setClientId(id);
-    setDays(order?.days_ids ?? [0, 1, 2, 3, 4, 5]);
-    setItems(order ? itemsFromStanding(order) : []);
+    setDays(order?.days_ids ?? DEFAULT_DAYS);
+    setBaskets(order ? basketsFromStanding(order) : {});
+    setSameForAll(order?.same_every_day ?? true);
+    setActiveDay(order?.days_ids[0] ?? null);
     setError(null);
+  };
+
+  const changeDays = (next: number[], selected: number | null = current) => {
+    setDays(next);
+    setBaskets(fillMissingBaskets(baskets, current, next));
+    if (selected !== null && next.includes(selected)) setActiveDay(selected);
+  };
+
+  const toggle = (day: number) => {
+    const next = toggleDay(days, day);
+    changeDays(next, next.includes(day) && !sameForAll ? day : current);
+  };
+
+  const changeItems = (next: FormItem[]) => {
+    if (current === null) return;
+    const updated = { ...baskets, [current]: next };
+    setBaskets(sameForAll ? copyBasket(updated, current, days) : updated);
+  };
+
+  const changeMode = (same: boolean) => {
+    setSameForAll(same);
+    if (same && current !== null) setBaskets(copyBasket(baskets, current, days));
   };
 
   const run = async (action: () => Promise<unknown>, fallback: string) => {
@@ -81,18 +121,13 @@ export function StandingPanel({
   };
 
   const save = () => {
-    const problem = standingFormError(clientId, days, items);
+    const problem = standingFormError(clientId, days, baskets);
     if (problem) {
       setError(problem);
       return;
     }
     run(
-      () =>
-        saveStandingOrder({
-          client_id: clientId as number,
-          days,
-          items: items.filter((item) => item.qty > 0).map((item) => ({ product_id: item.product_id, qty: item.qty })),
-        }),
+      () => saveStandingOrder({ client_id: clientId as number, schedule: scheduleFromBaskets(days, baskets) }),
       'Nie udało się zapisać zamówienia stałego.'
     );
   };
@@ -130,7 +165,9 @@ export function StandingPanel({
           <h2 id={titleId} className="m-0 font-display text-[24px] leading-tight font-extrabold break-words">
             {editing ? editing.client_name : 'Harmonogram dostaw'}
           </h2>
-          <span className="text-sm font-bold text-[#cfc8c4]">Ten sam koszyk w każdym zaznaczonym dniu tygodnia</span>
+          <span className="text-sm font-bold text-[#cfc8c4]">
+            Ten sam koszyk w każdym dniu albo inny skład na każdy dzień tygodnia
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-5">
@@ -168,7 +205,7 @@ export function StandingPanel({
                         key={label}
                         type="button"
                         aria-pressed={active}
-                        onClick={() => setDays(toggleDay(days, day))}
+                        onClick={() => toggle(day)}
                         className={`h-11 rounded-xl border text-[13px] font-extrabold ${
                           active ? 'bg-bakery-dark border-bakery-dark text-white' : 'bg-white border-bakery-btnBorder text-[#5f5a58]'
                         }`}
@@ -183,7 +220,7 @@ export function StandingPanel({
                     <button
                       key={preset.label}
                       type="button"
-                      onClick={() => setDays(preset.days)}
+                      onClick={() => changeDays(preset.days)}
                       className={`${CHIP} bg-white border-bakery-btnBorder hover:border-bakery-dark`}
                     >
                       {preset.label}
@@ -192,7 +229,77 @@ export function StandingPanel({
                 </div>
               </section>
 
-              <ItemsEditor items={items} products={data.products} onChange={setItems} />
+              {days.length > 0 && (
+                <section className="flex flex-col gap-2.5">
+                  <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">Skład</h3>
+                  <div role="group" aria-label="Skład zamówienia" className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { same: true, label: 'Taki sam w każdym dniu' },
+                      { same: false, label: 'Inny na każdy dzień' },
+                    ].map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        aria-pressed={sameForAll === option.same}
+                        onClick={() => changeMode(option.same)}
+                        className={`min-h-11 px-3 rounded-xl border text-[13px] font-extrabold ${
+                          sameForAll === option.same
+                            ? 'bg-bakery-dark border-bakery-dark text-white'
+                            : 'bg-white border-bakery-btnBorder text-[#5f5a58]'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {!sameForAll && (
+                    <>
+                      <div role="tablist" aria-label="Dzień tygodnia" className="flex flex-wrap gap-1.5">
+                        {days.map((day) => {
+                          const active = day === current;
+                          const pieces = itemsTotals(baskets[day] ?? []).pieces;
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              onClick={() => setActiveDay(day)}
+                              className={`min-w-[64px] px-2.5 py-1.5 rounded-xl border flex flex-col items-center leading-tight ${
+                                active
+                                  ? 'bg-bakery-dark border-bakery-dark text-white'
+                                  : 'bg-white border-bakery-btnBorder hover:border-bakery-dark'
+                              }`}
+                            >
+                              <span className="text-[13px] font-extrabold">{WEEKDAY_LABELS[day]}</span>
+                              <span
+                                className={`text-[11px] font-bold tabular-nums ${
+                                  active ? 'text-[#cfc8c4]' : pieces > 0 ? 'text-[#5f5a58]' : 'text-[#b91c1c]'
+                                }`}
+                              >
+                                {pieces > 0 ? formatPieces(pieces) : 'pusto'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {current !== null && days.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setBaskets(copyBasket(baskets, current, days))}
+                          className={`${CHIP} self-start inline-flex items-center gap-2 bg-white border-bakery-btnBorder hover:border-bakery-dark`}
+                        >
+                          <Copy aria-hidden className="w-4 h-4" />
+                          Skopiuj skład z {WEEKDAY_LABELS[current]} na pozostałe dni
+                        </button>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {current !== null && <ItemsEditor items={items} products={data.products} onChange={changeItems} />}
 
               <p className="m-0 flex gap-2 px-3.5 py-2.5 rounded-xl bg-[#eaf1fb] text-[13px] font-semibold text-[#1d4f91]">
                 <Info aria-hidden className="w-4 h-4 shrink-0 mt-0.5" />

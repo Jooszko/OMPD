@@ -81,18 +81,24 @@ class OrderAuditTests(TestCase):
 
     def test_standing_order_records_days_and_items(self):
         url = '/api/orders/standing/'
-        self.api.post(url, {'client_id': self.shop.pk, 'days': [0, 2], 'items': [self.item(self.bread, 5)]}, format='json')
-        self.api.post(
-            url, {'client_id': self.shop.pk, 'days': [0, 1, 2], 'items': [self.item(self.bread, 5)]}, format='json'
-        )
+
+        def schedule(*days):
+            return [{'day': day, 'items': [self.item(self.bread, qty)]} for day, qty in days]
+
+        self.api.post(url, {'client_id': self.shop.pk, 'schedule': schedule((0, 5), (2, 5))}, format='json')
+        self.api.post(url, {'client_id': self.shop.pk, 'schedule': schedule((0, 5), (1, 5), (2, 5))}, format='json')
+        self.api.post(url, {'client_id': self.shop.pk, 'schedule': schedule((0, 5), (1, 5), (2, 8))}, format='json')
         self.api.delete(f'{url}?client_id={self.shop.pk}')
 
-        created, updated, deleted = (
-            AuditEntry.objects.get(action=f'standing_order.{kind}') for kind in ('created', 'updated', 'deleted')
-        )
+        created, deleted = (AuditEntry.objects.get(action=f'standing_order.{kind}') for kind in ('created', 'deleted'))
+        days_added, quantity_changed = AuditEntry.objects.filter(action='standing_order.updated').order_by('entry_id')
         self.assertEqual(change_rows(created), [('Dni tygodnia', None, 'Pn, Śr'), ('Chleb', None, '5 szt.')])
-        self.assertEqual(change_rows(updated), [('Dni tygodnia', 'Pn, Śr', 'Pn, Wt, Śr')])
-        self.assertEqual(change_rows(deleted), [('Dni tygodnia', 'Pn, Wt, Śr', None), ('Chleb', '5 szt.', None)])
+        self.assertEqual(change_rows(days_added), [('Dni tygodnia', 'Pn, Śr', 'Pn, Wt, Śr')])
+        self.assertEqual(change_rows(quantity_changed), [('Chleb', '5 szt.', '5 szt. (Pn, Wt), 8 szt. (Śr)')])
+        self.assertEqual(
+            change_rows(deleted),
+            [('Dni tygodnia', 'Pn, Wt, Śr', None), ('Chleb', '5 szt. (Pn, Wt), 8 szt. (Śr)', None)],
+        )
 
     def test_unknown_product_rolls_back_order_and_entry(self):
         response = self.save_order([{'product_id': 999999, 'qty': 5}])

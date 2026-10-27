@@ -5,7 +5,7 @@ import type { OrderDayRoute, OrderDayStop } from '../../../services/api';
 import { STATUS_META, formatMoney, formatPieces, plural } from '../lib/orders';
 import { printRouteParam } from '../lib/print';
 
-const COLUMNS = 'md:grid md:grid-cols-[minmax(240px,1fr)_150px_110px_120px_24px] md:gap-3';
+const COLUMNS = '@3xl:grid @3xl:grid-cols-[minmax(240px,1fr)_150px_110px_120px_24px] @3xl:gap-3';
 
 export function StatusBadge({ status }: { status: OrderDayStop['status'] }) {
   return (
@@ -49,17 +49,24 @@ function StopRow({
             <MapPin aria-hidden className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{stop.address}</span>
           </span>
-          <span className="md:hidden mt-1 flex flex-wrap items-center gap-2 text-[13px] font-bold">
+          <span className="@3xl:hidden mt-1 flex flex-wrap items-center gap-2 text-[13px] font-bold">
             <StatusBadge status={stop.status} />
             {formatPieces(stop.total_quantity)} · {formatMoney(stop.total_amount)}
           </span>
         </span>
-        <span className="hidden md:block">
+        <span className="hidden @3xl:block">
           <StatusBadge status={stop.status} />
         </span>
-        <span className="hidden md:block text-right text-sm font-bold tabular-nums">{formatPieces(stop.total_quantity)}</span>
-        <span className="hidden md:block text-right text-sm font-extrabold tabular-nums">{formatMoney(stop.total_amount)}</span>
-        <ChevronDown aria-hidden className={`w-5 h-5 shrink-0 text-[#8a8482] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="hidden @3xl:block text-right text-sm font-bold tabular-nums">
+          {formatPieces(stop.total_quantity)}
+        </span>
+        <span className="hidden @3xl:block text-right text-sm font-extrabold tabular-nums">
+          {formatMoney(stop.total_amount)}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={`w-5 h-5 shrink-0 text-[#8a8482] transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
@@ -130,7 +137,7 @@ export function DayRoutes({
   onDelete: (stop: OrderDayStop) => void;
 }) {
   return (
-    <section className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
+    <section className="@container bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
       <div
         aria-hidden
         className={`hidden ${COLUMNS} items-center px-5 py-3 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]`}
@@ -145,7 +152,9 @@ export function DayRoutes({
       {routes.map((route) => (
         <div key={route.route_id ?? 'none'} role="group" aria-label={route.route_name}>
           <h2 className="m-0 px-4 md:px-5 py-2.5 bg-[#efebe9] border-t border-[#e2dcda] flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-            <span className="text-xs font-extrabold uppercase tracking-[0.06em] text-[#3d3937]">{route.route_name}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[0.06em] text-[#3d3937]">
+              {route.route_name}
+            </span>
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#4a4543]">
               <Truck aria-hidden className="w-3.5 h-3.5" />
               {route.driver_name ?? 'bez kierowcy'}

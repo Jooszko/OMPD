@@ -139,6 +139,13 @@ class OrderHistorySerializer(serializers.Serializer):
     results = HistoryStopSerializer(many=True)
 
 
+class StandingDaySerializer(serializers.Serializer):
+    day = serializers.IntegerField(min_value=0, max_value=6, help_text='0 = poniedziałek … 6 = niedziela.')
+    items = OrderItemSerializer(many=True)
+    total_quantity = serializers.IntegerField()
+    total_amount = serializers.FloatField()
+
+
 class StandingOrderGroupSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     client_id = serializers.IntegerField()
@@ -150,15 +157,20 @@ class StandingOrderGroupSerializer(serializers.Serializer):
     driver_name = serializers.CharField(allow_null=True)
     days_ids = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6))
     day_of_week = serializers.CharField(help_text='Dni słownie, np. „Pn, Śr, Pt” albo „Codziennie”.')
-    items = OrderItemSerializer(many=True)
-    total_quantity = serializers.IntegerField()
-    total_amount = serializers.FloatField()
+    schedule = StandingDaySerializer(many=True, help_text='Skład zamówienia w każdym dniu dostaw.')
+    same_every_day = serializers.BooleanField(help_text='Czy we wszystkie dni skład jest taki sam.')
+    weekly_quantity = serializers.IntegerField()
+    weekly_amount = serializers.FloatField()
+
+
+class StandingDayInputSerializer(serializers.Serializer):
+    day = serializers.IntegerField(min_value=0, max_value=6, help_text='0 = poniedziałek … 6 = niedziela.')
+    items = OrderItemInputSerializer(many=True)
 
 
 class StandingOrderInputSerializer(serializers.Serializer):
     client_id = serializers.IntegerField()
-    days = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), help_text='0 = poniedziałek … 6 = niedziela.')
-    items = OrderItemInputSerializer(many=True)
+    schedule = StandingDayInputSerializer(many=True, help_text='Każdy dzień dostaw z własnym składem.')
 
 
 class MessageSerializer(serializers.Serializer):

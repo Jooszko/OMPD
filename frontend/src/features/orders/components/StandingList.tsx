@@ -4,7 +4,7 @@ import { WeekStrip } from '../../clients/components/ClientBadges';
 import { formatMoney, formatPieces, plural } from '../lib/orders';
 import { groupStandingByRoute, weeklyTotals } from '../lib/standing';
 
-const COLUMNS = 'md:grid md:grid-cols-[minmax(240px,1fr)_180px_150px_130px_24px] md:gap-3';
+const COLUMNS = '@4xl:grid @4xl:grid-cols-[minmax(240px,1fr)_180px_150px_130px_24px] @4xl:gap-3';
 
 export function StandingList({
   orders,
@@ -14,7 +14,7 @@ export function StandingList({
   onSelect: (order: StandingOrderGroup) => void;
 }) {
   return (
-    <section className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
+    <section className="@container bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
       <div
         aria-hidden
         className={`hidden ${COLUMNS} items-center px-5 py-3 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]`}
@@ -64,19 +64,26 @@ export function StandingList({
                         <MapPin aria-hidden className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">{order.address}</span>
                       </span>
-                      <span className="md:hidden mt-1.5 flex flex-wrap items-center gap-2 text-[13px] font-bold">
+                      <span className="@4xl:hidden mt-1.5 flex flex-wrap items-center gap-2 text-[13px] font-bold">
                         <WeekStrip days={order.days_ids} />
                         {formatMoney(week.value)} / tydz.
+                        {!order.same_every_day && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#fbe5bd] text-[10px] font-extrabold uppercase text-[#5c3300]">
+                            Różny skład
+                          </span>
+                        )}
                       </span>
                     </span>
-                    <span className="hidden md:block">
+                    <span className="hidden @4xl:block">
                       <WeekStrip days={order.days_ids} />
                     </span>
-                    <span className="hidden md:flex flex-col items-end text-sm font-bold tabular-nums">
-                      {formatPieces(order.total_quantity)}
-                      <span className="text-xs font-semibold text-[#5f5a58]">{formatMoney(order.total_amount)}</span>
+                    <span className="hidden @4xl:flex flex-col items-end text-sm font-bold tabular-nums">
+                      {order.same_every_day ? formatPieces(order.schedule[0].total_quantity) : 'Różny skład'}
+                      <span className="text-xs font-semibold text-[#5f5a58]">
+                        {order.same_every_day ? formatMoney(order.schedule[0].total_amount) : 'zależnie od dnia'}
+                      </span>
                     </span>
-                    <span className="hidden md:flex flex-col items-end text-sm font-extrabold tabular-nums">
+                    <span className="hidden @4xl:flex flex-col items-end text-sm font-extrabold tabular-nums">
                       {formatMoney(week.value)}
                       <span className="text-xs font-semibold text-[#5f5a58]">{formatPieces(week.pieces)}</span>
                     </span>
