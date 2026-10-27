@@ -57,12 +57,46 @@ def _parse_items(items):
         return None
     return wanted
 
+def _days_label(days):
+    return 'Codziennie' if len(days) == 7 else ', '.join(DAY_LABELS[d] for d in days)
+
+
+def _parse_schedule(schedule):
+    if not isinstance(schedule, list) or not schedule:
+        return None, 'Zaznacz przynajmniej jeden dzień dostaw.'
+    baskets = {}
+    try:
+        for entry in schedule:
+            day = int(entry['day'])
+            items = _parse_items(entry.get('items') or [])
+            if day not in DAY_LABELS or day in baskets or items is None:
+                return None, 'Nieprawidłowy harmonogram zamówienia stałego.'
+            baskets[day] = items
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None, 'Nieprawidłowy harmonogram zamówienia stałego.'
+    empty = sorted(day for day, items in baskets.items() if not items)
+    if empty:
+        return None, f'Dodaj produkty na: {", ".join(DAY_LABELS[day] for day in empty)}.'
+    return baskets, None
+
+
 def _standing_order_state(client_id):
     orders = list(StandingOrder.objects.filter(client_id=client_id).select_related('product'))
-    state = {o.product.name: f'{o.quantity} szt.' for o in orders}
-    if orders:
-        days = sorted({o.day_of_week for o in orders})
-        state['_days'] = 'Codziennie' if len(days) == 7 else ', '.join(DAY_LABELS[d] for d in days)
+    if not orders:
+        return {}
+    days = sorted({o.day_of_week for o in orders})
+    quantities = {}
+    for o in orders:
+        quantities.setdefault(o.product.name, {})[o.day_of_week] = o.quantity
+    state = {'_days': _days_label(days)}
+    for name, by_day in quantities.items():
+        if sorted(by_day) == days and len(set(by_day.values())) == 1:
+            state[name] = f'{next(iter(by_day.values()))} szt.'
+            continue
+        by_quantity = {}
+        for day in sorted(by_day):
+            by_quantity.setdefault(by_day[day], []).append(day)
+        state[name] = ', '.join(f'{qty} szt. ({_days_label(group)})' for qty, group in by_quantity.items())
     return state
 
 
@@ -301,7 +335,7 @@ class StandingOrdersView(APIView):
             StandingOrder.objects
             .filter(is_active=True)
             .select_related('client__route__driver', 'product')
-            .order_by('client__name', 'day_of_week')
+            .order_by('client__name', 'day_of_week', 'product__name')
         )
 
         groups = {}
@@ -318,79 +352,81 @@ class StandingOrdersView(APIView):
                     'route_id': so.client.route_id,
                     'route_name': so.client.route.route_name,
                     'driver_name': so.client.route.driver.full_name if so.client.route.driver else None,
-                    'days_set': set(),
-                    'items_map': {},
+                    'days_map': {},
                 }
                 groups[key] = group
                 order_list.append(group)
 
-            group = groups[key]
-            group['days_set'].add(so.day_of_week)
-
-            pid = so.product_id
-            if pid not in group['items_map']:
-                group['items_map'][pid] = {
-                    'product_id': pid,
-                    'product_name': so.product.name,
-                    'qty': so.quantity,
-                    'price': float(so.price_at_sale),
-                }
+            groups[key]['days_map'].setdefault(so.day_of_week, []).append({
+                'product_id': so.product_id,
+                'product_name': so.product.name,
+                'qty': so.quantity,
+                'price': float(so.price_at_sale),
+            })
 
         for g in order_list:
-            days = sorted(g['days_set'])
+            schedule = [
+                {
+                    'day': day,
+                    'items': items,
+                    'total_quantity': sum(item['qty'] for item in items),
+                    'total_amount': round(sum(item['qty'] * item['price'] for item in items), 2),
+                }
+                for day, items in sorted(g.pop('days_map').items())
+            ]
+            days = [entry['day'] for entry in schedule]
+            baskets = {tuple((item['product_id'], item['qty']) for item in entry['items']) for entry in schedule}
             g['days_ids'] = days
-            g['day_of_week'] = 'Codziennie' if len(days) == 7 else ', '.join(DAY_LABELS[d] for d in days)
-            
-            # Dokładny skład koszyka 1:1
-            g['items'] = list(g['items_map'].values())
-            
-            # Wartości dla pojedynczego zamówienia (bez mnożenia przez dni)
-            g['total_quantity'] = sum(item['qty'] for item in g['items'])
-            g['total_amount'] = round(sum(item['qty'] * item['price'] for item in g['items']), 2)
-
-            del g['days_set']
-            del g['items_map']
+            g['day_of_week'] = _days_label(days)
+            g['schedule'] = schedule
+            g['same_every_day'] = len(baskets) == 1
+            g['weekly_quantity'] = sum(entry['total_quantity'] for entry in schedule)
+            g['weekly_amount'] = round(sum(entry['total_amount'] for entry in schedule), 2)
 
         return Response(order_list, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary='Zapis zamówienia stałego klienta',
-        description='Zastępuje całe zamówienie stałe klienta podanym składem i dniami tygodnia.',
+        description=(
+            'Zastępuje całe zamówienie stałe klienta harmonogramem dzień po dniu – '
+            'każdy dzień tygodnia może mieć inny skład.'
+        ),
         request=StandingOrderInputSerializer,
         responses={
             201: MessageSerializer,
-            400: error_response('Brak klienta, dni lub produktów.'),
+            400: error_response('Brak klienta, dni lub produktów w którymś dniu.'),
             404: OpenApiResponse(description='Nie znaleziono klienta lub produktu.'),
         },
     )
     def post(self, request):
         client_id = request.data.get('client_id')
-        days = request.data.get('days', [])
-        items = request.data.get('items', [])
-
-        if not client_id or not days or not items:
-            return Response(
-                {'error': 'Wybierz klienta, przynajmniej jeden dzień tygodnia i co najmniej jeden produkt.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        baskets, error = _parse_schedule(request.data.get('schedule'))
+        if not client_id:
+            error = 'Wybierz klienta.'
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
         client = get_object_or_404(Client, pk=client_id)
 
         with transaction.atomic():
             before = _standing_order_state(client.pk)
+            products = {
+                product_id: get_object_or_404(Product, pk=product_id)
+                for basket in baskets.values()
+                for product_id in basket
+            }
             StandingOrder.objects.filter(client=client).delete()
-            for day in days:
-                for item in items:
-                    product = get_object_or_404(Product, pk=item['product_id'])
-                    qty = int(item['qty'])
-                    if qty > 0:
-                        StandingOrder.objects.create(
-                            client=client,
-                            product=product,
-                            day_of_week=int(day),
-                            quantity=qty,
-                            price_at_sale=product.base_price,
-                            is_active=True
-                        )
+            StandingOrder.objects.bulk_create([
+                StandingOrder(
+                    client=client,
+                    product=products[product_id],
+                    day_of_week=day,
+                    quantity=qty,
+                    price_at_sale=products[product_id].base_price,
+                    is_active=True,
+                )
+                for day, basket in sorted(baskets.items())
+                for product_id, qty in basket.items()
+            ])
             changes = _order_changes(before, _standing_order_state(client.pk), STANDING_EXTRA_LABELS)
             if changes:
                 record_event(

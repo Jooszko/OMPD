@@ -1143,8 +1143,7 @@ export async function deleteStandingOrder(clientId: string | number): Promise<vo
 
 export async function saveStandingOrder(payload: {
   client_id: number;
-  days: number[];
-  items: { product_id: number; qty: number }[];
+  schedule: { day: number; items: { product_id: number; qty: number }[] }[];
 }): Promise<any> {
   const response = await apiFetch(`${API_BASE}/orders/standing/`, {
     method: 'POST',
@@ -1846,6 +1845,14 @@ export interface StandingOrderGroup {
   driver_name: string | null;
   days_ids: number[];
   day_of_week: string;
+  schedule: StandingDay[];
+  same_every_day: boolean;
+  weekly_quantity: number;
+  weekly_amount: number;
+}
+
+export interface StandingDay {
+  day: number;
   items: { product_id: number; product_name: string; qty: number; price: number }[];
   total_quantity: number;
   total_amount: number;

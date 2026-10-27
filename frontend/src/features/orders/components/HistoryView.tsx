@@ -24,7 +24,7 @@ function HistoryRow({ stop }: { stop: OrderHistoryStop }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="w-full text-left flex md:grid md:grid-cols-[minmax(240px,1fr)_150px_110px_120px_24px] items-center gap-3 px-4 md:px-5 py-3 hover:bg-[#f3efed]"
+        className="w-full text-left flex @3xl:grid @3xl:grid-cols-[minmax(240px,1fr)_150px_110px_120px_24px] items-center gap-3 px-4 md:px-5 py-3 hover:bg-[#f3efed]"
       >
         <span className="flex-1 min-w-0 flex flex-col gap-0.5">
           <span className="text-[15px] font-extrabold">{stop.client_name}</span>
@@ -32,17 +32,24 @@ function HistoryRow({ stop }: { stop: OrderHistoryStop }) {
             <MapPin aria-hidden className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{stop.address}</span>
           </span>
-          <span className="md:hidden mt-1 flex flex-wrap items-center gap-2 text-[13px] font-bold">
+          <span className="@3xl:hidden mt-1 flex flex-wrap items-center gap-2 text-[13px] font-bold">
             <StatusBadge status={stop.status} />
             {formatPieces(stop.total_quantity)} · {formatMoney(stop.total_amount)}
           </span>
         </span>
-        <span className="hidden md:block">
+        <span className="hidden @3xl:block">
           <StatusBadge status={stop.status} />
         </span>
-        <span className="hidden md:block text-right text-sm font-bold tabular-nums">{formatPieces(stop.total_quantity)}</span>
-        <span className="hidden md:block text-right text-sm font-extrabold tabular-nums">{formatMoney(stop.total_amount)}</span>
-        <ChevronDown aria-hidden className={`w-5 h-5 shrink-0 text-[#8a8482] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="hidden @3xl:block text-right text-sm font-bold tabular-nums">
+          {formatPieces(stop.total_quantity)}
+        </span>
+        <span className="hidden @3xl:block text-right text-sm font-extrabold tabular-nums">
+          {formatMoney(stop.total_amount)}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={`w-5 h-5 shrink-0 text-[#8a8482] transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       {open && (
         <ul className="m-0 mx-4 md:mx-5 mb-4 p-0 list-none rounded-xl border border-[#e2dcda] bg-white divide-y divide-[#eee9e7]">
@@ -113,7 +120,9 @@ export function HistoryView({ today }: { today: string }) {
                 aria-pressed={active}
                 onClick={() => update(range)}
                 className={`${CHIP} ${
-                  active ? 'bg-bakery-dark border-bakery-dark text-white' : 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]'
+                  active
+                    ? 'bg-bakery-dark border-bakery-dark text-white'
+                    : 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]'
                 }`}
               >
                 {preset.label}
@@ -147,7 +156,10 @@ export function HistoryView({ today }: { today: string }) {
         <div className="flex flex-wrap gap-3">
           <label className="relative block flex-1 min-w-[220px]">
             <span className="sr-only">Szukaj klienta</span>
-            <Search aria-hidden className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#8a8482]" />
+            <Search
+              aria-hidden
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#8a8482]"
+            />
             <input
               type="search"
               value={typed}
@@ -167,7 +179,9 @@ export function HistoryView({ today }: { today: string }) {
                 aria-pressed={active}
                 onClick={() => update({ status: option.value })}
                 className={`${CHIP} ${
-                  active ? 'bg-bakery-dark border-bakery-dark text-white' : 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]'
+                  active
+                    ? 'bg-bakery-dark border-bakery-dark text-white'
+                    : 'bg-white border-bakery-btnBorder hover:border-[#8f8a88]'
                 }`}
               >
                 {option.label}
@@ -196,7 +210,10 @@ export function HistoryView({ today }: { today: string }) {
       )}
 
       {!data && !loadError && (
-        <div aria-label="Wczytywanie historii" className="h-[420px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse" />
+        <div
+          aria-label="Wczytywanie historii"
+          className="h-[420px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse"
+        />
       )}
 
       {data && data.results.length === 0 && (
@@ -208,7 +225,7 @@ export function HistoryView({ today }: { today: string }) {
       {data && data.results.length > 0 && (
         <section
           aria-busy={loading}
-          className={`bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden transition-opacity ${
+          className={`@container bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden transition-opacity ${
             loading ? 'opacity-60' : ''
           }`}
         >

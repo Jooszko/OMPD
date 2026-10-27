@@ -10,8 +10,7 @@ export interface FormItem {
 
 export interface StandingGroup {
   client_id: number;
-  days_ids: number[];
-  items: { product_id: number; product_name: string; qty: number; price: number }[];
+  schedule: { day: number; items: { product_id: number; product_name: string; qty: number; price: number }[] }[];
 }
 
 export const MAX_QUANTITY = 9999;
@@ -28,8 +27,8 @@ export function itemsFromStop(stop: OrderDayStop): FormItem[] {
 }
 
 export function standingItemsFor(groups: StandingGroup[], clientId: number, weekday: number): FormItem[] {
-  const group = groups.find((entry) => entry.client_id === clientId && entry.days_ids.includes(weekday));
-  return (group?.items ?? []).map((item) => ({
+  const day = groups.find((entry) => entry.client_id === clientId)?.schedule.find((entry) => entry.day === weekday);
+  return (day?.items ?? []).map((item) => ({
     product_id: item.product_id,
     product_name: item.product_name,
     price: item.price,
