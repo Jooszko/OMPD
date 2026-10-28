@@ -10,6 +10,7 @@ from .views import (
     MixerDetailView,
     MixerListView,
     ProductionBoardView,
+    ProductionCalendarView,
     ProductionPlanView,
     ProductionSettingsView,
 )
@@ -17,6 +18,7 @@ from .views import (
 urlpatterns = [
     path('plan/', ProductionPlanView.as_view(), name='production-plan'),
     path('board/', ProductionBoardView.as_view(), name='production-board'),
+    path('calendar/', ProductionCalendarView.as_view(), name='production-calendar'),
     path('batches/<int:pk>/start/', BatchStartStageView.as_view(), name='production-batch-start'),
     path('batches/<int:pk>/advance/', BatchAdvanceStageView.as_view(), name='production-batch-advance'),
     path('batches/<int:pk>/waste/', BatchWasteView.as_view(), name='production-batch-waste'),

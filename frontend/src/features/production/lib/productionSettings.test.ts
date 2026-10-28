@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { ProductBakeSpecRow, ProductionDough } from '../../../services/api';
 import {
+  groupByDough,
   parseDecimal,
+  productMatches,
   recipeMassLooksWrong,
   recipeMassPerKg,
   validateBakeSpec,
@@ -103,5 +106,55 @@ describe('validateBakeSpec', () => {
       /Waga/
     );
     expect(validateBakeSpec({ dough_id: 1, piece_weight_kg: '0,58', bake_temp_c: '230', bake_time_min: '35' })).toBeNull();
+  });
+});
+
+const product = (id: number, name: string, doughId: number | null, category = 'bread'): ProductBakeSpecRow => ({
+  product_id: id,
+  product_name: name,
+  category,
+  spec:
+    doughId === null
+      ? null
+      : { dough_id: doughId, dough_name: doughId === 1 ? 'Ciasto pszenne' : 'Ciasto razowe', piece_weight_kg: '0.58', bake_temp_c: 230, bake_time_min: 35 },
+});
+
+const doughRow = (id: number, name: string): ProductionDough => ({
+  dough_id: id,
+  name,
+  mixer_id: null,
+  loss_buffer_pct: '3',
+  mixing_time_min: 10,
+  target_dough_temp_c: '26',
+  proofing_time_min: 45,
+  mixing_instructions: '',
+  ingredients: [],
+  products_count: 0,
+});
+
+describe('productMatches', () => {
+  it('szuka w nazwie, kategorii i cieście bez względu na wielkość liter', () => {
+    const row = product(1, 'Bagietka francuska', 1);
+    expect(productMatches(row, '')).toBe(true);
+    expect(productMatches(row, 'BAGIET')).toBe(true);
+    expect(productMatches(row, 'chleby')).toBe(true);
+    expect(productMatches(row, 'pszenne')).toBe(true);
+    expect(productMatches(row, 'razowe')).toBe(false);
+  });
+
+  it('wyrób bez ciasta nie dopasowuje się do nazwy ciasta', () => {
+    expect(productMatches(product(2, 'Bułka z serem', null, 'buns'), 'ciasto')).toBe(false);
+  });
+});
+
+describe('groupByDough', () => {
+  it('grupuje według kolejności ciast, sortuje wyroby i pomija puste grupy oraz wyroby bez ciasta', () => {
+    const groups = groupByDough(
+      [product(1, 'Chleb pszenny', 1), product(2, 'Bagietka', 1), product(3, 'Bułka z serem', null)],
+      [doughRow(2, 'Ciasto razowe'), doughRow(1, 'Ciasto pszenne')]
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('Ciasto pszenne');
+    expect(groups[0].rows.map((row) => row.product_name)).toEqual(['Bagietka', 'Chleb pszenny']);
   });
 });

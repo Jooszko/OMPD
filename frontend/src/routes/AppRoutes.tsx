@@ -9,7 +9,7 @@ import Produkty from '../features/dashboard/pages/Products';
 import UsersPage from '../features/users/pages/UsersPage';
 import ClientsPage from '../features/clients/pages/ClientsPage';
 import Contractors from '../features/dashboard/pages/Contractors';
-import Warehouse from '../features/dashboard/pages/Warehouse';
+import WarehousePage from '../features/warehouse/pages/WarehousePage';
 import Logistics from '../features/dashboard/pages/Logistics';
 import Notifications from '../features/dashboard/pages/Notifications';
 import DeliveryStats from '../features/dashboard/pages/DeliveryStats';
@@ -72,7 +72,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="production" element={<ProductionPlanning />} />
         <Route path="production/board" element={<ProductionKiosk />} />
         <Route path="production/settings" element={<ProductionSettings />} />
-        <Route path="warehouse" element={<Warehouse />} />
+        <Route path="warehouse" element={<WarehousePage />} />
         <Route path="logistics" element={<Logistics />} />
         <Route path="delivery-stats" element={<DeliveryStats />} />
         <Route path="products" element={<Produkty />} />

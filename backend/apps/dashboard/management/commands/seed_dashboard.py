@@ -14,7 +14,7 @@ from dashboard.seed.orders import create_daily_orders, create_product_returns, c
 from dashboard.seed.plans import create_production_history
 from dashboard.seed.production import create_production_setup
 from dashboard.seed.proofs import create_delivery_proofs
-from dashboard.seed.products import create_ingredients, create_products
+from dashboard.seed.products import create_ingredients, create_products, create_stock_history
 from dashboard.seed.suppliers import (
     create_supplier_ingredients,
     create_suppliers,
@@ -122,6 +122,9 @@ class Command(BaseCommand):
         bakers = [baker for baker in users['bakers'] if baker.is_active]
         plans_count = create_production_history(today, bakers)
         self.stdout.write(f'  Plany produkcji: {plans_count}')
+
+        movements_count = create_stock_history(ingredients, date_range, admin_user)
+        self.stdout.write(f'  Ruchy magazynowe: {movements_count}')
 
         expenses_count = create_expenses(date_range, admin_user)
         self.stdout.write(f'  Wydatki: {expenses_count}')

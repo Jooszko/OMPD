@@ -28,7 +28,7 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('link', { name: 'Ustawienia produkcji' }).click();
     await page.getByRole('heading', { name: 'Ustawienia produkcji' }).click();
     await page.getByRole('link', { name: 'Magazyn' }).click();
-    await page.getByRole('heading', { name: 'Magazyn i Surowce' }).click();
+    await page.getByRole('heading', { name: 'Wszystkie surowce' }).click();
     await page.getByRole('link', { name: 'Logistyka' }).click();
     await page.getByRole('heading', { name: 'Logistyka i Trasy' }).click();
     await page.getByRole('link', { name: 'Statystyki dostaw' }).click();

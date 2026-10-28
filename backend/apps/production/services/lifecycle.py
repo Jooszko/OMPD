@@ -3,7 +3,8 @@ from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
-from products.models import IngredientStock, Product
+from products.models import Product, StockMovement
+from products.stock import recalculate_min_stock, record_movement
 from users.models import Notification, User
 
 from ..models import BatchStageLog, PlanLine, ProductionBatch, WasteRecord
@@ -54,7 +55,7 @@ def advance_stage(batch_id, user, expected_stage=None):
     )
 
     if batch.stage == ProductionBatch.STAGE_MIXING:
-        _consume_ingredients(batch)
+        _consume_ingredients(batch, user)
 
     batch.stage = batch.next_stage
     batch.stage_started_at = None
@@ -66,12 +67,16 @@ def advance_stage(batch_id, user, expected_stage=None):
     return batch
 
 
-def _consume_ingredients(batch):
-    """Odważone surowce schodzą ze stanu magazynu po zakończeniu mieszania."""
-    for item in batch.ingredients.all():
-        IngredientStock.objects.filter(ingredient_id=item.ingredient_id).update(
-            current_stock=F('current_stock') - item.amount
+def _consume_ingredients(batch, user):
+    """Odważone surowce schodzą ze stanu magazynu po zakończeniu mieszania, a ich próg minimalny
+    (zużycie z ostatnich 7 dni) liczy się od nowa."""
+    items = list(batch.ingredients.all())
+    for item in items:
+        record_movement(
+            item.ingredient_id, StockMovement.KIND_PRODUCTION, -item.amount,
+            user=user, note=f'Dzieża {batch.pk}',
         )
+    recalculate_min_stock([item.ingredient_id for item in items])
 
 
 def good_pieces_by_product(batch):

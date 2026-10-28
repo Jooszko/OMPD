@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.db import transaction
 from django.db.models import Prefetch, ProtectedError
@@ -7,7 +7,7 @@ from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
 from products.models import Ingredient, Product
 
@@ -17,7 +17,7 @@ from .serializers import BakeSpecSerializer, DoughSerializer, MixerSerializer
 from common.openapi import error_response
 from .openapi import (
     DELIVERY_DATE_PARAM, FORBIDDEN, FORM_ERROR, NOT_FOUND, BakeSpecRowSerializer, BatchActionResultSerializer,
-    DeliveryDateInputSerializer, ProductionBoardSerializer, ProductionPlanSerializer, ProductionSettingsSerializer,
+    DeliveryDateInputSerializer, PlanCalendarDaySerializer, ProductionBoardSerializer, ProductionPlanSerializer, ProductionSettingsSerializer,
     StageInputSerializer, WasteInputSerializer, WasteResultSerializer,
 )
 from .services.lifecycle import (
@@ -35,10 +35,13 @@ from .services.planning import (
     current_production_date,
     delivery_date_for,
     generate_plan,
+    plan_calendar,
     plan_is_locked,
     plan_overview,
     production_date_for,
 )
+
+CALENDAR_DAYS = 7
 
 PRODUCTION_ROLES = ('admin', 'baker')
 
@@ -157,6 +160,30 @@ def _plan_summary(plan):
         'created_by': _person(plan.created_by),
         'locked': plan_is_locked(plan),
     }
+
+
+class ProductionCalendarView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Kalendarz planów produkcji',
+        description='Status planu dla 7 kolejnych dni dostawy od daty start (domyślnie 3 dni przed bieżącą dostawą).',
+        parameters=[OpenApiParameter('start', str, description='Pierwszy dzień dostawy, RRRR-MM-DD.')],
+        responses={
+            200: PlanCalendarDaySerializer(many=True),
+            400: error_response('Błędny format daty.'),
+            403: FORBIDDEN,
+        },
+    )
+    def get(self, request):
+        if request.user.role not in PRODUCTION_ROLES:
+            return _forbidden()
+        raw = request.query_params.get('start')
+        try:
+            start = date.fromisoformat(raw) if raw else delivery_date_for(current_production_date()) - timedelta(days=3)
+        except ValueError:
+            return Response({'error': 'Nieprawidłowy format daty.'}, status=http_status.HTTP_400_BAD_REQUEST)
+        return Response(PlanCalendarDaySerializer(plan_calendar(start, CALENDAR_DAYS), many=True).data)
 
 
 class ProductionPlanView(APIView):

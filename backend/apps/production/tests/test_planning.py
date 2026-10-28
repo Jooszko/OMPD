@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal
 
 from django.test import SimpleTestCase, TestCase, override_settings
+from rest_framework.test import APIClient
 
 from clients.models import Client, Route
 from orders.models import DailyOrder
@@ -22,6 +23,7 @@ from production.services.planning import (
     build_plan_preview,
     current_production_date,
     generate_plan,
+    plan_calendar,
     plan_overview,
     production_date_for,
     split_into_batches,
@@ -342,3 +344,44 @@ class PlanOverviewTests(PlanTestBase):
         for key in ('total_mass_kg', 'raw_mass_kg'):
             self.assertEqual(saved['doughs'][0][key], preview_at_approval['doughs'][0][key])
         self.assertEqual(saved['ingredient_totals'], preview_at_approval['ingredient_totals'])
+
+
+class PlanCalendarTests(PlanTestBase):
+    def test_reports_plan_status_and_ordered_pieces_per_day(self):
+        saved_day = self.delivery
+        started_day = self.delivery + timedelta(days=1)
+        done_day = self.delivery + timedelta(days=2)
+        for day in (saved_day, started_day, done_day):
+            self.order(self.bread_500, 10, day=day)
+        self.order(self.cake, 4, day=saved_day)
+        generate_plan(saved_day, self.admin)
+        started, _ = generate_plan(started_day, self.admin)
+        started.batches.update(stage='dividing')
+        done, _ = generate_plan(done_day, self.admin)
+        done.batches.update(stage='done')
+
+        days = plan_calendar(saved_day - timedelta(days=1), 5)
+
+        self.assertEqual(
+            [(d['status'], d['pieces']) for d in days],
+            [('none', 0), ('saved', 14), ('in_progress', 10), ('done', 10), ('none', 0)],
+        )
+        self.assertEqual(days[1]['production_date'], production_date_for(saved_day))
+        self.assertEqual((days[3]['batches'], days[3]['done_batches']), (1, 1))
+
+    def test_ingredient_balance_includes_minimum(self):
+        IngredientStock.objects.filter(ingredient=self.flour).update(min_stock_level=Decimal('12.5'))
+        self.order(self.bread_500, 10)
+
+        totals = {t['name']: t for t in build_plan_preview(self.delivery)['ingredient_totals']}
+
+        self.assertEqual(totals['Mąka 750']['min_stock_level'], Decimal('12.5'))
+
+    def test_calendar_endpoint_returns_a_week(self):
+        api = APIClient()
+        api.force_authenticate(self.baker)
+
+        response = api.get('/api/production/calendar/?start=2026-10-12')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([d['delivery_date'] for d in response.data][::6], ['2026-10-12', '2026-10-18'])
