@@ -1,5 +1,7 @@
 /** Pomocnicze funkcje formularzy ustawień produkcji (bez Reacta — testowane osobno). */
 
+import type { ProductBakeSpecRow, ProductionDough } from '../../../services/api';
+
 /** Liczba z pola tekstowego; akceptuje przecinek dziesiętny. Puste lub niepoprawne → null. */
 export function parseDecimal(value: string): number | null {
   const normalized = value.trim().replace(',', '.');
@@ -95,4 +97,40 @@ export function validateBakeSpec(draft: BakeSpecDraft): string | null {
   const minutes = parseDecimal(draft.bake_time_min);
   if (minutes === null || minutes <= 0 || !Number.isInteger(minutes)) return 'Podaj czas wypieku w pełnych minutach.';
   return null;
+}
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  bread: 'Chleby',
+  buns: 'Bułki/Drożdżówki',
+  pastry: 'Wyroby cukiernicze',
+  other: 'Inne',
+};
+
+export const categoryLabel = (category: string) => CATEGORY_LABELS[category] ?? category;
+
+/** Wyszukiwanie po nazwie wyrobu, kategorii i nazwie ciasta, bez rozróżniania wielkości liter. */
+export function productMatches(row: ProductBakeSpecRow, query: string): boolean {
+  const needle = query.trim().toLocaleLowerCase('pl');
+  if (!needle) return true;
+  return [row.product_name, categoryLabel(row.category), row.spec?.dough_name ?? '']
+    .some((text) => text.toLocaleLowerCase('pl').includes(needle));
+}
+
+export interface DoughGroup {
+  dough_id: number;
+  name: string;
+  rows: ProductBakeSpecRow[];
+}
+
+/** Wyroby z parametrami pogrupowane według ciasta (kolejność ciast z ustawień, wyroby alfabetycznie). */
+export function groupByDough(products: ProductBakeSpecRow[], doughs: ProductionDough[]): DoughGroup[] {
+  return doughs
+    .map((dough) => ({
+      dough_id: dough.dough_id,
+      name: dough.name,
+      rows: products
+        .filter((row) => row.spec?.dough_id === dough.dough_id)
+        .sort((a, b) => a.product_name.localeCompare(b.product_name, 'pl')),
+    }))
+    .filter((group) => group.rows.length > 0);
 }

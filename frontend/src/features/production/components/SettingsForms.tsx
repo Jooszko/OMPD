@@ -21,23 +21,22 @@ import {
   type DoughDraft,
   type MixerDraft,
 } from '../lib/productionSettings';
+import { DANGER_BUTTON, ERROR_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 
-const INPUT =
-  'w-full border border-bakery-btnBorder bg-bakery-rowBg text-bakery-dark font-semibold rounded text-xs p-2 outline-none focus:border-bakery-accent';
-const PRIMARY =
-  'px-4 h-9 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded shadow-xs transition disabled:opacity-40';
-const SECONDARY =
-  'px-4 h-9 text-xs font-bold bg-bakery-inactive border border-bakery-btnBorder text-bakery-dark rounded transition disabled:opacity-40';
+const FIELD =
+  'px-3.5 rounded-xl border-[1.5px] border-bakery-btnBorder bg-white text-[15px] font-semibold text-bakery-dark outline-none focus:border-bakery-accent';
+const INPUT = `${FIELD} w-full h-12`;
+const TEXTAREA = `${FIELD} w-full min-h-20 py-2.5`;
 
 /** Liczba z pola formularza w formacie dla API (kropka dziesiętna). */
 const decimal = (value: string) => String(parseDecimal(value) ?? '');
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+    <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
+      {label}
       {children}
-      {hint && <span className="text-[10px] text-gray-500 font-medium">{hint}</span>}
+      {hint && <span className="text-xs font-semibold text-[#5f5a58]">{hint}</span>}
     </label>
   );
 }
@@ -45,7 +44,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="m-0 flex items-start gap-2 bg-red-50 border border-red-300 rounded px-3 py-2 text-xs font-semibold text-red-800">
+    <p role="alert" className={`${ERROR_CLASS} flex items-start gap-2`}>
       <AlertTriangle className="w-4 h-4 shrink-0" /> {message}
     </p>
   );
@@ -53,11 +52,11 @@ function FormError({ message }: { message: string | null }) {
 
 function FormActions({ saving, onCancel }: { saving: boolean; onCancel: () => void }) {
   return (
-    <div className="flex justify-end gap-2 pt-1">
-      <button type="button" onClick={onCancel} disabled={saving} className={SECONDARY}>
+    <div className="flex justify-end gap-2.5 pt-1">
+      <button type="button" onClick={onCancel} disabled={saving} className={SECONDARY_BUTTON}>
         Anuluj
       </button>
-      <button type="submit" disabled={saving} className={PRIMARY}>
+      <button type="submit" disabled={saving} className={PRIMARY_BUTTON}>
         {saving ? 'Zapisywanie…' : 'Zapisz'}
       </button>
     </div>
@@ -122,7 +121,7 @@ export function MixerForm({
 
   return (
     <Modal title={mixer ? 'Edycja mieszałki' : 'Nowa mieszałka'} closeDisabled={saving} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-auth">
         <Field label="Nazwa">
           <input className={INPUT} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="np. Mieszałka spiralna duża" />
         </Field>
@@ -134,12 +133,12 @@ export function MixerForm({
             <input className={INPUT} inputMode="decimal" value={draft.max_capacity_kg} onChange={(e) => setDraft({ ...draft, max_capacity_kg: e.target.value })} />
           </Field>
         </div>
-        <label className="flex items-center gap-2 text-xs font-bold cursor-pointer select-none">
+        <label className="flex items-center gap-2.5 text-sm font-bold cursor-pointer select-none">
           <input
             type="checkbox"
             checked={draft.is_active}
             onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })}
-            className="w-4 h-4 accent-bakery-dark cursor-pointer"
+            className="size-5 accent-bakery-dark cursor-pointer"
           />
           Mieszałka sprawna (bierze udział w planowaniu)
         </label>
@@ -203,7 +202,7 @@ export function DoughForm({
 
   return (
     <Modal size="xl" title={dough ? `Edycja ciasta: ${dough.name}` : 'Nowe ciasto'} closeDisabled={saving} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-auth">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Nazwa">
             <input className={INPUT} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="np. Ciasto pszenne" />
@@ -240,7 +239,7 @@ export function DoughForm({
         </div>
         <Field label="Instrukcja mieszania (widoczna na tablicy produkcji)">
           <textarea
-            className={`${INPUT} min-h-16`}
+            className={TEXTAREA}
             value={draft.mixing_instructions}
             onChange={(e) => setDraft({ ...draft, mixing_instructions: e.target.value })}
           />
@@ -248,8 +247,8 @@ export function DoughForm({
 
         <section className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
-            <h3 className="m-0 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Receptura na 1 kg ciasta</h3>
-            <span className={`text-[11px] font-bold ${recipeMassLooksWrong(massPerKg) ? 'text-amber-700' : 'text-gray-600'}`}>
+            <h3 className="m-0 text-xs font-extrabold text-[#3d3937]">Receptura na 1 kg ciasta</h3>
+            <span className={`text-xs font-bold tabular-nums ${recipeMassLooksWrong(massPerKg) ? 'text-[#a35a00]' : 'text-[#5f5a58]'}`}>
               Suma surowców wagowych: {massPerKg.toLocaleString('pl-PL', { maximumFractionDigits: 3 })} kg
             </span>
           </div>
@@ -259,7 +258,7 @@ export function DoughForm({
               <div key={index} className="flex gap-2 items-center">
                 <select
                   aria-label={`Surowiec ${index + 1}`}
-                  className={`${INPUT} cursor-pointer flex-1`}
+                  className={`${INPUT} cursor-pointer flex-1 min-w-0`}
                   value={item.ingredient_id}
                   onChange={(e) => setItem(index, { ingredient_id: e.target.value === '' ? '' : Number(e.target.value) })}
                 >
@@ -272,18 +271,18 @@ export function DoughForm({
                 </select>
                 <input
                   aria-label={`Ilość surowca ${index + 1} na 1 kg ciasta`}
-                  className={`${INPUT} w-28 font-mono`}
+                  className={`${FIELD} h-12 w-28 shrink-0 tabular-nums`}
                   inputMode="decimal"
                   placeholder="np. 0,611"
                   value={item.amount_per_kg}
                   onChange={(e) => setItem(index, { amount_per_kg: e.target.value })}
                 />
-                <span className="w-10 text-xs font-semibold text-gray-600">{unit}</span>
+                <span className="w-8 shrink-0 text-xs font-bold text-[#5f5a58]">{unit}</span>
                 <button
                   type="button"
                   aria-label={`Usuń surowiec ${index + 1}`}
                   onClick={() => setDraft({ ...draft, ingredients: draft.ingredients.filter((_, i) => i !== index) })}
-                  className="p-2 rounded text-gray-500 hover:text-red-700 hover:bg-red-50"
+                  className="shrink-0 grid place-items-center size-12 rounded-xl border-0 bg-transparent text-[#5f5a58] cursor-pointer hover:text-[#b91c1c] hover:bg-[#fdecec]"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -293,12 +292,12 @@ export function DoughForm({
           <button
             type="button"
             onClick={() => setDraft({ ...draft, ingredients: [...draft.ingredients, { ingredient_id: '', amount_per_kg: '' }] })}
-            className="self-start flex items-center gap-1 px-3 h-8 text-xs font-bold bg-bakery-rowBg border border-bakery-btnBorder rounded"
+            className="self-start inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark cursor-pointer hover:border-bakery-dark"
           >
             <Plus className="w-3.5 h-3.5" /> Dodaj surowiec
           </button>
           {recipeMassLooksWrong(massPerKg) && (
-            <p className="m-0 text-[11px] font-semibold text-amber-800">
+            <p className="m-0 text-xs font-semibold text-[#a35a00]">
               Dla kompletnej receptury suma surowców wagowych wynosi zwykle ok. 1 kg na 1 kg ciasta — sprawdź, czy
               ilości nie są wpisane w gramach.
             </p>
@@ -306,7 +305,7 @@ export function DoughForm({
         </section>
 
         {dough && dough.products_count > 0 && (
-          <p className="m-0 text-[11px] text-gray-600 font-medium">
+          <p className="m-0 text-xs font-semibold text-[#5f5a58]">
             Zmiany obejmą przyszłe plany. Zapisane plany zachowują swoje listy odważeń.
           </p>
         )}
@@ -352,7 +351,7 @@ export function BakeSpecForm({
 
   return (
     <Modal title={`Parametry: ${row.product_name}`} closeDisabled={saving} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-auth">
         <Field label="Ciasto">
           <select
             className={`${INPUT} cursor-pointer`}
@@ -402,17 +401,17 @@ export function ConfirmDialog({
 
   return (
     <Modal title={title} closeDisabled={saving} onClose={onClose}>
-      <p className="m-0 text-sm">{message}</p>
+      <p className="m-0 text-sm font-semibold leading-relaxed text-[#3d3937] font-auth">{message}</p>
       <FormError message={error} />
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} disabled={saving} className={SECONDARY}>
+      <div className="flex justify-end gap-2.5 font-auth">
+        <button type="button" onClick={onClose} disabled={saving} className={SECONDARY_BUTTON}>
           Anuluj
         </button>
         <button
           type="button"
           onClick={() => submit(null, onConfirm)}
           disabled={saving}
-          className="px-4 h-9 text-xs font-bold bg-red-700 hover:bg-red-800 text-white rounded shadow-xs transition disabled:opacity-40"
+          className={DANGER_BUTTON}
         >
           {saving ? 'Usuwanie…' : confirmLabel}
         </button>
