@@ -87,6 +87,7 @@ class UnassignedProductSerializer(serializers.Serializer):
 
 class IngredientBalanceSerializer(WeighingSerializer):
     current_stock = serializers.FloatField()
+    min_stock_level = serializers.FloatField(help_text='Próg minimalny surowca (zużycie z ostatnich 7 dni).')
     shortage = serializers.FloatField(help_text='Ile surowca brakuje w magazynie.')
 
 
@@ -263,3 +264,14 @@ class ProductionSettingsSerializer(serializers.Serializer):
     doughs = DoughSerializer(many=True)
     products = BakeSpecRowSerializer(many=True)
     ingredients = SettingsIngredientSerializer(many=True)
+
+class PlanCalendarDaySerializer(serializers.Serializer):
+    delivery_date = serializers.DateField()
+    production_date = serializers.DateField()
+    status = serializers.ChoiceField(
+        ['none', 'saved', 'in_progress', 'done'],
+        help_text='none – brak planu, saved – zapisany, in_progress – produkcja ruszyła, done – wszystkie dzieże gotowe.',
+    )
+    batches = serializers.IntegerField()
+    done_batches = serializers.IntegerField()
+    pieces = serializers.IntegerField(help_text='Zamówione sztuki na ten dzień dostawy.')

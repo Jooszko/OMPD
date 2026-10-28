@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from orders.models import DailyOrder
@@ -217,11 +217,12 @@ def _ingredient_balance(ingredient_totals):
     stock = _ingredient_stock(ingredient_totals.keys())
     balance = []
     for ingredient_id, item in sorted(ingredient_totals.items(), key=lambda kv: kv[1]['name']):
-        current = stock.get(ingredient_id, Decimal('0'))
+        current, minimum = stock.get(ingredient_id, (Decimal('0'), Decimal('0')))
         balance.append({
             **item,
             'amount': _kg(item['amount']),
             'current_stock': current,
+            'min_stock_level': minimum,
             'shortage': _kg(max(Decimal('0'), item['amount'] - current)),
         })
     return balance
@@ -448,11 +449,60 @@ def plan_overview(delivery_date, plan):
 
 
 def _ingredient_stock(ingredient_ids):
-    return dict(
-        IngredientStock.objects
+    """{ingredient_id: (stan, próg minimalny)}."""
+    return {
+        ingredient_id: (current, minimum)
+        for ingredient_id, current, minimum in IngredientStock.objects
         .filter(ingredient_id__in=list(ingredient_ids))
-        .values_list('ingredient_id', 'current_stock')
+        .values_list('ingredient_id', 'current_stock', 'min_stock_level')
+    }
+
+
+CALENDAR_NONE = 'none'
+CALENDAR_SAVED = 'saved'
+CALENDAR_IN_PROGRESS = 'in_progress'
+CALENDAR_DONE = 'done'
+
+
+def plan_calendar(start, days):
+    """Status planu dla kolejnych dat dostawy: brak / zapisany / w realizacji / zrealizowany."""
+    end = start + timedelta(days=days - 1)
+    plans = {
+        plan.delivery_date: plan
+        for plan in ProductionPlan.objects.filter(delivery_date__range=(start, end)).annotate(
+            batch_count=Count('batches'),
+            done_count=Count('batches', filter=Q(batches__stage=ProductionBatch.STAGE_DONE)),
+        )
+    }
+    pieces = dict(
+        DailyOrder.objects
+        .filter(order_date__range=(start, end))
+        .exclude(status__in=DailyOrder.NON_REVENUE_STATUSES)
+        .values('order_date')
+        .annotate(total=Sum('quantity'))
+        .values_list('order_date', 'total')
     )
+    calendar = []
+    for offset in range(days):
+        delivery_date = start + timedelta(days=offset)
+        plan = plans.get(delivery_date)
+        if plan is None:
+            status = CALENDAR_NONE
+        elif plan.batch_count and plan.done_count == plan.batch_count:
+            status = CALENDAR_DONE
+        elif plan_is_locked(plan):
+            status = CALENDAR_IN_PROGRESS
+        else:
+            status = CALENDAR_SAVED
+        calendar.append({
+            'delivery_date': delivery_date,
+            'production_date': production_date_for(delivery_date),
+            'status': status,
+            'batches': plan.batch_count if plan else 0,
+            'done_batches': plan.done_count if plan else 0,
+            'pieces': pieces.get(delivery_date, 0),
+        })
+    return calendar
 
 
 def plan_is_locked(plan):

@@ -226,7 +226,7 @@ export default function ProductionKiosk() {
       {board?.plan && (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <CoveragePanel coverage={board.coverage} compact />
+            <CoveragePanel coverage={board.coverage} />
           </div>
 
           <nav className="grid grid-cols-3 sm:grid-cols-6 gap-2" aria-label="Filtr etapów">
