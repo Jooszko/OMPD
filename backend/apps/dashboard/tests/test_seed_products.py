@@ -1,7 +1,10 @@
+from datetime import date
+
 from django.test import TestCase
 
 from products.models import Ingredient, IngredientStock, Product, Recipe
-from dashboard.seed.products import create_ingredients, create_products
+from dashboard.seed.dates import build_date_range
+from dashboard.seed.products import create_ingredients, create_products, create_stock_history
 
 
 class SeedProductsTests(TestCase):
@@ -13,7 +16,8 @@ class SeedProductsTests(TestCase):
         self.assertEqual(IngredientStock.objects.count(), 20)
 
     def test_some_ingredients_below_min_stock(self):
-        create_ingredients()
+        ingredients = create_ingredients()
+        create_stock_history(ingredients, build_date_range(date.today(), 30), user=None)
 
         below_min = [
             stock for stock in IngredientStock.objects.select_related('ingredient')

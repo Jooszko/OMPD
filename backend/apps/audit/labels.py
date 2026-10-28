@@ -17,6 +17,10 @@ ACTIONS = {
     },
     'products': {
         'ingredient.created': 'Dodanie składnika',
+        'ingredient.updated': 'Zmiana składnika',
+        'stock.delivery': 'Przyjęcie dostawy surowca',
+        'stock.loss': 'Rozchód surowca',
+        'stock.count': 'Inwentaryzacja surowca',
         'product.updated': 'Zmiana produktu',
         'product.price_changed': 'Zmiana ceny',
         'product.deleted': 'Usunięcie produktu',

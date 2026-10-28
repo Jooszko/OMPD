@@ -77,7 +77,9 @@ class BatchLifecycleTests(PlanTestBase):
 
         self.run_stage()
 
-        self.assertEqual(IngredientStock.objects.get(ingredient=self.flour).current_stock, flour_before - amount)
+        stock = IngredientStock.objects.get(ingredient=self.flour)
+        self.assertEqual(stock.current_stock, flour_before - amount)
+        self.assertEqual(stock.min_stock_level, amount)
 
     def test_completed_batch_moves_good_pieces_to_finished_goods(self):
         self.run_stage()

@@ -40,10 +40,6 @@ html, body {
   right: 6px;
 }
 
-.warehouse-stock-chart-scrollbar > .dashboard-list-scroll-thumb {
-  right: -8px;
-}
-
 .dashboard-list-table-scrollbar [data-slot="table-container"] {
   display: contents;
 }

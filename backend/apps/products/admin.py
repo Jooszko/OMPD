@@ -8,6 +8,7 @@ class IngredientStockInline(admin.StackedInline):
     model = IngredientStock
     can_delete = False
     verbose_name_plural = 'Stan Magazynowy'
+    readonly_fields = ('min_stock_level',)
 
 @admin.register(Ingredient)
 class IngredientAdmin(TimeStampedAdmin):

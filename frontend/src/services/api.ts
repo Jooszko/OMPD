@@ -2,17 +2,6 @@ import { clearCache } from './offlineCache';
 
 const API_BASE = '/api';
 
-export interface WarehouseItem {
-  name: string;
-  unit: string;
-  current_stock: string;
-  min_stock_level: string;
-}
-
-export interface DashboardData {
-  warehouse_stock: WarehouseItem[];
-}
-
 export interface LoginResponse {
   refresh: string;
   access: string;
@@ -137,24 +126,6 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
   return fetch(input, withAuth(init));
 }
 
-export async function fetchDashboard(): Promise<DashboardData> {
-  const token = getAuthToken();
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await apiFetch(`${API_BASE}/dashboard/`, { headers });
-  if (!response.ok) {
-    if (response.status === 401) {
-      logoutUser();
-      window.location.reload();
-    }
-    throw new Error(`Błąd serwera: ${response.status}`);
-  }
-  return response.json();
-}
 
 export type HomeOrderStatus = 'planned' | 'in_production' | 'in_delivery' | 'delivered' | 'failed';
 
@@ -528,8 +499,91 @@ export async function fetchIngredients(): Promise<AppIngredient[]> {
   return handleJsonResponse(response);
 }
 
-export async function createIngredient(payload: Pick<AppIngredient, 'name' | 'unit'>): Promise<AppIngredient> {
+export interface IngredientPayload {
+  name?: string;
+  unit?: string;
+  current_stock?: string;
+}
+
+export async function createIngredient(
+  payload: IngredientPayload & Pick<AppIngredient, 'name' | 'unit'>
+): Promise<WarehouseRow> {
   const response = await apiFetch(`${API_BASE}/products/ingredients/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function updateIngredient(
+  ingredientId: number,
+  payload: Omit<IngredientPayload, 'current_stock'>
+): Promise<WarehouseRow> {
+  const response = await apiFetch(`${API_BASE}/products/ingredients/${ingredientId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse(response);
+}
+
+export interface WarehouseRow {
+  ingredient_id: number;
+  name: string;
+  unit: string;
+  current_stock: string;
+  min_stock_level: string;
+  daily_usage: string;
+  days_left: number | null;
+  last_delivery_at: string | null;
+  updated_at: string | null;
+}
+
+export type StockMovementKind = 'initial' | 'delivery' | 'production' | 'loss' | 'count';
+export type StockAdjustmentKind = Extract<StockMovementKind, 'delivery' | 'loss' | 'count'>;
+
+export interface StockDay {
+  date: string;
+  balance: string;
+  received: string;
+  used: string;
+  corrected: string;
+}
+
+export interface StockMovement {
+  movement_id: number;
+  kind: StockMovementKind;
+  quantity: string;
+  balance_after: string;
+  note: string;
+  created_at: string;
+  created_by_name: string;
+}
+
+export interface StockHistory {
+  days: number;
+  series: StockDay[];
+  movements: StockMovement[];
+}
+
+export async function fetchWarehouse(): Promise<WarehouseRow[]> {
+  const response = await apiFetch(`${API_BASE}/products/warehouse/`, { headers: authHeaders() });
+  return (await handleJsonResponse(response)).items;
+}
+
+export async function fetchStockHistory(ingredientId: number, days: number): Promise<StockHistory> {
+  const response = await apiFetch(`${API_BASE}/products/ingredients/${ingredientId}/history/?days=${days}`, {
+    headers: authHeaders(),
+  });
+  return handleJsonResponse(response);
+}
+
+export async function adjustStock(
+  ingredientId: number,
+  payload: { kind: StockAdjustmentKind; quantity: string; note?: string }
+): Promise<WarehouseRow> {
+  const response = await apiFetch(`${API_BASE}/products/ingredients/${ingredientId}/stock/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -1201,7 +1255,7 @@ export interface PlanPreview {
   production_date: string;
   doughs: PlanPreviewDough[];
   unassigned_products: { product_id: number; product_name: string; ordered_qty: number }[];
-  ingredient_totals: (WeighItem & { current_stock: number; shortage: number })[];
+  ingredient_totals: (WeighItem & { current_stock: number; min_stock_level: number; shortage: number })[];
 }
 
 export interface ProductionPlanSummary {
@@ -1332,6 +1386,23 @@ export async function generateProductionPlan(deliveryDate: string): Promise<Prod
     headers: authHeaders(),
     body: JSON.stringify({ delivery_date: deliveryDate }),
   });
+  return productionJson(response);
+}
+
+export type PlanCalendarStatus = 'none' | 'saved' | 'in_progress' | 'done';
+
+export interface PlanCalendarDay {
+  delivery_date: string;
+  production_date: string;
+  status: PlanCalendarStatus;
+  batches: number;
+  done_batches: number;
+  pieces: number;
+}
+
+export async function fetchPlanCalendar(start?: string): Promise<PlanCalendarDay[]> {
+  const query = start ? `?start=${start}` : '';
+  const response = await apiFetch(`${API_BASE}/production/calendar/${query}`, { headers: authHeaders() });
   return productionJson(response);
 }
 
