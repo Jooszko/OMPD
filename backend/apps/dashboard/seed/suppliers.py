@@ -1,9 +1,6 @@
-from datetime import datetime, timedelta
 from decimal import Decimal
 
-from django.utils import timezone
-
-from finance.models import Supplier, SupplierIngredient, SupplyOrder, SupplyOrderItem
+from finance.models import Supplier, SupplierIngredient
 
 SUPPLIER_DATA = [
     # (name, phone, email, address, is_active)
@@ -18,10 +15,6 @@ SUPPLIER_DATA = [
     ('Transport Chłodniczy "ZimnyWóz"', '777-888-999', 'logistyka@zimnywoz.pl', 'Tychy, ul. Chłodna 4', False),
     ('Hurtownia Ogólnospożywcza "MegaHurt"', '888-999-000', 'biuro@megahurt.pl', 'Częstochowa, ul. Handlowa 20', True),
 ]
-
-SUPPLY_ORDER_STATUSES = ['ordered', 'partially_received', 'completed', 'cancelled']
-SUPPLY_ORDER_COUNT = 25
-
 
 def create_suppliers():
     suppliers = {}
@@ -54,46 +47,3 @@ def create_supplier_ingredients(suppliers, ingredients):
         )
         links.append(link)
     return links
-
-
-def create_supply_orders(suppliers, supplier_links, admin_user, date_range):
-    supplier_list = list(suppliers.values())
-    orders = []
-    for i in range(SUPPLY_ORDER_COUNT):
-        day_offset = i % len(date_range)
-        order_date = date_range[day_offset]
-        supplier = supplier_list[i % len(supplier_list)]
-        status = SUPPLY_ORDER_STATUSES[i % len(SUPPLY_ORDER_STATUSES)]
-        order_datetime = timezone.make_aware(datetime.combine(order_date, datetime.min.time()))
-        expected_datetime = order_datetime + timedelta(days=3)
-
-        order, created = SupplyOrder.objects.get_or_create(
-            supplier=supplier,
-            order_date=order_datetime,
-            defaults={
-                'expected_delivery_date': expected_datetime,
-                'status': status,
-                'created_by': admin_user,
-            },
-        )
-        if created:
-            supplier_link_subset = [
-                link for link in supplier_links if link.supplier_id == supplier.supplier_id
-            ]
-            if supplier_link_subset:
-                item_count = 1 + (i % min(3, len(supplier_link_subset)))
-                for offset in range(item_count):
-                    link = supplier_link_subset[offset % len(supplier_link_subset)]
-                    quantity = Decimal(10 + ((i + offset) % 90))
-                    received = quantity if status == 'completed' else Decimal('0.000')
-                    SupplyOrderItem.objects.get_or_create(
-                        supply_order=order,
-                        ingredient=link.ingredient,
-                        defaults={
-                            'quantity_ordered': quantity,
-                            'quantity_received': received,
-                            'unit_price': link.last_price or Decimal('5.00'),
-                        },
-                    )
-        orders.append(order)
-    return orders

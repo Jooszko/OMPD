@@ -4,8 +4,6 @@ from finance.models import (
     Expense,
     Supplier,
     SupplierIngredient,
-    SupplyOrder,
-    SupplyOrderItem,
 )
 from orders.models import DailyOrder, DeliveryProof, StandingOrder, StandingOrderRun
 from production.models import Dough, Mixer, ProductionPlan
@@ -20,8 +18,6 @@ def clear_all():
         proof.image.delete(save=False)
     DailyFinancialReport.objects.all().delete()
     Expense.objects.all().delete()
-    SupplyOrderItem.objects.all().delete()
-    SupplyOrder.objects.all().delete()
     SupplierIngredient.objects.all().delete()
     Supplier.objects.all().delete()
     ProductionPlan.objects.all().delete()

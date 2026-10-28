@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 
 from clients.models import Client, Route
 from finance.models import (
-    DailyFinancialReport, Expense, RecurringExpense, Supplier, SupplierIngredient, SupplyOrder,
+    DailyFinancialReport, Expense, RecurringExpense, Supplier, SupplierIngredient,
 )
 from orders.models import DailyOrder, DeliveryProof, ProductReturn, StandingOrder
 from production.models import Dough, Mixer, ProductBakeSpec, ProductionPlan
@@ -38,7 +38,6 @@ class SeedDashboardCommandTests(TestCase):
         self.assertEqual(ProductBakeSpec.objects.count(), 9)
         self.assertEqual(Supplier.objects.count(), 10)
         self.assertEqual(SupplierIngredient.objects.count(), 20)
-        self.assertEqual(SupplyOrder.objects.count(), 25)
         self.assertGreaterEqual(StandingOrder.objects.count(), 45)
         self.assertGreater(DailyOrder.objects.count(), 0)
         self.assertGreater(ProductReturn.objects.count(), 0)

@@ -15,11 +15,7 @@ from dashboard.seed.plans import create_production_history
 from dashboard.seed.production import create_production_setup
 from dashboard.seed.proofs import create_delivery_proofs
 from dashboard.seed.products import create_ingredients, create_products, create_stock_history
-from dashboard.seed.suppliers import (
-    create_supplier_ingredients,
-    create_suppliers,
-    create_supply_orders,
-)
+from dashboard.seed.suppliers import create_supplier_ingredients, create_suppliers
 from orders.standing import mark_standing_days
 from dashboard.seed.users import DEFAULT_SEED_PASSWORD, DEMO_USERNAMES, create_notifications, create_users
 
@@ -100,8 +96,6 @@ class Command(BaseCommand):
         self.stdout.write(f'  Powiązania dostawca-surowiec: {len(supplier_links)}')
 
         admin_user = users['admins'][0]
-        supply_orders = create_supply_orders(suppliers, supplier_links, admin_user, date_range)
-        self.stdout.write(f'  Zamówienia surowcowe: {len(supply_orders)}')
 
         standing_orders = create_standing_orders(clients, products)
         self.stdout.write(f'  Szablony stałych zamówień: {len(standing_orders)}')
