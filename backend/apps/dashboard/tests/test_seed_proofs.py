@@ -1,6 +1,8 @@
 import shutil
 import tempfile
 from datetime import date, timedelta
+from pathlib import Path
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from PIL import Image
@@ -15,6 +17,7 @@ from orders.models import DailyOrder, DeliveryProof
 from users.models import User
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp()
+SEED_PHOTO_PATH = Path(TEMP_MEDIA_ROOT) / 'delivery_photo.jpg'
 TODAY = date(2026, 10, 21)
 
 
@@ -25,6 +28,11 @@ def tearDownModule():
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class SeedDeliveryProofsTests(TestCase):
     def setUp(self):
+        Image.new('RGB', (640, 480), '#c9d3d9').save(SEED_PHOTO_PATH, format='JPEG')
+        patcher = patch('dashboard.seed.proofs.DELIVERY_PHOTO_PATH', SEED_PHOTO_PATH)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         drivers = [
             User.objects.create_user(username=f'proof_driver{i}', password='x', role='driver', full_name=f'Driver {i}')
             for i in range(6)
@@ -51,11 +59,19 @@ class SeedDeliveryProofsTests(TestCase):
         create_delivery_proofs(TODAY)
 
         photo = DeliveryProof.objects.filter(kind='photo').first()
+        self.assertEqual(Path(photo.image.path).read_bytes(), SEED_PHOTO_PATH.read_bytes())
         with Image.open(photo.image.path) as image:
             self.assertEqual((image.format, image.size), ('JPEG', (640, 480)))
         signature = DeliveryProof.objects.filter(kind='signature').first()
         with Image.open(signature.image.path) as image:
             self.assertEqual(image.format, 'PNG')
+
+    def test_missing_seed_photo_reports_its_path(self):
+        missing_path = SEED_PHOTO_PATH.with_name('missing.jpg')
+        with patch('dashboard.seed.proofs.DELIVERY_PHOTO_PATH', missing_path):
+            with self.assertRaises(FileNotFoundError) as error:
+                create_delivery_proofs(TODAY)
+        self.assertIn(str(missing_path), str(error.exception))
 
     def test_is_idempotent(self):
         create_delivery_proofs(TODAY)

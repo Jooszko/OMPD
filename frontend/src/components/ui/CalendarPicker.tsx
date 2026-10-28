@@ -42,6 +42,7 @@ export function CalendarPicker({
   label,
   children,
   triggerClassName,
+  align = 'start',
 }: {
   value: string;
   min?: string;
@@ -50,6 +51,7 @@ export function CalendarPicker({
   label: string;
   children: ReactNode;
   triggerClassName: string;
+  align?: 'start' | 'end';
 }) {
   const calendarId = useId();
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,7 @@ export function CalendarPicker({
           id={calendarId}
           role="dialog"
           aria-label={label}
-          className="absolute left-0 z-30 mt-2 w-[280px] max-w-[calc(100vw-2rem)] rounded-xl border border-bakery-btnBorder bg-bakery-card p-3 shadow-lg"
+          className={`absolute ${align === 'end' ? 'right-0' : 'left-0'} z-30 mt-2 w-[280px] max-w-[calc(100vw-2rem)] rounded-xl border border-bakery-btnBorder bg-bakery-card p-3 shadow-lg`}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="font-display text-sm font-extrabold">{monthLabel}</span>

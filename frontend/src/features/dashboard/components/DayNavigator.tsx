@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarPicker } from '../../../components/ui/CalendarPicker';
 import { shiftIsoDate } from '../lib/dateFormat';
 
 const NAV_BUTTON =
@@ -26,14 +27,16 @@ export function DayNavigator({
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-      <input
-        type="date"
+      <CalendarPicker
         value={date}
         max={today}
-        onChange={(e) => e.target.value && goToDate(e.target.value)}
-        aria-label="Wybierz dzień"
-        className="min-h-[44px] sm:min-h-0 px-2 py-1 text-xs font-semibold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg outline-none focus:border-bakery-accent"
-      />
+        onChange={goToDate}
+        label="Wybierz dzień"
+        triggerClassName="inline-flex h-11 sm:h-8 items-center gap-2 px-3 sm:px-2 text-sm sm:text-xs font-semibold bg-white border border-bakery-btnBorder text-bakery-dark rounded-lg shadow-xs transition hover:bg-bakery-inactive outline-none focus-visible:border-bakery-accent focus-visible:ring-2 focus-visible:ring-bakery-accent/30"
+      >
+        <CalendarDays aria-hidden className="size-4 shrink-0" />
+        {date.split('-').reverse().join('.')}
+      </CalendarPicker>
       <button
         type="button"
         onClick={() => goToDate(shiftIsoDate(date, 1))}

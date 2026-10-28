@@ -55,6 +55,7 @@ export function WeekStrip({
             value={selected}
             onChange={onJump}
             label="Wybierz datę dostawy"
+            align="end"
             triggerClassName="inline-flex items-center gap-2 h-9 px-3 rounded-full border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark cursor-pointer outline-none hover:border-bakery-dark focus-visible:border-bakery-accent"
           >
             <CalendarDays aria-hidden className="size-4" />
