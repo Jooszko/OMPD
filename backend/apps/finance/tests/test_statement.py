@@ -1,14 +1,15 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from clients.models import Client, Route
-from finance.models import Expense
+from finance.models import Expense, Supplier, SupplierIngredient
 from finance.statement import build_statement, period_bounds, period_label, previous_bounds
 from orders.models import DailyOrder
-from products.models import Product
+from products.models import Ingredient, Product, Recipe, StockMovement
 from users.models import User
 
 URL = '/api/finance/statement/'
@@ -63,6 +64,26 @@ class StatementTests(TestCase):
         self.assertEqual(lines['net_profit'], ('700.00', '750.00'))
         self.assertEqual([line['level'] for line in data['lines']][-2:], ['item', 'total'])
         self.assertEqual(data['net_margin_pct'], 70.0)
+
+    def test_raw_material_lines_split_recipe_use_and_stock_losses(self):
+        flour = Ingredient.objects.create(name='Mąka St', unit='kg')
+        Recipe.objects.create(product=self.bread, ingredient=flour, amount=Decimal('0.500'))
+        SupplierIngredient.objects.create(
+            supplier=Supplier.objects.create(name='Młyn St'), ingredient=flour, last_price=Decimal('4.00'),
+        )
+        self.sale(date(2026, 9, 5), 10)
+        StockMovement.objects.create(
+            ingredient=flour, kind=StockMovement.KIND_COUNT, quantity=Decimal('-2'), balance_after=Decimal('0'),
+            created_at=timezone.make_aware(datetime(2026, 9, 6, 15)),
+        )
+
+        data = build_statement('month', date(2026, 9, 15), today=date(2026, 10, 14))
+        lines = {line['key']: (line['level'], line['amount']) for line in data['lines']}
+
+        self.assertEqual(lines['materials'], ('sub', '-20.00'))
+        self.assertEqual(lines['stock_losses'], ('sub', '-8.00'))
+        self.assertEqual(lines['cogs'], ('item', '-28.00'))
+        self.assertEqual(lines['gross_margin'], ('sum', '72.00'))
 
     def test_trend_and_days(self):
         self.sale(date(2026, 9, 5), 10)

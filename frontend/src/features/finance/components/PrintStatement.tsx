@@ -50,8 +50,8 @@ export function PrintStatement({ statement }: { statement: Statement }) {
       </dl>
 
       <p className="mt-8 text-[11px] text-[#5f5a58]">
-        Koszt surowców liczony z receptur produktów i ostatnich cen u dostawców. Kwoty w złotych. Dokument wygenerowany
-        w systemie OMPD.
+        Koszt surowców liczony z receptur produktów i ostatnich cen u dostawców, powiększony o straty i różnice z
+        inwentaryzacji w magazynie. Kwoty w złotych. Dokument wygenerowany w systemie OMPD.
       </p>
     </div>,
     document.body

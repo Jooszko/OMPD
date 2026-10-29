@@ -5,13 +5,14 @@ from decimal import Decimal
 from django.db.models import Avg, DecimalField, ExpressionWrapper, F, Sum
 
 from orders.models import DailyOrder, ProductReturn
-from products.models import Recipe
+from products.models import Recipe, StockMovement
 
 from .models import Expense, SupplierIngredient
 
 ZERO = Decimal('0')
 MONEY = DecimalField(max_digits=12, decimal_places=2)
 COGS_STATUSES = ['planned', 'in_production', 'in_delivery', 'delivered', 'failed']
+STOCK_LOSS_KINDS = [StockMovement.KIND_LOSS, StockMovement.KIND_COUNT]
 
 
 def days_between(start, end):
@@ -51,8 +52,7 @@ def ingredient_prices():
     )
 
 
-def cogs_by_day(start, end):
-    prices = ingredient_prices()
+def cogs_by_day(start, end, prices):
     usage = (
         Recipe.objects
         .filter(
@@ -72,6 +72,20 @@ def cogs_by_day(start, end):
     return {day: amount.quantize(Decimal('0.01')) for day, amount in cogs.items()}
 
 
+def stock_losses_by_day(start, end, prices):
+    rows = (
+        StockMovement.objects
+        .filter(kind__in=STOCK_LOSS_KINDS, created_at__date__range=(start, end))
+        .values('created_at__date', 'ingredient_id')
+        .annotate(total=Sum('quantity'))
+    )
+    losses = defaultdict(lambda: ZERO)
+    for row in rows:
+        price = prices.get(row['ingredient_id']) or ZERO
+        losses[row['created_at__date']] -= row['total'] * price
+    return {day: amount.quantize(Decimal('0.01')) for day, amount in losses.items()}
+
+
 def expenses_by_day_and_category(start, end):
     rows = (
         Expense.objects
@@ -87,9 +101,11 @@ def expenses_by_day_and_category(start, end):
 
 def daily_results(start, end):
     """One entry per day: revenue (sales − returns), COGS, operating expenses and net profit."""
+    prices = ingredient_prices()
     sales = sales_by_day(start, end)
     returns = returns_by_day(start, end)
-    cogs = cogs_by_day(start, end)
+    materials = cogs_by_day(start, end, prices)
+    stock_losses = stock_losses_by_day(start, end, prices)
     expenses = expenses_by_day_and_category(start, end)
 
     results = []
@@ -97,12 +113,16 @@ def daily_results(start, end):
         day_expenses = expenses.get(day, {})
         operating = sum(day_expenses.values(), ZERO)
         revenue = sales.get(day, ZERO) - returns.get(day, ZERO)
-        day_cogs = cogs.get(day, ZERO)
+        day_materials = materials.get(day, ZERO)
+        day_losses = stock_losses.get(day, ZERO)
+        day_cogs = day_materials + day_losses
         results.append({
             'date': day,
             'sales': sales.get(day, ZERO),
             'returns': returns.get(day, ZERO),
             'revenue': revenue,
+            'materials': day_materials,
+            'stock_losses': day_losses,
             'cogs': day_cogs,
             'operating_expenses': operating,
             'expenses_by_category': day_expenses,
@@ -112,7 +132,7 @@ def daily_results(start, end):
 
 
 def period_totals(results):
-    keys = ('sales', 'returns', 'revenue', 'cogs', 'operating_expenses', 'net_profit')
+    keys = ('sales', 'returns', 'revenue', 'materials', 'stock_losses', 'cogs', 'operating_expenses', 'net_profit')
     totals = {key: sum((day[key] for day in results), ZERO) for key in keys}
     by_category = defaultdict(lambda: ZERO)
     for day in results:

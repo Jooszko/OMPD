@@ -1,13 +1,14 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from clients.models import Client, Route
-from finance.models import Expense
+from finance.models import Expense, Supplier, SupplierIngredient
 from orders.models import DailyOrder, ProductReturn
-from products.models import Product
+from products.models import Ingredient, Product, StockMovement
 from users.models import User
 
 URL = '/api/finance/overview/'
@@ -96,6 +97,25 @@ class FinanceOverviewTests(TestCase):
             [(r['key'], r['amount'], r['previous']) for r in rows],
             [('cogs', '0.00', '0.00'), ('fuel', '0.00', '20.00'), ('salary', '100.00', '0.00')],
         )
+
+    def test_cost_structure_adds_stock_losses_to_raw_materials(self):
+        flour = Ingredient.objects.create(name='Mąka Ov', unit='kg')
+        SupplierIngredient.objects.create(
+            supplier=Supplier.objects.create(name='Młyn Ov'), ingredient=flour, last_price=Decimal('4.00'),
+        )
+        StockMovement.objects.create(
+            ingredient=flour, kind=StockMovement.KIND_LOSS, quantity=Decimal('-5'), balance_after=Decimal('0'),
+            created_at=timezone.make_aware(datetime(2026, 9, 4, 12)),
+        )
+
+        data = self.api.get(URL, PERIOD).data
+
+        self.assertEqual(
+            [(r['key'], r['group'], r['amount']) for r in data['cost_structure']],
+            [('cogs', 'cogs', '0.00'), ('stock_losses', 'cogs', '20.00')],
+        )
+        self.assertEqual(data['totals']['cogs'], '20.00')
+        self.assertEqual(data['totals']['net_profit'], '-20.00')
 
     def test_recent_expenses_are_newest_five_in_period(self):
         for day in range(1, 8):
