@@ -20,7 +20,6 @@ def _month_end(year, month):
 
 
 def period_bounds(kind, anchor):
-    """First and last day of the month, quarter or year that contains `anchor`."""
     if kind == 'month':
         return anchor.replace(day=1), _month_end(anchor.year, anchor.month)
     if kind == 'quarter':
@@ -57,7 +56,9 @@ def _lines(current, previous):
         line('sales', 'Sprzedaż', 'item', current['sales'], previous['sales']),
         line('returns', 'Zwroty od klientów', 'item', -current['returns'], -previous['returns']),
         line('revenue', 'Przychód netto', 'sum', current['revenue'], previous['revenue']),
-        line('cogs', 'Koszt surowców', 'item', -current['cogs'], -previous['cogs']),
+        line('materials', 'Zużycie wg receptur', 'sub', -current['materials'], -previous['materials']),
+        line('stock_losses', 'Straty i inwentaryzacja', 'sub', -current['stock_losses'], -previous['stock_losses']),
+        line('cogs', 'Koszt surowców razem', 'item', -current['cogs'], -previous['cogs']),
         line('gross_margin', 'Marża brutto', 'sum', gross, gross_before),
     ]
     for category, label in Expense.CATEGORY_CHOICES:

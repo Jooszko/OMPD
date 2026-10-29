@@ -41,7 +41,7 @@ export function CostStructure({ rows, revenue }: { rows: FinanceCostRow[]; reven
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <GroupTile label="Surowce" amount={cogs} total={total} hint="Rośnie i maleje razem ze sprzedażą." />
+            <GroupTile label="Surowce" amount={cogs} total={total} hint="Zużycie wg receptur i straty z magazynu." />
             <GroupTile
               label="Koszty operacyjne"
               amount={total - cogs}

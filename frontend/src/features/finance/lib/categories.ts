@@ -1,5 +1,6 @@
 export const CATEGORY_COLORS: Record<string, { color: string; tint: string }> = {
   cogs: { color: '#2a78d6', tint: '#dce9f8' },
+  stock_losses: { color: '#7c5cc4', tint: '#ebe4f7' },
   salary: { color: '#eb6834', tint: '#fce4da' },
   rent: { color: '#1baf7a', tint: '#dcf3ea' },
   utility: { color: '#eda100', tint: '#fcefcc' },

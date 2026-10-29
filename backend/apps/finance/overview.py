@@ -79,11 +79,19 @@ def _top_clients(start, end, previous_start, previous_end, total_revenue):
 def _cost_structure(current, previous):
     rows = [{
         'key': 'cogs',
-        'label': 'Surowce',
+        'label': 'Zużycie surowców',
         'group': 'cogs',
-        'amount': money(current['cogs']),
-        'previous': money(previous['cogs']),
+        'amount': money(current['materials']),
+        'previous': money(previous['materials']),
     }]
+    if current['stock_losses'] or previous['stock_losses']:
+        rows.append({
+            'key': 'stock_losses',
+            'label': 'Straty i inwentaryzacja',
+            'group': 'cogs',
+            'amount': money(current['stock_losses']),
+            'previous': money(previous['stock_losses']),
+        })
     for category, label in Expense.CATEGORY_CHOICES:
         amount = current['expenses_by_category'].get(category, ZERO)
         before = previous['expenses_by_category'].get(category, ZERO)
