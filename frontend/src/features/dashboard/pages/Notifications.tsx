@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bell, CheckCheck, Inbox, PenSquare, User, X } from 'lucide-react';
+import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import {
   fetchNotifications,
   markNotificationRead,
@@ -40,8 +41,10 @@ export default function Notifications() {
   const [msgTitle, setMsgTitle] = useState('');
   const [msgBody, setMsgBody] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [toast, setToast] = useState<ActionToastData | null>(null);
 
   const currentUserId = getCurrentUserId();
+  const closeToast = useCallback(() => setToast(null), []);
 
   const load = () => {
     fetchNotifications()
@@ -102,6 +105,7 @@ export default function Notifications() {
     try {
       await sendMessage(recipientId, msgTitle.trim(), msgBody.trim());
       setIsComposeOpen(false);
+      setToast({ variant: 'success', text: 'Wiadomość została wysłana.' });
       load();
     } catch (err) {
       console.error('Błąd podczas wysyłania wiadomości:', err);
@@ -287,6 +291,7 @@ export default function Notifications() {
         </div>
       )}
 
+      <ActionToast toast={toast} onClose={closeToast} onRefresh={closeToast} />
     </div>
   );
 }

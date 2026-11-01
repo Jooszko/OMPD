@@ -158,14 +158,6 @@ export default function AccountantTab() {
             </button>
           ))}
         </div>
-
-        <section className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm p-5 flex flex-col gap-2">
-          <h2 className="m-0 text-base font-extrabold">O plikach CSV</h2>
-          <p className="m-0 text-[13px] leading-relaxed text-[#3d3937]">
-            Pliki otwierają się w Excelu dwuklikiem, z polskimi znakami. Kolumny są rozdzielone średnikiem, kwoty mają
-            przecinek dziesiętny, a daty format DD.MM.RRRR. Zakres plików to zawsze okres wybrany powyżej.
-          </p>
-        </section>
       </div>
 
       {statement && <PrintStatement statement={statement} />}

@@ -11,6 +11,7 @@ import {
   type StandingOrderGroup,
 } from '../../../services/api';
 import { useDialogFocus } from '../../dashboard/components/useDialogFocus';
+import { DashboardListScrollbar } from '../../dashboard/components/DashboardListScrollbar';
 import { ERROR_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
 import { itemsTotals, type FormItem } from '../lib/orderForm';
@@ -170,7 +171,10 @@ export function StandingPanel({
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-5">
+        <DashboardListScrollbar
+          className="flex-1 min-h-0"
+          contentClassName="px-5 sm:px-6 py-5 flex flex-col gap-5"
+        >
           {loadError && (
             <p role="alert" className={ERROR_CLASS}>
               {loadError}
@@ -308,7 +312,7 @@ export function StandingPanel({
               </p>
             </>
           )}
-        </div>
+        </DashboardListScrollbar>
 
         <div className="px-5 sm:px-6 py-4 border-t border-[#e2dcda] bg-bakery-card flex flex-col gap-3">
           {error && (

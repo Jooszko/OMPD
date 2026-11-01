@@ -35,7 +35,7 @@ export default function SuppliersPanel() {
     const [globalProducts, setGlobalProducts] = useState<SupplierProduct[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [toast, setToast] = useState<ActionToastData | null>(null);
-    const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
+    const [editingSupplierId, setEditingSupplierId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<SupplierStatusFilter>('all');
     const [ingredientSearch, setIngredientSearch] = useState('');
@@ -102,6 +102,7 @@ export default function SuppliersPanel() {
     }, []);
 
     const handleOpenAdd = () => {
+        setEditingSupplierId(null);
         setModalMode('add');
         setName('');
         setPhone('');
@@ -116,9 +117,10 @@ export default function SuppliersPanel() {
         setIsModalOpen(true);
     };
 
-    const handleOpenEdit = () => {
-        const supplier = suppliers.find(s => s.supplier_id === selectedSupplierId);
+    const handleOpenEdit = (supplierId: number) => {
+        const supplier = suppliers.find(s => s.supplier_id === supplierId);
         if (supplier) {
+            setEditingSupplierId(supplier.supplier_id);
             setModalMode('edit');
             setName(supplier.name);
             setPhone(formatPhoneNumber(supplier.phone));
@@ -173,7 +175,7 @@ export default function SuppliersPanel() {
 
         const previouslyAssignedProductIds = new Set(
             suppliers
-                .find(supplier => supplier.supplier_id === selectedSupplierId)
+                .find(supplier => supplier.supplier_id === editingSupplierId)
                 ?.products
                 .filter(product => product.is_assigned !== false)
                 .map(product => product.product_id) ?? [],
@@ -217,12 +219,12 @@ export default function SuppliersPanel() {
                 const savedData = await saveSupplier(payload, null);
                 setSuppliers([savedData, ...suppliers]);
             } else {
-                const savedData = await saveSupplier(payload, selectedSupplierId);
-                setSuppliers(suppliers.map(s => s.supplier_id === selectedSupplierId ? savedData : s));
+                const savedData = await saveSupplier(payload, editingSupplierId);
+                setSuppliers(suppliers.map(s => s.supplier_id === editingSupplierId ? savedData : s));
             }
             
             closeSupplierModal();
-            setSelectedSupplierId(null);
+            setEditingSupplierId(null);
             setToast({ variant: 'success', text: 'Kontrahent został pomyślnie zapisany w bazie danych.' });
         } catch (error: unknown) {
             console.error("Błąd podczas zapisu w komponencie:", error);
@@ -401,34 +403,35 @@ export default function SuppliersPanel() {
             </div>
 
             <div className="flex flex-col gap-4 w-full">
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={handleOpenAdd}
+                        className="inline-flex items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
+                    >
+                        <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj Kontrahenta
+                    </button>
+                </div>
                 <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
                     <DashboardListScrollbar className="flex-1 min-h-0">
                         {isLoading ? (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[#5f5a58] font-semibold">Ładowanie danych z bazy...</div>
                         ) : (
-                            <table className="w-full min-w-[900px] text-left border-collapse">
+                            <table className="w-full min-w-[980px] text-left border-collapse">
                                 <thead className="sticky top-0 bg-[#efebe9] z-10">
                                     <tr className="border-b border-[#e2dcda] text-[11px] font-extrabold text-[#5f5a58] uppercase tracking-[0.06em]">
-                                        <th className="py-3 px-4 w-12 text-center">Wybór</th>
                                         <th className="py-3 px-4">Nazwa Firmy</th>
                                         <th className="py-3 px-4">Identyfikatory</th>
                                         <th className="py-3 px-4">Dane Kontaktowe</th>
                                         <th className="py-3 px-4">Lokalizacja</th>
                                         <th className="py-3 px-4 text-center">Status relacji</th>
                                         <th className="py-3 px-4">Produkty dostawcy</th>
+                                        <th className="py-3 px-4 text-center">Akcje</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#e6e1df] text-sm">
                                     {filteredSuppliers.map((supplier) => (
-                                        <tr key={supplier.supplier_id} className={`bg-bakery-card hover:bg-[#f3efed] transition ${selectedSupplierId === supplier.supplier_id ? '!bg-[#ebe4e1]' : ''}`}>
-                                            <td className="py-3 px-4 text-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedSupplierId === supplier.supplier_id}
-                                                    onChange={() => setSelectedSupplierId(selectedSupplierId === supplier.supplier_id ? null : supplier.supplier_id)}
-                                                    className="rounded border-bakery-border text-bakery-dark focus:ring-bakery-accent w-4 h-4 accent-bakery-dark cursor-pointer"
-                                                />
-                                            </td>
+                                        <tr key={supplier.supplier_id} className="bg-bakery-card hover:bg-[#f3efed] transition">
                                             <td className="py-3 px-4 font-extrabold text-bakery-dark">{supplier.name}</td>
                                             <td className="py-3 px-4 text-[13px] font-semibold text-[#4a4543]">
                                                 {supplier.nip ? (
@@ -470,6 +473,17 @@ export default function SuppliersPanel() {
                                                     )}
                                                 </div>
                                             </td>
+                                            <td className="py-3 px-4 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenEdit(supplier.supplier_id)}
+                                                    aria-label={`Edytuj kontrahenta ${supplier.name}`}
+                                                    title="Edytuj kontrahenta"
+                                                    className="inline-flex items-center justify-center size-10 rounded-xl border border-bakery-btnBorder bg-white text-bakery-dark transition hover:border-bakery-dark"
+                                                >
+                                                    <Edit aria-hidden className="w-4 h-4" />
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -485,26 +499,6 @@ export default function SuppliersPanel() {
                     </DashboardListScrollbar>
                 </div>
 
-                <div className="flex flex-col min-[1016px]:flex-row min-[1016px]:items-center gap-3 bg-bakery-card p-3.5 rounded-[14px] border border-bakery-btnBorder shadow-sm">
-                    <div className="flex flex-wrap justify-center min-[1016px]:justify-start items-center gap-2">
-                        <button
-                            onClick={handleOpenAdd}
-                            className="inline-flex items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
-                        >
-                            <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj Kontrahenta
-                        </button>
-                        <button
-                            onClick={handleOpenEdit}
-                            disabled={!selectedSupplierId}
-                            className="inline-flex items-center gap-2 min-h-11 px-4 text-[13px] font-extrabold bg-white border border-bakery-btnBorder text-bakery-dark rounded-xl shadow-sm hover:bg-[#f3efed] disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-                        >
-                            <Edit className="w-4 h-4" /> Edytuj dane / status
-                        </button>
-                    </div>
-                    {!selectedSupplierId && (
-                        <span className="text-[13px] text-[#5f5a58] font-semibold text-center min-[1016px]:text-left min-[1016px]:ml-2">Zaznacz firmę w tabeli powyżej, aby dokonać zmian w kartotece lub zmienić status aktywności.</span>
-                    )}
-                </div>
             </div>
 
             {isModalOpen && (
@@ -514,7 +508,7 @@ export default function SuppliersPanel() {
                         <div className="bg-bakery-dark text-white px-5 py-4 flex justify-between items-center shrink-0">
                             <h2 className="m-0 text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
                                 <MapPin className="w-4 h-4 text-bakery-accent" />
-                                {modalMode === 'add' ? 'Nowa Kartoteka Kontrahenta' : `Edycja firmy: ${suppliers.find(s => s.supplier_id === selectedSupplierId)?.name}`}
+                                {modalMode === 'add' ? 'Nowa Kartoteka Kontrahenta' : `Edycja firmy: ${suppliers.find(s => s.supplier_id === editingSupplierId)?.name}`}
                             </h2>
                             <button type="button" onClick={closeSupplierModal} className="text-gray-400 hover:text-white transition">
                                 <X className="w-5 h-5" />

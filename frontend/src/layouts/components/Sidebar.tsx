@@ -79,7 +79,7 @@ export function Sidebar({ role, fullName, active, collapsed, onToggle, onLogout 
         </button>
       </div>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#3a3533_transparent] px-3 pt-1 pb-3 flex flex-col gap-2.5">
+      <nav className="sidebar-nav-scrollbar flex-1 min-h-0 overflow-y-auto px-3 pt-1 pb-3 flex flex-col gap-2.5">
         <div className="flex flex-col gap-0.5">
           {top.map((item) => (
             <NavLink key={item.path} item={item} active={active === item.path} collapsed={collapsed} />
