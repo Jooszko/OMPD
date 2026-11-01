@@ -32,7 +32,7 @@ export const MOVEMENT_LABELS: Record<StockMovementKind, string> = {
 export const PERIODS = [30, 90, 180] as const;
 export type Period = (typeof PERIODS)[number];
 
-export const UNIT_SUGGESTIONS = ['kg', 'g', 'l', 'ml', 'szt', 'opak'];
+export const UNIT_OPTIONS = ['kg', 'l', 'szt'];
 
 export interface StockItem extends WarehouseRow {
   current: number;

@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Pencil, Search, SlidersHorizontal, XCircle } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Pencil, Search, SlidersHorizontal, XCircle } from 'lucide-react';
+import { Select } from '@base-ui/react/select';
 import { type ComponentType, type CSSProperties, useMemo, useState } from 'react';
 import {
   BAR_MIN_POSITION,
@@ -119,17 +120,44 @@ export function StockList({
           >
             Do uzupełnienia {attention}
           </button>
-          <label className="inline-flex items-center gap-1.5 text-[13px] font-extrabold">
-            <span className="sr-only">Sortowanie</span>
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value as Sort)}
-              className="h-9 px-3 rounded-full border border-bakery-btnBorder bg-white text-[13px] font-extrabold outline-none focus:border-bakery-accent cursor-pointer"
+          <Select.Root
+            value={sort}
+            onValueChange={(value) => {
+              if (value === 'urgency' || value === 'name') setSort(value);
+            }}
+          >
+            <Select.Trigger
+              aria-label="Sortowanie"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-bakery-btnBorder bg-white px-3.5 text-[13px] font-extrabold text-bakery-dark outline-none transition hover:bg-[#fff4e2] focus-visible:border-bakery-accent cursor-pointer"
             >
-              <option value="urgency">Najpilniejsze</option>
-              <option value="name">Alfabetycznie</option>
-            </select>
-          </label>
+              <Select.Value>{sort === 'urgency' ? 'Najpilniejsze' : 'Alfabetycznie'}</Select.Value>
+              <Select.Icon>
+                <ChevronDown aria-hidden className="size-4 text-[#5f5a58]" />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner align="end" sideOffset={5} className="z-50">
+                <Select.Popup className="sidebar-nav-scrollbar max-h-[min(12rem,var(--available-height))] min-w-[var(--anchor-width)] overflow-y-auto rounded-xl border border-bakery-btnBorder bg-white p-1.5 shadow-xl outline-none">
+                  <Select.List>
+                    <Select.Item
+                      value="urgency"
+                      className="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-[13px] font-semibold text-bakery-dark outline-none data-[highlighted]:bg-[#f6f2f0] data-[selected]:bg-[#fff4e2] data-[selected]:font-extrabold"
+                    >
+                      <Select.ItemText>Najpilniejsze</Select.ItemText>
+                      <Select.ItemIndicator><Check aria-hidden className="size-4 text-bakery-accent" /></Select.ItemIndicator>
+                    </Select.Item>
+                    <Select.Item
+                      value="name"
+                      className="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-[13px] font-semibold text-bakery-dark outline-none data-[highlighted]:bg-[#f6f2f0] data-[selected]:bg-[#fff4e2] data-[selected]:font-extrabold"
+                    >
+                      <Select.ItemText>Alfabetycznie</Select.ItemText>
+                      <Select.ItemIndicator><Check aria-hidden className="size-4 text-bakery-accent" /></Select.ItemIndicator>
+                    </Select.Item>
+                  </Select.List>
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
         </div>
       </div>
 

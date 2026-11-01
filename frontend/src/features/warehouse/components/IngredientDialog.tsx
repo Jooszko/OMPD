@@ -1,9 +1,11 @@
-import { type FormEvent, useId, useState } from 'react';
+import { Select } from '@base-ui/react/select';
+import { Check, ChevronDown } from 'lucide-react';
+import { type FormEvent, useState } from 'react';
 import { createIngredient, updateIngredient, type WarehouseRow } from '../../../services/api';
 import { Modal } from '../../dashboard/components/Modal';
 import { ERROR_CLASS, FIELD_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
-import { parseQuantity, UNIT_SUGGESTIONS, type StockItem } from '../lib/warehouse';
+import { parseQuantity, UNIT_OPTIONS, type StockItem } from '../lib/warehouse';
 
 export function IngredientDialog({
   item,
@@ -14,7 +16,6 @@ export function IngredientDialog({
   onClose: () => void;
   onSaved: (row: WarehouseRow, created: boolean) => void;
 }) {
-  const unitsId = useId();
   const [name, setName] = useState(item?.name ?? '');
   const [unit, setUnit] = useState(item?.unit ?? 'kg');
   const [initial, setInitial] = useState('');
@@ -69,18 +70,50 @@ export function IngredientDialog({
           </label>
           <label className={LABEL_CLASS}>
             Jednostka
-            <input
+            <Select.Root
               value={unit}
-              maxLength={10}
-              list={unitsId}
-              onChange={(event) => setUnit(event.target.value)}
-              className={FIELD_CLASS}
-            />
-            <datalist id={unitsId}>
-              {UNIT_SUGGESTIONS.map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
+              onValueChange={(value) => {
+                if (typeof value === 'string') setUnit(value);
+              }}
+            >
+              <Select.Trigger className={`${FIELD_CLASS} inline-flex items-center justify-between gap-2 text-left cursor-pointer`}>
+                <Select.Value>{unit}</Select.Value>
+                <Select.Icon>
+                  <ChevronDown aria-hidden className="size-4 shrink-0 text-[#5f5a58]" />
+                </Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Positioner align="start" sideOffset={4} className="z-[2000]">
+                  <Select.Popup className="sidebar-nav-scrollbar max-h-[min(12rem,var(--available-height))] min-w-[var(--anchor-width)] overflow-y-auto rounded-xl border border-bakery-btnBorder bg-white p-1.5 shadow-xl outline-none">
+                    <Select.List>
+                      {UNIT_OPTIONS.map((option) => (
+                        <Select.Item
+                          key={option}
+                          value={option}
+                          className="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm font-semibold text-bakery-dark outline-none data-[highlighted]:bg-[#f6f2f0] data-[selected]:bg-[#fff4e2] data-[selected]:font-extrabold"
+                        >
+                          <Select.ItemText>{option}</Select.ItemText>
+                          <Select.ItemIndicator>
+                            <Check aria-hidden className="size-4 text-bakery-accent" />
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                      {item && !UNIT_OPTIONS.includes(item.unit) && (
+                        <Select.Item
+                          value={item.unit}
+                          className="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm font-semibold text-bakery-dark outline-none data-[highlighted]:bg-[#f6f2f0] data-[selected]:bg-[#fff4e2] data-[selected]:font-extrabold"
+                        >
+                          <Select.ItemText>{item.unit}</Select.ItemText>
+                          <Select.ItemIndicator>
+                            <Check aria-hidden className="size-4 text-bakery-accent" />
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      )}
+                    </Select.List>
+                  </Select.Popup>
+                </Select.Positioner>
+              </Select.Portal>
+            </Select.Root>
           </label>
         </div>
 

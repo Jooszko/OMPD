@@ -1,4 +1,5 @@
-import { ArrowDownLeft, ArrowUpRight, ClipboardCheck, Factory, PackageOpen, SlidersHorizontal } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronDown, ClipboardCheck, Factory, PackageOpen, SlidersHorizontal } from 'lucide-react';
+import { Select } from '@base-ui/react/select';
 import type { ComponentType } from 'react';
 import type { StockHistory, StockMovementKind } from '../../../services/api';
 import { formatClock } from '../../home/lib/home';
@@ -115,24 +116,46 @@ export function StockDetail({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex flex-col gap-1">
-          <label htmlFor="detail-ingredient" className="text-xs font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">
+          <span className="text-xs font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">
             Historia stanu
-          </label>
-          <div className="relative">
-            <select
+          </span>
+          <Select.Root
+            value={item.ingredient_id}
+            onValueChange={(value) => {
+              if (typeof value === 'number') onSelect(value);
+            }}
+          >
+            <Select.Trigger
               id="detail-ingredient"
-              value={item.ingredient_id}
-              onChange={(event) => onSelect(Number(event.target.value))}
-              className="max-w-full field-sizing-content appearance-none pr-8 bg-transparent border-0 p-0 font-display text-[26px] sm:text-[30px] leading-tight font-extrabold text-bakery-dark cursor-pointer outline-none focus-visible:underline"
+              aria-label="Wybierz surowiec do historii stanu"
+              className="inline-flex max-w-full items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-[26px] sm:text-[30px] leading-tight font-extrabold text-bakery-dark cursor-pointer outline-none focus-visible:underline"
             >
-              {items.map((option) => (
-                <option key={option.ingredient_id} value={option.ingredient_id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-            <span aria-hidden className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-lg font-extrabold">▾</span>
-          </div>
+              <Select.Value>{item.name}</Select.Value>
+              <Select.Icon className="shrink-0 text-[#5f5a58]">
+                <ChevronDown aria-hidden className="size-4" />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner align="start" sideOffset={6} alignItemWithTrigger={false} className="z-50">
+                <Select.Popup className="sidebar-nav-scrollbar max-h-[min(18rem,var(--available-height))] min-w-[var(--anchor-width)] overflow-y-auto rounded-xl border border-bakery-btnBorder bg-white p-1.5 shadow-xl outline-none">
+                  <Select.List>
+                    {items.map((option) => (
+                      <Select.Item
+                        key={option.ingredient_id}
+                        value={option.ingredient_id}
+                        className="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm font-semibold text-bakery-dark outline-none data-[highlighted]:bg-[#f6f2f0] data-[selected]:bg-[#fff4e2] data-[selected]:font-extrabold"
+                      >
+                        <Select.ItemText>{option.name}</Select.ItemText>
+                        <Select.ItemIndicator>
+                          <Check aria-hidden className="size-4 text-bakery-accent" />
+                        </Select.ItemIndicator>
+                      </Select.Item>
+                    ))}
+                  </Select.List>
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
           <h2 id="detail-title" className="sr-only">Historia stanu: {item.name}</h2>
           <span className="inline-flex items-center gap-2 text-[13px] font-bold text-[#3d3937]">
             <span aria-hidden className="size-2 rounded-full" style={{ background: STATUS_COLORS[item.status] }} />
