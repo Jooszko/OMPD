@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { Check, ChevronDown, MapPin, Search } from 'lucide-react';
 import type { AppClient } from '../../../services/api';
+import { DashboardListScrollbar } from '../../dashboard/components/DashboardListScrollbar';
 import { pickableClients } from '../lib/clientPicker';
 
 export function ClientPicker({
@@ -90,51 +91,53 @@ export function ClientPicker({
               className="w-full h-12 pl-11 pr-4 text-[15px] font-semibold outline-none"
             />
           </div>
-          <ul id={listId} role="listbox" aria-label="Klienci" className="m-0 p-1 list-none max-h-[320px] overflow-y-auto">
-            {options.length === 0 && (
-              <li className="px-3 py-3 text-[13px] font-semibold text-[#5f5a58]">Żaden aktywny klient nie pasuje.</li>
-            )}
-            {groups.map((group) => (
-              <li key={group.routeName} role="presentation">
-                <span className="block px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]">
-                  {group.routeName}
-                </span>
-                <ul role="presentation" className="m-0 p-0 list-none">
-                  {group.clients.map((client) => {
-                    const index = options.indexOf(client);
-                    const note = badge?.(client) ?? null;
-                    return (
-                      <li
-                        key={client.client_id}
-                        id={`${listId}-${client.client_id}`}
-                        role="option"
-                        aria-selected={client.client_id === value}
-                        onMouseEnter={() => setActive(index)}
-                        onClick={() => choose(client)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${
-                          index === active ? 'bg-[#f3efed]' : ''
-                        }`}
-                      >
-                        <span className="flex-1 min-w-0 flex flex-col">
-                          <span className="text-[14px] font-extrabold truncate">{client.name}</span>
-                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#5f5a58]">
-                            <MapPin aria-hidden className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{client.address}</span>
+          <DashboardListScrollbar className="h-[320px] max-h-[40vh] shrink-0" contentClassName="p-1">
+            <ul id={listId} role="listbox" aria-label="Klienci" className="m-0 list-none">
+              {options.length === 0 && (
+                <li className="px-3 py-3 text-[13px] font-semibold text-[#5f5a58]">Żaden aktywny klient nie pasuje.</li>
+              )}
+              {groups.map((group) => (
+                <li key={group.routeName} role="presentation">
+                  <span className="block px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]">
+                    {group.routeName}
+                  </span>
+                  <ul role="presentation" className="m-0 p-0 list-none">
+                    {group.clients.map((client) => {
+                      const index = options.indexOf(client);
+                      const note = badge?.(client) ?? null;
+                      return (
+                        <li
+                          key={client.client_id}
+                          id={`${listId}-${client.client_id}`}
+                          role="option"
+                          aria-selected={client.client_id === value}
+                          onMouseEnter={() => setActive(index)}
+                          onClick={() => choose(client)}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${
+                            index === active ? 'bg-[#f3efed]' : ''
+                          }`}
+                        >
+                          <span className="flex-1 min-w-0 flex flex-col">
+                            <span className="text-[14px] font-extrabold truncate">{client.name}</span>
+                            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#5f5a58]">
+                              <MapPin aria-hidden className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{client.address}</span>
+                            </span>
                           </span>
-                        </span>
-                        {note && (
-                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-[#fbe5bd] text-[11px] font-extrabold text-[#7a4300]">
-                            {note}
-                          </span>
-                        )}
-                        {client.client_id === value && <Check aria-hidden className="w-4 h-4 shrink-0" />}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))}
-          </ul>
+                          {note && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full bg-[#fbe5bd] text-[11px] font-extrabold text-[#7a4300]">
+                              {note}
+                            </span>
+                          )}
+                          {client.client_id === value && <Check aria-hidden className="w-4 h-4 shrink-0" />}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </DashboardListScrollbar>
         </div>
       )}
     </div>

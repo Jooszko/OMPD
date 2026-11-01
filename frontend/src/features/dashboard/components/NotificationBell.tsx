@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, ExternalLink } from 'lucide-react';
+import { DashboardListScrollbar } from './DashboardListScrollbar';
 import {
   fetchNotifications,
   markNotificationRead,
@@ -164,7 +165,7 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
           <div
             ref={panelRef}
             style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
-            className="fixed max-h-96 flex flex-col bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-xl z-50 overflow-hidden font-auth text-bakery-dark"
+            className="fixed h-96 max-h-[calc(100dvh-1rem)] flex flex-col bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-xl z-50 overflow-hidden font-auth text-bakery-dark"
           >
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#3d3937] bg-bakery-dark text-white shrink-0">
               <span className="text-sm font-extrabold uppercase tracking-wide">Powiadomienia</span>
@@ -178,7 +179,10 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-[#e6e1df]">
+            <DashboardListScrollbar
+              className="flex-1 min-h-0"
+              contentClassName="divide-y divide-[#e6e1df]"
+            >
               {notifications.length === 0 ? (
                 <p className="m-0 p-5 text-center text-sm text-[#5f5a58] font-semibold">Brak powiadomień.</p>
               ) : (
@@ -204,7 +208,7 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
                   </button>
                 ))
               )}
-            </div>
+            </DashboardListScrollbar>
 
             <button
               type="button"

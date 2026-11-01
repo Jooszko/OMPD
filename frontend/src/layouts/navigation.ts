@@ -48,8 +48,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { path: '/production/board', label: 'Tablica produkcji', short: 'Tablica', icon: LayoutGrid, roles: ['admin', 'baker'] },
       { path: '/production', label: 'Planowanie produkcji', short: 'Plan', icon: CalendarDays, roles: ['admin', 'baker'] },
-      { path: '/products', label: 'Produkty', short: 'Produkty', icon: Package, roles: ['admin', 'baker'] },
       { path: '/production/settings', label: 'Ustawienia produkcji', short: 'Ustawienia', icon: SlidersHorizontal, roles: ['admin'] },
+      { path: '/products', label: 'Produkty', short: 'Produkty', icon: Package, roles: ['admin', 'baker'] },
     ],
   },
   {
