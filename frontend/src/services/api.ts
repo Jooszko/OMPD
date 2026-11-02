@@ -28,7 +28,7 @@ function markSessionExpired(): void {
   try {
     sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
   } catch {
-    // brak dostępu do sessionStorage – komunikat się po prostu nie pokaże
+    console.log('Brak dostępu do sessionStorage');
   }
 }
 
@@ -73,7 +73,7 @@ export async function revokeSession(): Promise<void> {
       body: JSON.stringify({ refresh }),
     });
   } catch {
-    // brak połączenia – tokeny i tak zostaną usunięte z urządzenia
+    console.log('Nie udało się wylogować z serwera. Brak połączenia z internetem.');
   }
 }
 
@@ -1276,7 +1276,6 @@ export interface PlanOrderChange {
 export interface ProductionPlanResponse {
   preview: PlanPreview;
   plan: ProductionPlanSummary | null;
-  /** Różnice między zatwierdzonym planem a bieżącymi zamówieniami; puste, gdy plan nie jest zapisany. */
   order_changes: PlanOrderChange[];
 }
 
@@ -1437,11 +1436,7 @@ export function recordBatchWaste(
   return postBatchAction(batchId, 'waste', payload);
 }
 
-// ---------------------------------------------------------------------------
-// Ustawienia produkcji: mieszałki, ciasta z recepturą, parametry wyrobów
-// ---------------------------------------------------------------------------
 
-/** Kwoty dziesiętne przychodzą z Django jako tekst, np. "120.000". */
 export interface ProductionMixer {
   mixer_id: number;
   name: string;

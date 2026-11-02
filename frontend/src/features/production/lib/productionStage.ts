@@ -18,7 +18,6 @@ export const STAGE_SHORT_LABELS: Record<ProductionStage, string> = {
   done: 'Gotowe',
 };
 
-/** Pełne, kontrastowe kolory — czytelne z daleka i na zabrudzonym ekranie. */
 export const STAGE_COLORS: Record<ProductionStage, string> = {
   mixing: 'bg-sky-700 text-white',
   dividing: 'bg-violet-700 text-white',
@@ -39,7 +38,6 @@ export function getBatchAction(batch: ProductionBatch): BatchAction {
   return { kind: 'advance', label: `Dalej: ${STAGE_SHORT_LABELS[batch.next_stage ?? 'done']}` };
 }
 
-/** Planowany czas trwania bieżącego etapu w minutach (null, gdy etap nie ma normy czasowej). */
 export function stageTargetMinutes(batch: ProductionBatch): number | null {
   switch (batch.stage) {
     case 'mixing':
@@ -73,7 +71,6 @@ export function countByStage(batches: ProductionBatch[]): Record<ProductionStage
   return counts;
 }
 
-/** Kolejność na tablicy: najpierw dzieże w toku, potem oczekujące wg etapu, zakończone na końcu. */
 export function sortBatchesForBoard(batches: ProductionBatch[]): ProductionBatch[] {
   const rank = (b: ProductionBatch) => {
     if (b.stage === 'done') return 2;

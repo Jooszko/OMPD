@@ -9,8 +9,7 @@ MIXER_DATA = [
 ]
 
 DOUGH_DATA = [
-    # (name, mixer_name, loss_buffer_pct, mixing_time_min, target_temp_c, proofing_time_min,
-    #  instructions, [(ingredient_name, amount_per_kg_of_dough), ...])
+    # (name, mixer_name, loss_buffer_pct, mixing_time_min, target_temp_c, proofing_time_min, instructions, [(ingredient_name, amount_per_kg_of_dough), ...])
     ('Ciasto pszenne', 'Mieszałka spiralna duża', Decimal('3.00'), 12, Decimal('26.0'), 50,
      'Mąka i woda 4 min na wolnych obrotach, dodać drożdże i sól, 8 min na szybkich.', [
          ('Mąka pszenna typ 550', Decimal('0.6110')),

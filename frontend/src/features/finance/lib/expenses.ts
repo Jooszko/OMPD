@@ -64,7 +64,6 @@ export function daysUntilLabel(days: number): string {
   return `za ${days} dni`;
 }
 
-/** How far we are between the previous and the next payment (0–100%), for the progress bar. */
 export function cycleProgress(recurring: RecurringExpense): number {
   if (!recurring.next_date || !recurring.previous_date || recurring.days_until_next === null) return 0;
   const cycle = Math.round(

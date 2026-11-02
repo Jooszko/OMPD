@@ -9,7 +9,7 @@ class Supplier(models.Model):
     phone = models.CharField(max_length=15, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
-    nip = models.CharField(max_length=13, blank=True, null=True)  # Nowe opcjonalne pole NIP
+    nip = models.CharField(max_length=13, blank=True, null=True)  
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -18,8 +18,8 @@ class Supplier(models.Model):
 class SupplierIngredient(TimeStampedModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='ingredients_catalog')
     ingredient = models.ForeignKey('products.Ingredient', on_delete=models.CASCADE, related_name='suppliers_catalog')
-    supplier_part_no = models.CharField(max_length=50, blank=True, null=True) # Kod produktu u dostawcy
-    last_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) # Ostatnia cena
+    supplier_part_no = models.CharField(max_length=50, blank=True, null=True) 
+    last_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) 
     is_assigned = models.BooleanField(default=True)
 
     class Meta:

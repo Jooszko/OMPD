@@ -7,7 +7,7 @@ import { STAGE_LABELS } from '../lib/productionStage';
 const STEP_BUTTON =
   'flex items-center justify-center min-w-[64px] h-16 px-3 rounded-xl text-xl font-extrabold border-2 border-bakery-dark bg-white text-bakery-dark active:scale-[0.97] disabled:opacity-30';
 
-/** Zgłoszenie straty bez klawiatury: kafelki wyrobu i powodu, licznik sterowany przyciskami. */
+
 export function WasteDialog({
   batch,
   reasons,

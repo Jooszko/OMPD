@@ -11,18 +11,15 @@ from products.stock import recalculate_min_stock
 
 INGREDIENT_DATA = [
     # (name, unit, typowe dzienne zużycie, na ile dni starcza obecny stan)
-    # Zużycie jest używane tylko dla dni bez danych z produkcji (starsza historia i surowce spoza
-    # receptur ciast). Próg minimalny = zużycie z 7 dni, więc zapas < 7 dni to „poniżej minimum”,
-    # a 7–10,5 dnia to „blisko minimum”.
     ('Mąka pszenna typ 550', 'kg', Decimal('280'), Decimal('16')),
     ('Mąka żytnia typ 720', 'kg', Decimal('22'), Decimal('12')),
     ('Mąka pszenna typ 750', 'kg', Decimal('17'), Decimal('18')),
     ('Woda', 'l', Decimal('175'), Decimal('30')),
-    ('Drożdże świeże', 'kg', Decimal('6.5'), Decimal('9')),  # blisko minimum
+    ('Drożdże świeże', 'kg', Decimal('6.5'), Decimal('9')), 
     ('Sól', 'kg', Decimal('4.9'), Decimal('21')),
     ('Cukier', 'kg', Decimal('2.4'), Decimal('17')),
-    ('Masło', 'kg', Decimal('2.9'), Decimal('9.5')),  # blisko minimum
-    ('Olej rzepakowy', 'l', Decimal('1.5'), Decimal('1')),  # poniżej minimum
+    ('Masło', 'kg', Decimal('2.9'), Decimal('9.5')), 
+    ('Olej rzepakowy', 'l', Decimal('1.5'), Decimal('1')), 
     ('Jaja', 'szt', Decimal('14'), Decimal('12')),
     ('Mleko', 'l', Decimal('11'), Decimal('11')),
     ('Ser żółty', 'kg', Decimal('0.9'), Decimal('13')),
@@ -33,7 +30,7 @@ INGREDIENT_DATA = [
     ('Ziarna słonecznika', 'kg', Decimal('0.45'), Decimal('13')),
     ('Płatki owsiane', 'kg', Decimal('0.6'), Decimal('16')),
     ('Miód', 'kg', Decimal('0.25'), Decimal('11')),
-    ('Czekolada', 'kg', Decimal('0.9'), Decimal('2')),  # poniżej minimum
+    ('Czekolada', 'kg', Decimal('0.9'), Decimal('2')),  
 ]
 
 PRODUCT_DATA = [

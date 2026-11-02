@@ -18,7 +18,6 @@ function Fact({ icon, label, value }: { icon: ReactNode; label: string; value: s
   );
 }
 
-/** Lista odważeń — dotknięcie wiersza odhacza składnik (tylko lokalnie, jako pomoc przy wadze). */
 function WeighList({ batch }: { batch: ProductionBatch }) {
   const [weighed, setWeighed] = useState<Set<number>>(new Set());
   const toggle = (id: number) =>

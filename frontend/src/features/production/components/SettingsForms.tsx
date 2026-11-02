@@ -28,7 +28,6 @@ const FIELD =
 const INPUT = `${FIELD} w-full h-12`;
 const TEXTAREA = `${FIELD} w-full min-h-20 py-2.5`;
 
-/** Liczba z pola formularza w formacie dla API (kropka dziesiętna). */
 const decimal = (value: string) => String(parseDecimal(value) ?? '');
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -63,7 +62,6 @@ function FormActions({ saving, onCancel }: { saving: boolean; onCancel: () => vo
   );
 }
 
-/** Wspólna obsługa zapisu: walidacja lokalna, potem API; błąd serwera zostaje w formularzu. */
 function useSubmit(onSaved: () => void) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -4,7 +4,6 @@ import { plural, type Segment } from '../../home/lib/home';
 
 export type StockStatus = 'critical' | 'warning' | 'good';
 
-/** Zapas poniżej 150% minimum to sygnał, żeby zamówić surowiec. */
 const WARNING_RATIO = 1.5;
 
 export const STATUS_ORDER: StockStatus[] = ['critical', 'warning', 'good'];
@@ -54,7 +53,6 @@ export function toStockItem(row: WarehouseRow): StockItem {
   return { ...row, current, minimum, usage: Number(row.daily_usage), status: stockStatus(current, minimum) };
 }
 
-/** Najpierw to, czego zabraknie najszybciej: status, potem dni zapasu, potem nazwa. */
 export function byUrgency(a: StockItem, b: StockItem): number {
   const status = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
   if (status !== 0) return status;
@@ -114,7 +112,6 @@ export function summary(items: StockItem[]): Segment[] {
   return segments.filter((segment) => segment.text);
 }
 
-/** Szerokość paska stanu: minimum zawsze w tym samym miejscu skali, żeby wiersze dało się porównać. */
 export const BAR_MIN_POSITION = 1 / 4;
 
 export function stockBar(item: StockItem): { fill: number; overflow: boolean } {
@@ -176,7 +173,6 @@ export function nearestIndex(points: ChartPoint[], x: number): number {
   return Math.max(0, Math.min(points.length - 1, Math.round(x / step)));
 }
 
-/** Liczba dodatnia z pola formularza (przecinek albo kropka). Null, gdy wpis jest niepoprawny. */
 export function parseQuantity(text: string): number | null {
   const normalized = text.trim().replace(/\s/g, '').replace(',', '.');
   if (!/^\d+(\.\d{1,3})?$/.test(normalized)) return null;

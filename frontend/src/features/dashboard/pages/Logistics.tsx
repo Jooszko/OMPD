@@ -100,7 +100,6 @@ export default function Logistics() {
     };
   }, [previewDriverId, selectedDate, requestKey, cacheKey]);
 
-  // --- Kopia danych w telefonie: zapis po każdej zmianie, także offline ---
   useEffect(() => {
     if (data && !loading) void saveCached(cacheKey, data, lastUpdatedAt ?? new Date());
   }, [data, loading, cacheKey, lastUpdatedAt]);
@@ -110,7 +109,6 @@ export default function Logistics() {
     loadFailed().then(setFailedActions);
   }, []);
 
-  // --- Wyszukiwanie przystanków i zamówień w aktualnych danych ---
   const allStops = data ? [...data.routes.flatMap((route) => route.stops), ...data.unassigned] : [];
   const findStop = (clientId: number) => allStops.find((stop) => stop.client_id === clientId) ?? null;
   const findOrder = (orderId: number) => {
@@ -133,7 +131,6 @@ export default function Logistics() {
   const stopLabel = (clientId: number, text: string) =>
     `${findStop(clientId)?.name ?? `Klient #${clientId}`} – ${text}`;
 
-  // --- Zmiany na ekranie ---
   const patchOrders = (orderIds: number[], patch: Partial<LogisticsOrder>) => {
     const ids = new Set(orderIds);
     setData((prev) => {

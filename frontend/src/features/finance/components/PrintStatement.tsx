@@ -7,7 +7,6 @@ function formatPct(value: number | null): string {
   return value === null ? '—' : `${value.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%`;
 }
 
-/** Print-only copy of the statement, rendered next to the app root and shown only when printing. */
 export function PrintStatement({ statement }: { statement: Statement }) {
   const { period } = statement;
   const printedAt = new Date().toLocaleString('pl-PL', { dateStyle: 'long', timeStyle: 'short' });

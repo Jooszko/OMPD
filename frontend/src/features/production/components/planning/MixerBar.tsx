@@ -1,7 +1,6 @@
 import type { PlanPreviewDough } from '../../../../services/api';
 import { MIXER_LOAD_COLORS, mixerLoad } from '../../lib/planning';
 
-/** Wsad dzieży na skali pojemności mieszałki; kreska to minimalny wsad. */
 export function MixerBar({
   massKg,
   mixer,

@@ -2,7 +2,6 @@ import { AlertTriangle, CircleCheck } from 'lucide-react';
 import type { CoverageRow } from '../../../services/api';
 import { shortfallRows } from '../lib/productionStage';
 
-/** Czy zamówienia zostaną pokryte po uwzględnieniu zgłoszonych strat (pasek na tablicy produkcji). */
 export function CoveragePanel({ coverage }: { coverage: CoverageRow[] }) {
   const short = shortfallRows(coverage);
 

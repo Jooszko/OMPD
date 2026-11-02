@@ -1,8 +1,6 @@
-/** Pomocnicze funkcje formularzy ustawień produkcji (bez Reacta — testowane osobno). */
 
 import type { ProductBakeSpecRow, ProductionDough } from '../../../services/api';
 
-/** Liczba z pola tekstowego; akceptuje przecinek dziesiętny. Puste lub niepoprawne → null. */
 export function parseDecimal(value: string): number | null {
   const normalized = value.trim().replace(',', '.');
   if (normalized === '') return null;
@@ -64,10 +62,6 @@ export function validateDough(draft: DoughDraft): string | null {
   return null;
 }
 
-/**
- * Masa surowców liczonych wagowo (kg, l ≈ kg) na 1 kg ciasta. Dla kompletnej receptury wynosi ok. 1,0 —
- * odchylenie podpowiada pomyłkę o rząd wielkości (np. gramy wpisane jako kilogramy).
- */
 export function recipeMassPerKg(items: RecipeDraftItem[], unitOf: (ingredientId: number) => string | undefined): number {
   return items.reduce((sum, item) => {
     if (item.ingredient_id === '') return sum;
@@ -108,7 +102,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 export const categoryLabel = (category: string) => CATEGORY_LABELS[category] ?? category;
 
-/** Wyszukiwanie po nazwie wyrobu, kategorii i nazwie ciasta, bez rozróżniania wielkości liter. */
 export function productMatches(row: ProductBakeSpecRow, query: string): boolean {
   const needle = query.trim().toLocaleLowerCase('pl');
   if (!needle) return true;
@@ -122,7 +115,6 @@ export interface DoughGroup {
   rows: ProductBakeSpecRow[];
 }
 
-/** Wyroby z parametrami pogrupowane według ciasta (kolejność ciast z ustawień, wyroby alfabetycznie). */
 export function groupByDough(products: ProductBakeSpecRow[], doughs: ProductionDough[]): DoughGroup[] {
   return doughs
     .map((dough) => ({

@@ -35,7 +35,6 @@ function byPeriodMargin(a: ProfitabilityProduct, b: ProfitabilityProduct): numbe
   return Number(b.period_margin ?? 0) - Number(a.period_margin ?? 0) || a.name.localeCompare(b.name, 'pl');
 }
 
-/** Products split into margin levels; empty groups are left out. */
 export function groupByMargin(products: ProfitabilityProduct[]): MarginGroup[] {
   return GROUPS.map((group) => ({
     ...group,
@@ -47,7 +46,6 @@ function isComplete(product: ProfitabilityProduct): boolean {
   return product.has_recipe && product.missing_prices.length === 0 && product.margin_pct !== null;
 }
 
-/** Products with full cost data that sold anything in the period, best period margin first. */
 export function profitRanking(products: ProfitabilityProduct[]): ProfitabilityProduct[] {
   return products.filter((product) => isComplete(product) && product.sold > 0).sort(byPeriodMargin);
 }

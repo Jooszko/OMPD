@@ -39,7 +39,6 @@ export function mixerLoad(massKg: number, mixer: Mixer | null): { pct: number; m
   return { pct, minPct: (min / max) * 100, state };
 }
 
-/** Najbardziej obciążona dzieża ciasta – jej wsad pokazuje kafel. */
 export function peakLoad(dough: PlanPreviewDough) {
   const masses = dough.batches.map((batch) => Number(batch.dough_mass_kg));
   if (masses.length === 0) return null;
@@ -93,7 +92,6 @@ export function ingredientNeeds(rows: PlanPreview['ingredient_totals']): Ingredi
     .sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || b.amount / (b.current || 1) - a.amount / (a.current || 1));
 }
 
-/** Pozycje paska surowca na wspólnej skali: zapotrzebowanie, stan i minimum. */
 export function needBar(need: IngredientNeed): { amount: number; current: number; minimum: number } {
   const scale = Math.max(need.amount, need.current, need.minimum) || 1;
   return { amount: need.amount / scale, current: need.current / scale, minimum: need.minimum / scale };

@@ -91,7 +91,6 @@ class RouteDirectionsViewTests(TestCase):
 
     @mock.patch('dashboard.views.get_cached_route_directions')
     def test_two_stops_are_not_reordered(self, mock_get_directions):
-        # Nothing to optimize with only 2 points — order stays as given.
         mock_get_directions.return_value = {
             'coordinates': [], 'distance_m': 0.0, 'duration_s': 0.0, 'provider': 'osrm',
         }
@@ -104,9 +103,6 @@ class RouteDirectionsViewTests(TestCase):
 
     @mock.patch('dashboard.views.get_cached_route_directions')
     def test_three_or_more_stops_are_optimized_automatically(self, mock_get_directions):
-        # Client 3 sits right next to Client 1 (start), far from Client 2 —
-        # the default (name) order visits 1, 2, 3; optimization always runs
-        # for 3+ stops, so it should visit the near point (3) before the far one (2).
         Client.objects.create(
             name='Klient 3', address='Adres 3', route=self.route,
             latitude=Decimal('50.001000'), longitude=Decimal('18.001000'),

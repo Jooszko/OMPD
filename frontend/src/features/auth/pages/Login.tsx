@@ -41,7 +41,7 @@ export default function Login() {
     try {
       sessionStorage.removeItem(SESSION_EXPIRED_KEY);
     } catch {
-      // brak dostępu do sessionStorage
+      console.log('Brak dostępu do sessionStorage');
     }
   }, []);
 

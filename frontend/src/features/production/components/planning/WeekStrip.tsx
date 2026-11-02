@@ -26,7 +26,6 @@ export function WeekStrip({
 }) {
   const listRef = useRef<HTMLOListElement>(null);
 
-  // Na wąskim ekranie pasek przewija się w poziomie – wybrany dzień ma być widoczny.
   useEffect(() => {
     const list = listRef.current;
     const active = list?.querySelector<HTMLElement>('[aria-pressed="true"]')?.parentElement;

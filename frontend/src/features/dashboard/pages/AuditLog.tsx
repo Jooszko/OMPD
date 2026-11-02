@@ -99,7 +99,7 @@ export default function AuditLogPage() {
   useEffect(() => {
     fetchAuditFilterOptions()
       .then(setOptions)
-      .catch(() => undefined); // bez list filtrów strona nadal działa, a błąd pokaże pobieranie wpisów
+      .catch(() => undefined); 
   }, []);
 
   useEffect(() => {

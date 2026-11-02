@@ -11,7 +11,7 @@ export async function saveCached<T>(key: string, value: T, savedAt: Date = new D
   try {
     await set(CACHE_PREFIX + key, { value, savedAt: savedAt.toISOString() });
   } catch {
-    // Brak dostępu do IndexedDB (np. tryb prywatny) – aplikacja działa dalej, tylko bez pamięci offline.
+    console.log('Nie udało się wyczyścić pamięci offline.');
   }
 }
 
@@ -28,7 +28,7 @@ export async function clearCache(): Promise<void> {
     const cacheKeys = (await keys()).filter((key) => typeof key === 'string' && key.startsWith(CACHE_PREFIX));
     await delMany(cacheKeys);
   } catch {
-    // Jak wyżej – nie ma czego czyścić.
+    console.log('Nie udało się wyczyścić pamięci offline.');
   }
 }
 
