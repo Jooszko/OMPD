@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Edit, Trash2, Tag, BookOpen, X, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, BookOpen, X, AlertTriangle, Search } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { Modal } from '../components/Modal';
@@ -35,6 +35,7 @@ export default function ProductsPanel() {
   const visibleTab = currentRole === 'baker' ? 'receptury' : activeTab;
 
   const [products, setProducts] = useState<AppProduct[]>([]);
+  const [productSearch, setProductSearch] = useState('');
   const [ingredients, setIngredients] = useState<AppIngredient[]>([]);
   const [recipes, setRecipes] = useState<AppRecipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,6 +59,9 @@ export default function ProductsPanel() {
   const [ingredientAmount, setIngredientAmount] = useState<string>('');
 
   const closeToast = useCallback(() => setToast(null), []);
+  const filteredProducts = products.filter(product =>
+    product.name.toLocaleLowerCase('pl').includes(productSearch.trim().toLocaleLowerCase('pl'))
+  );
 
   useEffect(() => {
     const loadData = async () => {
@@ -238,6 +242,17 @@ export default function ProductsPanel() {
 
       {visibleTab === 'ceny' && (
         <div className="flex flex-col w-full">
+            <label className="mb-3 flex w-full sm:max-w-sm items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+              <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
+              <input
+                type="search"
+                aria-label="Szukaj produktu po nazwie"
+                placeholder="Szukaj produktu po nazwie..."
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+                className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
+              />
+            </label>
             <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[70vh] max-h-[700px] min-h-[360px] flex flex-col overflow-hidden">
               <DashboardListScrollbar className="products-table-scrollbar flex-1 min-h-0" contentClassName="pr-2">
                 {isLoading ? (
@@ -245,6 +260,8 @@ export default function ProductsPanel() {
                 ) : (
                   products.length === 0 ? (
                     <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak produktów w cenniku.</p>
+                  ) : filteredProducts.length === 0 ? (
+                    <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Nie znaleziono produktów o podanej nazwie.</p>
                   ) : (
                     <table className="w-full text-left border-collapse">
                       <thead className="dashboard-list-table-header">
@@ -257,7 +274,7 @@ export default function ProductsPanel() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#e6e1df] text-sm">
-                        {products.map((product) => (
+                        {filteredProducts.map((product) => (
                           <tr key={product.product_id} className="bg-white transition-colors hover:bg-[#efebe9]">
                             <td className="py-3 px-4 font-mono text-xs text-[#77716e]">#{product.product_id}</td>
                             <td className="py-3 px-4 font-bold text-bakery-dark">{product.name}</td>

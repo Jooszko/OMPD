@@ -335,16 +335,6 @@ export default function SuppliersPanel() {
                     <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.02em]">Księga Kontrahentów</h1>
                     <p className="m-0 text-sm text-[#4a4543]">Baza dostawców surowców, zarządzanie danymi kontaktowymi oraz asortymentem surowcowym.</p>
                 </div>
-                <label className="flex-[1_1_280px] max-w-lg flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
-                    <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
-                    <input
-                        type="text"
-                        placeholder="Szukaj po nazwie firmy, NIP lub surowca..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
-                    />
-                </label>
             </div>
 
             <div role="group" aria-label="Filtr statusu kontrahentów">
@@ -403,11 +393,21 @@ export default function SuppliersPanel() {
             </div>
 
             <div className="flex flex-col gap-4 w-full">
-                <div className="flex justify-end">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <label className="w-full md:w-96 min-w-0 flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+                        <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
+                        <input
+                            type="text"
+                            placeholder="Szukaj po nazwie firmy, NIP lub surowca..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
+                        />
+                    </label>
                     <button
                         type="button"
                         onClick={handleOpenAdd}
-                        className="inline-flex items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
+                        className="inline-flex w-full md:w-auto shrink-0 justify-center items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
                     >
                         <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj Kontrahenta
                     </button>
