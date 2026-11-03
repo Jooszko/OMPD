@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
-import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { createIngredient, fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
 
@@ -393,87 +392,121 @@ export default function SuppliersPanel() {
             </div>
 
             <div className="flex flex-col gap-4 w-full">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <label className="w-full md:w-96 min-w-0 flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex-[1_1_280px] flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
                         <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
+                        <span className="sr-only">Szukaj kontrahenta po nazwie firmy, NIP lub surowcu</span>
                         <input
-                            type="text"
+                            type="search"
+                            aria-label="Szukaj kontrahenta po nazwie firmy, NIP lub surowcu"
                             placeholder="Szukaj po nazwie firmy, NIP lub surowca..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
                         />
                     </label>
+                    <span className="text-[13px] font-bold text-[#4a4543] tabular-nums">
+                        Pokazano {filteredSuppliers.length} z {suppliers.length}
+                    </span>
                     <button
                         type="button"
                         onClick={handleOpenAdd}
-                        className="inline-flex w-full md:w-auto shrink-0 justify-center items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
+                        className="inline-flex shrink-0 justify-center items-center gap-2 min-h-11 px-[18px] text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition active:scale-[0.98]"
                     >
                         <Plus className="w-4 h-4 text-bakery-accent" /> Dodaj Kontrahenta
                     </button>
                 </div>
-                <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[400px] flex flex-col overflow-hidden">
-                    <DashboardListScrollbar className="flex-1 min-h-0">
-                        {isLoading ? (
-                            <div className="absolute inset-0 flex items-center justify-center text-sm text-[#5f5a58] font-semibold">Ładowanie danych z bazy...</div>
-                        ) : (
-                            <table className="w-full min-w-[980px] text-left border-collapse">
-                                <thead className="sticky top-0 bg-[#efebe9] z-10">
-                                    <tr className="border-b border-[#e2dcda] text-[11px] font-extrabold text-[#5f5a58] uppercase tracking-[0.06em]">
-                                        <th className="py-3 px-4">Nazwa Firmy</th>
-                                        <th className="py-3 px-4">Identyfikatory</th>
-                                        <th className="py-3 px-4">Dane Kontaktowe</th>
-                                        <th className="py-3 px-4">Lokalizacja</th>
-                                        <th className="py-3 px-4 text-center">Status relacji</th>
-                                        <th className="py-3 px-4">Produkty dostawcy</th>
-                                        <th className="py-3 px-4 text-center">Akcje</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#e6e1df] text-sm">
-                                    {filteredSuppliers.map((supplier) => (
-                                        <tr key={supplier.supplier_id} className="bg-bakery-card hover:bg-[#f3efed] transition">
-                                            <td className="py-3 px-4 font-extrabold text-bakery-dark">{supplier.name}</td>
-                                            <td className="py-3 px-4 text-[13px] font-semibold text-[#4a4543]">
-                                                {supplier.nip ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <FileText className="w-3.5 h-3.5 text-gray-400" /> NIP: <span className="font-mono font-bold">{supplier.nip}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400 italic">Brak NIP</span>
-                                                )}
-                                            </td>
-                                            <td className="py-3 px-4 space-y-1">
-                                                <div className="flex items-center gap-1.5 text-[#4a4543] font-semibold text-[13px]"><Phone className="w-3.5 h-3.5" /> {supplier.phone}</div>
-                                                <div className="flex items-center gap-1.5 text-[#4a4543] font-semibold text-[13px]"><Mail className="w-3.5 h-3.5" /> {supplier.email}</div>
-                                            </td>
-                                            <td className="py-3 px-4 text-[13px] font-semibold text-[#4a4543]"><MapPin className="w-3.5 h-3.5 inline mr-1 text-[#8a8482]" /> {supplier.address}</td>
-                                            <td className="py-3 px-4 text-center">
-                                                <div className="flex items-center justify-center gap-1">
+                {isLoading ? (
+                    <div role="status" className="h-[420px] rounded-[14px] border border-bakery-btnBorder bg-bakery-inactive animate-pulse" aria-label="Ładowanie kontrahentów" />
+                ) : filteredSuppliers.length === 0 ? (
+                    <div className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm p-6 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <SearchCheck aria-hidden className="w-8 h-8 shrink-0 text-[#8a8482]" />
+                            <div>
+                                <p className="text-sm font-semibold m-0">Brak kontrahentów spełniających kryteria.</p>
+                                <p className="text-[13px] m-0 text-[#5f5a58]">Zmień frazę wyszukiwania lub dodaj nowego dostawcę.</p>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <section aria-label="Lista kontrahentów" className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
+                        <div
+                            aria-hidden
+                            className="hidden md:grid md:grid-cols-[minmax(170px,1.25fr)_minmax(150px,1fr)_minmax(130px,1fr)_110px_minmax(150px,1.2fr)_56px] md:gap-3 items-center px-5 py-3 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]"
+                        >
+                            <span>Kontrahent</span>
+                            <span>Dane kontaktowe</span>
+                            <span>Lokalizacja</span>
+                            <span>Status</span>
+                            <span>Surowce</span>
+                            <span />
+                        </div>
+                        <ul className="m-0 p-0 list-none">
+                            {filteredSuppliers.map((supplier) => {
+                                const assignedProducts = supplier.products?.filter(product => product.is_assigned !== false) ?? [];
+                                return (
+                                    <li key={supplier.supplier_id} className="border-t border-[#e6e1df]">
+                                        <div className="flex flex-wrap items-start md:grid md:grid-cols-[minmax(170px,1.25fr)_minmax(150px,1fr)_minmax(130px,1fr)_110px_minmax(150px,1.2fr)_56px] md:gap-3 md:items-center gap-3 px-4 md:px-5 py-3 transition hover:bg-[#f3efed]">
+                                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                <span className="text-[15px] font-extrabold text-bakery-dark">{supplier.name}</span>
+                                                <span className="text-xs font-semibold text-[#5f5a58]">
+                                                    {supplier.nip ? (
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <FileText aria-hidden className="w-3.5 h-3.5 text-[#8a8482]" />
+                                                            NIP: <span className="font-mono">{supplier.nip}</span>
+                                                        </span>
+                                                    ) : 'Brak NIP'}
+                                                </span>
+                                                <span className="md:hidden mt-1 flex flex-wrap gap-1.5">
                                                     {supplier.is_active ? (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                                                            <CheckCircle className="w-3 h-3" /> Aktywny
+                                                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-700">
+                                                            <CheckCircle aria-hidden className="w-3 h-3" /> Aktywny
                                                         </span>
                                                     ) : (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                                                            <XCircle className="w-3 h-3" /> Nieaktywny
+                                                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-red-700">
+                                                            <XCircle aria-hidden className="w-3 h-3" /> Nieaktywny
                                                         </span>
                                                     )}
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-4 text-[13px]">
-                                                <div className="flex flex-wrap gap-1">
-                                                    {supplier.products?.filter(p => p.is_assigned !== false).slice(0, 3).map(p => (
-                                                        <span key={p.product_id} className="bg-[#efebe9] border border-[#e2dcda] px-2 py-0.5 rounded-full text-[#4a4543] font-bold text-[11px]">{p.name}</span>
-                                                    ))}
-                                                    {(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) > 3 && (
-                                                        <span className="text-[10px] text-gray-500 font-semibold italic">+{(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) - 3} więcej</span>
-                                                    )}
-                                                    {(supplier.products?.filter(p => p.is_assigned !== false).length ?? 0) === 0 && (
-                                                        <span className="text-[10px] text-gray-400 font-medium italic">Nie przypisano produktów</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-4 text-center">
+                                                </span>
+                                            </span>
+                                            <span className="hidden md:flex min-w-0 flex-col gap-1">
+                                                <span className="flex items-center gap-1.5 truncate text-[13px] font-semibold text-[#3d3937]">
+                                                    <Phone aria-hidden className="w-3.5 h-3.5 shrink-0 text-[#8a8482]" /> {supplier.phone || '—'}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 truncate text-[13px] font-semibold text-[#3d3937]">
+                                                    <Mail aria-hidden className="w-3.5 h-3.5 shrink-0 text-[#8a8482]" /> {supplier.email || '—'}
+                                                </span>
+                                            </span>
+                                            <span className="hidden md:block truncate text-[13px] font-semibold text-[#3d3937]">
+                                                {supplier.address ? (
+                                                    <><MapPin aria-hidden className="w-3.5 h-3.5 inline mr-1 text-[#8a8482]" />{supplier.address}</>
+                                                ) : '—'}
+                                            </span>
+                                            <span className="hidden md:block">
+                                                {supplier.is_active ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-700">
+                                                        <CheckCircle aria-hidden className="w-3 h-3" /> Aktywny
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-red-700">
+                                                        <XCircle aria-hidden className="w-3 h-3" /> Nieaktywny
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="hidden md:flex min-w-0 flex-wrap gap-1">
+                                                {assignedProducts.slice(0, 3).map(product => (
+                                                    <span key={product.product_id} className="max-w-full truncate rounded-full border border-[#e2dcda] bg-[#efebe9] px-2 py-0.5 text-[11px] font-bold text-[#4a4543]">
+                                                        {product.name}
+                                                    </span>
+                                                ))}
+                                                {assignedProducts.length > 3 && (
+                                                    <span className="text-[10px] font-semibold italic text-[#5f5a58]">+{assignedProducts.length - 3} więcej</span>
+                                                )}
+                                                {assignedProducts.length === 0 && (
+                                                    <span className="text-[11px] font-semibold italic text-[#5f5a58]">Brak surowców</span>
+                                                )}
+                                            </span>
+                                            <span className="flex shrink-0 justify-end md:justify-center">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenEdit(supplier.supplier_id)}
@@ -483,21 +516,40 @@ export default function SuppliersPanel() {
                                                 >
                                                     <Edit aria-hidden className="w-4 h-4" />
                                                 </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                        {!isLoading && filteredSuppliers.length === 0 && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[#8a8482] p-8">
-                                <SearchCheck className="w-12 h-12 mb-4" />
-                                <p className="text-sm font-semibold m-0">Brak kontrahentów spełniających kryteria.</p>
-                                <p className="text-[13px] m-0">Zmień frazę wyszukiwania lub dodaj nowego dostawcę.</p>
-                            </div>
-                        )}
-                    </DashboardListScrollbar>
-                </div>
+                                            </span>
+                                            <div className="basis-full md:hidden -mt-1 flex flex-col gap-1.5 text-[13px] font-semibold text-[#4a4543]">
+                                                <span className="flex items-center gap-1.5">
+                                                    <Phone aria-hidden className="w-3.5 h-3.5 shrink-0 text-[#8a8482]" /> {supplier.phone || 'Brak telefonu'}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 break-all">
+                                                    <Mail aria-hidden className="w-3.5 h-3.5 shrink-0 text-[#8a8482]" /> {supplier.email || 'Brak e-maila'}
+                                                </span>
+                                                {supplier.address && (
+                                                    <span className="flex items-start gap-1.5">
+                                                        <MapPin aria-hidden className="w-3.5 h-3.5 shrink-0 text-[#8a8482]" /> {supplier.address}
+                                                    </span>
+                                                )}
+                                                <span className="flex flex-wrap gap-1">
+                                                    {assignedProducts.slice(0, 3).map(product => (
+                                                        <span key={product.product_id} className="max-w-full truncate rounded-full border border-[#e2dcda] bg-white px-2 py-0.5 text-[11px] font-bold text-[#4a4543]">
+                                                            {product.name}
+                                                        </span>
+                                                    ))}
+                                                    {assignedProducts.length > 3 && (
+                                                        <span className="text-[10px] font-semibold italic text-[#5f5a58]">+{assignedProducts.length - 3} więcej</span>
+                                                    )}
+                                                    {assignedProducts.length === 0 && (
+                                                        <span className="text-[11px] font-semibold italic text-[#5f5a58]">Brak przypisanych surowców</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </section>
+                )}
 
             </div>
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Edit, Trash2, Tag, BookOpen, X, AlertTriangle, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Tag, BookOpen, X, AlertTriangle, Search } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { Modal } from '../components/Modal';
@@ -36,6 +36,7 @@ export default function ProductsPanel() {
 
   const [products, setProducts] = useState<AppProduct[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [recipeSearch, setRecipeSearch] = useState('');
   const [ingredients, setIngredients] = useState<AppIngredient[]>([]);
   const [recipes, setRecipes] = useState<AppRecipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +62,9 @@ export default function ProductsPanel() {
   const closeToast = useCallback(() => setToast(null), []);
   const filteredProducts = products.filter(product =>
     product.name.toLocaleLowerCase('pl').includes(productSearch.trim().toLocaleLowerCase('pl'))
+  );
+  const filteredRecipes = recipes.filter(recipe =>
+    recipe.name.toLocaleLowerCase('pl').includes(recipeSearch.trim().toLocaleLowerCase('pl'))
   );
 
   useEffect(() => {
@@ -241,9 +245,11 @@ export default function ProductsPanel() {
       </div>
 
       {visibleTab === 'ceny' && (
-        <div className="flex flex-col w-full">
-            <label className="mb-3 flex w-full sm:max-w-sm items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+        <div className="flex flex-col gap-3 w-full">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex-[1_1_280px] flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
               <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
+              <span className="sr-only">Szukaj produktu po nazwie</span>
               <input
                 type="search"
                 aria-label="Szukaj produktu po nazwie"
@@ -253,65 +259,74 @@ export default function ProductsPanel() {
                 className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
               />
             </label>
-            <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm h-[70vh] max-h-[700px] min-h-[360px] flex flex-col overflow-hidden">
-              <DashboardListScrollbar className="products-table-scrollbar flex-1 min-h-0" contentClassName="pr-2">
-                {isLoading ? (
-                  <div role="status" className="absolute inset-0 flex items-center justify-center text-sm text-[#5f5a58] font-semibold">Ładowanie danych z bazy...</div>
-                ) : (
-                  products.length === 0 ? (
-                    <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak produktów w cenniku.</p>
-                  ) : filteredProducts.length === 0 ? (
-                    <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Nie znaleziono produktów o podanej nazwie.</p>
-                  ) : (
-                    <table className="w-full text-left border-collapse">
-                      <thead className="dashboard-list-table-header">
-                        <tr className="text-[11px] font-extrabold text-bakery-dark uppercase tracking-wider">
-                          <th className="py-3 px-4">ID</th>
-                          <th className="py-3 px-4">Nazwa produktu</th>
-                          <th className="py-3 px-4">Kategoria</th>
-                          <th className="py-3 px-4 text-right">Cena bazowa</th>
-                          <th className="py-3 px-4 text-center">Akcje</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#e6e1df] text-sm">
-                        {filteredProducts.map((product) => (
-                          <tr key={product.product_id} className="bg-white transition-colors hover:bg-[#efebe9]">
-                            <td className="py-3 px-4 font-mono text-xs text-[#77716e]">#{product.product_id}</td>
-                            <td className="py-3 px-4 font-bold text-bakery-dark">{product.name}</td>
-                            <td className="py-3 px-4 text-[13px] font-semibold text-[#5f5a58]">{CATEGORY_LABELS[product.category] ?? product.category}</td>
-                            <td className="py-3 px-4 text-right font-mono font-extrabold text-bakery-dark">
-                              {parseFloat(product.base_price).toFixed(2)} zł
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditPrice(product.product_id)}
-                                  aria-label={`Edytuj cenę produktu ${product.name}`}
-                                  className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors"
-                                >
-                                  <Edit aria-hidden className="w-4 h-4" />
-                                </button>
-                                {currentRole === 'admin' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setProductPendingDeletion(product)}
-                                    aria-label={`Usuń produkt ${product.name}`}
-                                    className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-red-700 hover:text-white border border-red-200 text-red-700 transition-colors"
-                                  >
-                                    <Trash2 aria-hidden className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )
-                )}
-              </DashboardListScrollbar>
-            </div>
+            {!isLoading && products.length > 0 && (
+              <span className="text-[13px] font-bold text-[#4a4543] tabular-nums">
+                Pokazano {filteredProducts.length} z {products.length}
+              </span>
+            )}
+          </div>
+
+          <section aria-label="Cennik produktów" className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden">
+            {isLoading ? (
+              <div role="status" className="p-6 text-sm font-semibold text-[#5f5a58]">Ładowanie danych z bazy...</div>
+            ) : products.length === 0 ? (
+              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak produktów w cenniku.</p>
+            ) : filteredProducts.length === 0 ? (
+              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Nie znaleziono produktów o podanej nazwie.</p>
+            ) : (
+              <>
+                <div
+                  aria-hidden
+                  className="hidden md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(140px,1fr)_140px_110px] md:gap-3 items-center px-5 py-3 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]"
+                >
+                  <span>Produkt</span>
+                  <span>Kategoria</span>
+                  <span>Cena bazowa</span>
+                  <span className="text-center">Akcje</span>
+                </div>
+                <ul className="m-0 p-0 list-none">
+                  {filteredProducts.map((product) => (
+                    <li key={product.product_id} className="border-t border-[#e6e1df]">
+                      <div className="flex md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(140px,1fr)_140px_110px] md:gap-3 items-center gap-3 px-4 md:px-5 py-3 transition-colors hover:bg-[#f3efed]">
+                        <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                          <span className="text-[15px] font-extrabold text-bakery-dark">{product.name}</span>
+                          <span className="md:hidden text-xs font-semibold text-[#5f5a58]">
+                            {CATEGORY_LABELS[product.category] ?? product.category} · {parseFloat(product.base_price).toFixed(2)} zł
+                          </span>
+                        </span>
+                        <span className="hidden md:block text-[13px] font-semibold text-[#3d3937]">
+                          {CATEGORY_LABELS[product.category] ?? product.category}
+                        </span>
+                        <span className="hidden md:block text-[13px] font-bold tabular-nums text-[#3d3937]">
+                          {parseFloat(product.base_price).toFixed(2)} zł
+                        </span>
+                        <span className="shrink-0 flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditPrice(product.product_id)}
+                            aria-label={`Edytuj cenę produktu ${product.name}`}
+                            className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors"
+                          >
+                            <Pencil aria-hidden className="size-4" />
+                          </button>
+                          {currentRole === 'admin' && (
+                            <button
+                              type="button"
+                              onClick={() => setProductPendingDeletion(product)}
+                              aria-label={`Usuń produkt ${product.name}`}
+                              className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-red-700 hover:text-white border border-red-200 text-red-700 transition-colors"
+                            >
+                              <Trash2 aria-hidden className="w-4 h-4" />
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
         </div>
       )}
 
@@ -380,60 +395,92 @@ export default function ProductsPanel() {
 
       {visibleTab === 'receptury' && (
         <div className="flex flex-col gap-4 w-full">
-          {currentRole !== 'baker' && (
-            <div className="flex justify-start">
+          <div className="flex flex-wrap items-center gap-3">
+            {currentRole !== 'baker' && (
               <button type="button" onClick={handleOpenAddRecipe} className="inline-flex items-center gap-2 min-h-11 px-[18px] rounded-xl bg-bakery-dark hover:bg-[#2e2e2e] text-white text-sm font-extrabold transition-colors">
                 <Plus className="w-4 h-4 text-bakery-accent" /> Zdefiniuj nową recepturę
               </button>
-            </div>
-          )}
-
-          <div className="bg-bakery-card rounded-[14px] border border-bakery-btnBorder shadow-sm overflow-hidden w-full">
-            {recipes.length === 0 ? (
-              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak zdefiniowanych receptur.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left border-collapse">
-                  <thead className="dashboard-list-table-header">
-                    <tr className="text-[11px] font-extrabold text-bakery-dark uppercase tracking-wider">
-                      <th className="py-3 px-4">Produkt końcowy</th>
-                      <th className="py-3 px-4">Kategoria</th>
-                      <th className="py-3 px-4">Liczba użytych surowców</th>
-                      <th className="py-3 px-4">Skład szczegółowy receptury</th>
-                      {currentRole !== 'baker' && <th className="py-3 px-4 text-center w-32">Akcje</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e6e1df] text-sm">
-                    {recipes.map((recipe) => (
-                      <tr key={recipe.product_id} className="bg-white hover:bg-[#efebe9] transition-colors">
-                        <td className="py-3 px-4 font-bold text-bakery-dark">{recipe.name}</td>
-                        <td className="py-3 px-4 text-[13px] font-semibold text-[#5f5a58]">{CATEGORY_LABELS[recipe.category] ?? recipe.category}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-center text-bakery-dark w-44">{recipe.items.length} składn.</td>
-                        <td className="py-3 px-4 text-xs">
-                          <div className="flex flex-wrap gap-1.5">
-                            {recipe.items.map((item, index) => (
-                              <span key={index} className="bg-bakery-card border border-bakery-btnBorder px-2.5 py-1 rounded-lg text-[#4a4543] font-semibold text-[11px]">
-                                {item.ingredient_name}: <span className="text-bakery-dark font-extrabold">{item.amount} {item.unit}</span>
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        {currentRole !== 'baker' && (
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex gap-2 justify-center">
-                              <button type="button" aria-label={`Edytuj recepturę: ${recipe.name}`} onClick={() => handleOpenEditRecipe(recipe)} className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors">
-                                <Edit className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            )}
+            <label className="flex-[1_1_280px] flex items-center gap-2.5 min-h-11 px-3.5 rounded-xl border border-bakery-btnBorder bg-white focus-within:border-bakery-accent">
+              <Search aria-hidden className="w-[18px] h-[18px] shrink-0 text-[#5f5a58]" />
+              <span className="sr-only">Szukaj receptury po nazwie produktu</span>
+              <input
+                type="search"
+                aria-label="Szukaj receptury po nazwie produktu"
+                placeholder="Szukaj produktu po nazwie..."
+                value={recipeSearch}
+                onChange={(event) => setRecipeSearch(event.target.value)}
+                className="flex-1 min-w-0 border-0 outline-none bg-transparent text-sm font-semibold text-bakery-dark"
+              />
+            </label>
+            {recipes.length > 0 && (
+              <span className="text-[13px] font-bold text-[#4a4543] tabular-nums">
+                Pokazano {filteredRecipes.length} z {recipes.length}
+              </span>
             )}
           </div>
+
+          <section aria-label="Lista receptur" className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm overflow-hidden w-full">
+            {recipes.length === 0 ? (
+              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Brak zdefiniowanych receptur.</p>
+            ) : filteredRecipes.length === 0 ? (
+              <p className="m-0 p-6 text-sm font-semibold text-[#5f5a58]">Nie znaleziono receptur o podanej nazwie produktu.</p>
+            ) : (
+              <>
+                <div
+                  aria-hidden
+                  className={`hidden md:grid ${currentRole !== 'baker' ? 'md:grid-cols-[minmax(180px,1.2fr)_minmax(120px,0.8fr)_100px_minmax(240px,2fr)_56px]' : 'md:grid-cols-[minmax(180px,1.2fr)_minmax(120px,0.8fr)_100px_minmax(240px,2fr)]'} md:gap-3 items-center px-5 py-3 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#5f5a58]`}
+                >
+                  <span>Produkt końcowy</span>
+                  <span>Kategoria</span>
+                  <span>Składniki</span>
+                  <span>Skład receptury</span>
+                  {currentRole !== 'baker' && <span className="text-center">Akcje</span>}
+                </div>
+                <ul className="m-0 p-0 list-none">
+                  {filteredRecipes.map((recipe) => (
+                    <li key={recipe.product_id} className="border-t border-[#e6e1df]">
+                      <div
+                        className={`flex flex-col md:grid ${currentRole !== 'baker' ? 'md:grid-cols-[minmax(180px,1.2fr)_minmax(120px,0.8fr)_100px_minmax(240px,2fr)_56px]' : 'md:grid-cols-[minmax(180px,1.2fr)_minmax(120px,0.8fr)_100px_minmax(240px,2fr)]'} md:gap-3 md:items-center gap-2 px-4 md:px-5 py-3 transition-colors hover:bg-[#f3efed]`}
+                      >
+                        <span className="min-w-0 flex flex-col gap-0.5">
+                          <span className="text-[15px] font-extrabold text-bakery-dark">{recipe.name}</span>
+                          <span className="md:hidden text-xs font-semibold text-[#5f5a58]">
+                            {CATEGORY_LABELS[recipe.category] ?? recipe.category} · {recipe.items.length} składn.
+                          </span>
+                        </span>
+                        <span className="hidden md:block text-[13px] font-semibold text-[#3d3937]">
+                          {CATEGORY_LABELS[recipe.category] ?? recipe.category}
+                        </span>
+                        <span className="hidden md:block text-[13px] font-bold tabular-nums text-[#3d3937]">
+                          {recipe.items.length}
+                        </span>
+                        <span className="flex min-w-0 flex-wrap gap-1.5">
+                          {recipe.items.map((item, index) => (
+                            <span key={index} className="bg-white border border-bakery-btnBorder px-2.5 py-1 rounded-lg text-[#4a4543] font-semibold text-[11px]">
+                              {item.ingredient_name}: <span className="text-bakery-dark font-extrabold">{item.amount} {item.unit}</span>
+                            </span>
+                          ))}
+                        </span>
+                        {currentRole !== 'baker' && (
+                          <span className="flex justify-end md:justify-center">
+                            <button
+                              type="button"
+                              aria-label={`Edytuj recepturę: ${recipe.name}`}
+                              onClick={() => handleOpenEditRecipe(recipe)}
+                              className="size-9 inline-flex items-center justify-center rounded-lg bg-white hover:bg-bakery-dark hover:text-white border border-bakery-btnBorder text-bakery-dark transition-colors"
+                            >
+                              <Pencil aria-hidden className="size-4" />
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
         </div>
       )}
 
