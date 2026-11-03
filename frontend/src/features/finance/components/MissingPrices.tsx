@@ -1,29 +1,18 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { setIngredientPrice, type MissingIngredientPrice } from '../../../services/api';
 
-function PriceForm({
-  offerId,
-  supplier,
-  unit,
-  onSaved,
-}: {
-  offerId: number;
-  supplier: string;
-  unit: string;
-  onSaved: () => void;
-}) {
+function PriceForm({ ingredientId, unit, onSaved }: { ingredientId: number; unit: string; onSaved: () => void }) {
   const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputId = `price-${offerId}`;
+  const inputId = `price-${ingredientId}`;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await setIngredientPrice(offerId, price.trim());
+      await setIngredientPrice(ingredientId, price.trim());
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nie udało się zapisać ceny.');
@@ -34,7 +23,7 @@ function PriceForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-1">
       <label htmlFor={inputId} className="text-xs font-bold">
-        {supplier}
+        Cena magazynowa
       </label>
       <div className="flex items-center gap-2">
         <span className="relative flex-1 flex">
@@ -79,7 +68,8 @@ export function MissingPrices({ items, onSaved }: { items: MissingIngredientPric
           Brakujące ceny składników
         </h2>
         <p className="m-0 text-[13px] font-semibold">
-          Bez nich koszt produktu jest zaniżony, a marża wygląda lepiej niż w rzeczywistości. Wpisz ostatnią cenę zakupu.
+          Bez nich koszt produktu jest zaniżony, a marża wygląda lepiej niż w rzeczywistości. Wpisz aktualną cenę
+          surowca w magazynie – kolejne przyjęcia dostaw przeliczą ją średnią ważoną.
         </p>
       </div>
 
@@ -90,24 +80,7 @@ export function MissingPrices({ items, onSaved }: { items: MissingIngredientPric
               <strong className="text-sm">{item.name}</strong>
               <span className="text-xs font-semibold">Używają: {item.products.join(', ')}</span>
             </span>
-            {item.suppliers.length > 0 ? (
-              item.suppliers.map((offer) => (
-                <PriceForm
-                  key={offer.supplier_ingredient_id}
-                  offerId={offer.supplier_ingredient_id}
-                  supplier={offer.supplier}
-                  unit={item.unit}
-                  onSaved={onSaved}
-                />
-              ))
-            ) : (
-              <span className="text-xs font-semibold">
-                Żaden dostawca nie ma tego składnika w asortymencie.{' '}
-                <Link to="/contractors" className="font-extrabold text-[#5c3b06]">
-                  Dodaj go u dostawcy →
-                </Link>
-              </span>
-            )}
+            <PriceForm ingredientId={item.ingredient_id} unit={item.unit} onSaved={onSaved} />
           </li>
         ))}
       </ul>

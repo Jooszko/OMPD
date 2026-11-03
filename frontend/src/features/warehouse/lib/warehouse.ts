@@ -173,6 +173,19 @@ export function nearestIndex(points: ChartPoint[], x: number): number {
   return Math.max(0, Math.min(points.length - 1, Math.round(x / step)));
 }
 
+export function weightedPrice(held: number, price: number | null, amount: number, unitPrice: number): number {
+  const weight = Math.max(held, 0);
+  if (price === null || weight === 0) return unitPrice;
+  return Math.round(((weight * price + amount * unitPrice) / (weight + amount)) * 100) / 100;
+}
+
+export function parsePrice(text: string): number | null {
+  const normalized = text.trim().replace(/\s/g, '').replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return value > 0 ? value : null;
+}
+
 export function parseQuantity(text: string): number | null {
   const normalized = text.trim().replace(/\s/g, '').replace(',', '.');
   if (!/^\d+(\.\d{1,3})?$/.test(normalized)) return null;

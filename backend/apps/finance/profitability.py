@@ -7,7 +7,6 @@ from orders.models import DailyOrder, ProductReturn
 from products.models import Product, Recipe
 
 from .calculations import COGS_STATUSES, MONEY, ZERO, ingredient_prices
-from .models import SupplierIngredient
 from .overview import money
 
 SALE_VALUE = ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=MONEY)
@@ -102,20 +101,12 @@ def _missing_prices(recipes, prices):
                 used_in[ingredient.ingredient_id].add(product.name)
                 ingredients[ingredient.ingredient_id] = ingredient
 
-    offers = defaultdict(list)
-    catalog = SupplierIngredient.objects.filter(
-        ingredient_id__in=ingredients.keys(), is_assigned=True,
-    ).select_related('supplier')
-    for item in catalog.order_by('supplier__name'):
-        offers[item.ingredient_id].append({'supplier_ingredient_id': item.pk, 'supplier': item.supplier.name})
-
     return [
         {
             'ingredient_id': ingredient_id,
             'name': ingredient.name,
             'unit': ingredient.unit,
             'products': sorted(used_in[ingredient_id]),
-            'suppliers': offers[ingredient_id],
         }
         for ingredient_id, ingredient in sorted(ingredients.items(), key=lambda item: item[1].name)
     ]

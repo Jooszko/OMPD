@@ -6,10 +6,10 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from clients.models import Client, Route
-from finance.models import Expense, Supplier, SupplierIngredient
+from finance.models import Expense
 from finance.statement import build_statement, period_bounds, period_label, previous_bounds
 from orders.models import DailyOrder
-from products.models import Ingredient, Product, Recipe, StockMovement
+from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from users.models import User
 
 URL = '/api/finance/statement/'
@@ -68,9 +68,7 @@ class StatementTests(TestCase):
     def test_raw_material_lines_split_recipe_use_and_stock_losses(self):
         flour = Ingredient.objects.create(name='Mąka St', unit='kg')
         Recipe.objects.create(product=self.bread, ingredient=flour, amount=Decimal('0.500'))
-        SupplierIngredient.objects.create(
-            supplier=Supplier.objects.create(name='Młyn St'), ingredient=flour, last_price=Decimal('4.00'),
-        )
+        IngredientStock.objects.create(ingredient=flour, current_price=Decimal('4.00'))
         self.sale(date(2026, 9, 5), 10)
         StockMovement.objects.create(
             ingredient=flour, kind=StockMovement.KIND_COUNT, quantity=Decimal('-2'), balance_after=Decimal('0'),

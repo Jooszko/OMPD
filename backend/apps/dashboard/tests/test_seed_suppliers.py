@@ -3,6 +3,7 @@ from django.test import TestCase
 from finance.models import Supplier, SupplierIngredient
 from dashboard.seed.products import create_ingredients
 from dashboard.seed.suppliers import create_supplier_ingredients, create_suppliers
+from products.models import IngredientStock
 
 
 class SeedSuppliersTests(TestCase):
@@ -23,3 +24,9 @@ class SeedSuppliersTests(TestCase):
 
         self.assertEqual(len(links), 20)
         self.assertEqual(SupplierIngredient.objects.count(), 20)
+
+    def test_supplier_prices_become_warehouse_prices(self):
+        links = create_supplier_ingredients(create_suppliers(), self.ingredients)
+
+        for link in links:
+            self.assertEqual(IngredientStock.objects.get(ingredient=link.ingredient).current_price, link.last_price)

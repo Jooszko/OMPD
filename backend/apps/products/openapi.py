@@ -31,6 +31,14 @@ class RecipeCreateSerializer(serializers.Serializer):
 class RecipeUpdateSerializer(serializers.Serializer):
     items = RecipeItemInputSerializer(many=True, help_text='Pełny nowy skład – zastępuje dotychczasowy.')
 
+class DeliveryOfferSerializer(serializers.Serializer):
+    supplier_id = serializers.IntegerField()
+    name = serializers.CharField()
+    price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, allow_null=True, help_text='Cena u dostawcy za jednostkę.'
+    )
+
+
 class WarehouseRowSerializer(serializers.Serializer):
     ingredient_id = serializers.IntegerField()
     name = serializers.CharField()
@@ -45,6 +53,11 @@ class WarehouseRowSerializer(serializers.Serializer):
     days_left = serializers.FloatField(allow_null=True, help_text='Na ile dni wystarczy stan przy średnim zużyciu.')
     last_delivery_at = serializers.DateTimeField(allow_null=True)
     updated_at = serializers.DateTimeField(allow_null=True)
+    current_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, allow_null=True,
+        help_text='Cena magazynowa za jednostkę: średnia ważona ilością ze stanu i przyjętych dostaw.',
+    )
+    suppliers = DeliveryOfferSerializer(many=True, help_text='Aktywni dostawcy, u których surowiec jest przypisany.')
 
 
 class WarehouseSerializer(serializers.Serializer):

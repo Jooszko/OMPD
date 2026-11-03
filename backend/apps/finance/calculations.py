@@ -2,12 +2,12 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Avg, DecimalField, ExpressionWrapper, F, Sum
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 
 from orders.models import DailyOrder, ProductReturn
-from products.models import Recipe, StockMovement
+from products.models import IngredientStock, Recipe, StockMovement
 
-from .models import Expense, SupplierIngredient
+from .models import Expense
 
 ZERO = Decimal('0')
 MONEY = DecimalField(max_digits=12, decimal_places=2)
@@ -41,14 +41,10 @@ def returns_by_day(start, end):
 
 
 def ingredient_prices():
-    """Average last purchase price of each ingredient across its suppliers."""
     return dict(
-        SupplierIngredient.objects
-        .filter(is_assigned=True)
-        .exclude(last_price__isnull=True)
-        .values('ingredient_id')
-        .annotate(avg_price=Avg('last_price'))
-        .values_list('ingredient_id', 'avg_price')
+        IngredientStock.objects
+        .exclude(current_price__isnull=True)
+        .values_list('ingredient_id', 'current_price')
     )
 
 

@@ -1,9 +1,9 @@
 from decimal import Decimal
 
 from finance.models import Supplier, SupplierIngredient
+from products.models import IngredientStock
 
 SUPPLIER_DATA = [
-    # (name, phone, email, address, is_active)
     ('Młyn „Złoty Kłos"', '123-456-789', 'biuro@zlotyklos.pl', 'Cieszyn, ul. Młyńska 5', True),
     ('Hurtownia Surowców „BakeryTrade"', '987-654-321', 'zamowienia@bakerytrade.pl', 'Bielsko-Biała, ul. Piekarska 10', True),
     ('Cukiernia Hurt „SłodkiPak"', '111-222-333', 'kontakt@slodkipak.pl', 'Katowice, ul. Cukrowa 8', True),
@@ -45,5 +45,6 @@ def create_supplier_ingredients(suppliers, ingredients):
             ingredient=ingredient,
             defaults={'supplier_part_no': part_no, 'last_price': price},
         )
+        IngredientStock.objects.filter(ingredient=ingredient).update(current_price=link.last_price)
         links.append(link)
     return links

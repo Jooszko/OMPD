@@ -6,9 +6,9 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from clients.models import Client, Route
-from finance.models import Expense, Supplier, SupplierIngredient
+from finance.models import Expense
 from orders.models import DailyOrder, ProductReturn
-from products.models import Ingredient, Product, StockMovement
+from products.models import Ingredient, IngredientStock, Product, StockMovement
 from users.models import User
 
 URL = '/api/finance/overview/'
@@ -100,9 +100,7 @@ class FinanceOverviewTests(TestCase):
 
     def test_cost_structure_adds_stock_losses_to_raw_materials(self):
         flour = Ingredient.objects.create(name='Mąka Ov', unit='kg')
-        SupplierIngredient.objects.create(
-            supplier=Supplier.objects.create(name='Młyn Ov'), ingredient=flour, last_price=Decimal('4.00'),
-        )
+        IngredientStock.objects.create(ingredient=flour, current_price=Decimal('4.00'))
         StockMovement.objects.create(
             ingredient=flour, kind=StockMovement.KIND_LOSS, quantity=Decimal('-5'), balance_after=Decimal('0'),
             created_at=timezone.make_aware(datetime(2026, 9, 4, 12)),
