@@ -6,11 +6,13 @@ import {
   formatDays,
   headline,
   nearestIndex,
+  parsePrice,
   parseQuantity,
   stockBar,
   stockStatus,
   summary,
   toStockItem,
+  weightedPrice,
 } from './warehouse';
 
 function row(overrides: Partial<WarehouseRow>): WarehouseRow {
@@ -24,6 +26,8 @@ function row(overrides: Partial<WarehouseRow>): WarehouseRow {
     days_left: 20,
     last_delivery_at: null,
     updated_at: null,
+    current_price: null,
+    suppliers: [],
     ...overrides,
   };
 }
@@ -88,6 +92,25 @@ describe('stockBar', () => {
   it('places the minimum at a quarter of the bar and caps overflow', () => {
     expect(stockBar(toStockItem(row({ current_stock: '20' }))).fill).toBeCloseTo(1 / 4);
     expect(stockBar(toStockItem(row({ current_stock: '100' })))).toEqual({ fill: 1, overflow: true });
+  });
+});
+
+describe('weightedPrice', () => {
+  it('weights the stock price and the delivery price by quantity', () => {
+    expect(weightedPrice(100, 2, 50, 3)).toBe(2.33);
+    expect(weightedPrice(0, 2, 10, 3)).toBe(3);
+    expect(weightedPrice(-5, 2, 10, 3)).toBe(3);
+    expect(weightedPrice(40, null, 10, 3)).toBe(3);
+  });
+});
+
+describe('parsePrice', () => {
+  it('accepts a positive price with up to two decimals', () => {
+    expect(parsePrice('4,50')).toBe(4.5);
+    expect(parsePrice(' 12 ')).toBe(12);
+    expect(parsePrice('0')).toBeNull();
+    expect(parsePrice('1,234')).toBeNull();
+    expect(parsePrice('tanio')).toBeNull();
   });
 });
 

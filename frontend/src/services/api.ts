@@ -528,6 +528,12 @@ export async function updateIngredient(
   return handleJsonResponse(response);
 }
 
+export interface DeliveryOffer {
+  supplier_id: number;
+  name: string;
+  price: string | null;
+}
+
 export interface WarehouseRow {
   ingredient_id: number;
   name: string;
@@ -538,6 +544,8 @@ export interface WarehouseRow {
   days_left: number | null;
   last_delivery_at: string | null;
   updated_at: string | null;
+  current_price: string | null;
+  suppliers: DeliveryOffer[];
 }
 
 export type StockMovementKind = 'initial' | 'delivery' | 'production' | 'loss' | 'count';
@@ -581,7 +589,13 @@ export async function fetchStockHistory(ingredientId: number, days: number): Pro
 
 export async function adjustStock(
   ingredientId: number,
-  payload: { kind: StockAdjustmentKind; quantity: string; note?: string }
+  payload: {
+    kind: StockAdjustmentKind;
+    quantity: string;
+    note?: string;
+    supplier_id?: number | null;
+    unit_price?: string | null;
+  }
 ): Promise<WarehouseRow> {
   const response = await apiFetch(`${API_BASE}/products/ingredients/${ingredientId}/stock/`, {
     method: 'POST',
@@ -1735,7 +1749,6 @@ export interface MissingIngredientPrice {
   name: string;
   unit: string;
   products: string[];
-  suppliers: { supplier_ingredient_id: number; supplier: string }[];
 }
 
 export interface Profitability {
@@ -1750,8 +1763,8 @@ export async function fetchProfitability(start: string, end: string): Promise<Pr
   return (await ensureOk(await apiFetch(`${API_BASE}/finance/profitability/?${params}`))).json();
 }
 
-export async function setIngredientPrice(supplierIngredientId: number, price: string): Promise<void> {
-  await sendJson(`${API_BASE}/finance/supplier-ingredients/${supplierIngredientId}/`, 'PATCH', { last_price: price });
+export async function setIngredientPrice(ingredientId: number, price: string): Promise<void> {
+  await sendJson(`${API_BASE}/finance/ingredient-prices/${ingredientId}/`, 'PATCH', { current_price: price });
 }
 
 export type ReportPeriodKind = 'month' | 'quarter' | 'year';

@@ -190,8 +190,8 @@ export default function ProfitabilityTab() {
           <section className="bg-bakery-card border border-bakery-btnBorder rounded-[14px] shadow-sm p-5 flex flex-col gap-2">
             <h2 className="m-0 text-base font-extrabold">Jak liczymy marżę</h2>
             <p className="m-0 text-[13px] leading-relaxed text-[#3d3937]">
-              Koszt surowców to składniki z receptury produktu pomnożone przez ostatnią cenę u dostawcy (średnią, gdy
-              dostawców jest kilku). Marża w okresie to przychód po zwrotach minus surowce wszystkich upieczonych sztuk.
+              Koszt surowców to składniki z receptury produktu pomnożone przez cenę magazynową surowca – średnią
+              ważoną ze stanu w magazynie i przyjętych dostaw. Marża w okresie to przychód po zwrotach minus surowce wszystkich upieczonych sztuk.
               Nie obejmuje pracy, energii ani transportu – te koszty widać w zakładce Wydatki.
             </p>
           </section>

@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from audit.models import AuditEntry
 from clients.models import Client, Route
+from finance.models import Supplier, SupplierIngredient
 from orders.models import DailyOrder
 from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from products.stock import recalculate_min_stock, record_movement, warehouse_row
@@ -114,10 +115,26 @@ class WarehouseApiTests(TestCase):
         self.admin = User.objects.create_user(username='admin_wh', password='x', role='admin', full_name='Admin')
         self.baker = User.objects.create_user(username='baker_wh', password='x', role='baker', full_name='Piekarz')
         self.flour = Ingredient.objects.create(name='Mąka', unit='kg')
-        IngredientStock.objects.create(ingredient=self.flour, current_stock=Decimal('100'), min_stock_level=Decimal('20'))
+        IngredientStock.objects.create(
+            ingredient=self.flour, current_stock=Decimal('100'), min_stock_level=Decimal('20'),
+            current_price=Decimal('2.00'),
+        )
+        self.mill = Supplier.objects.create(name='Młyn')
+        self.offer = SupplierIngredient.objects.create(
+            supplier=self.mill, ingredient=self.flour, last_price=Decimal('3.00')
+        )
 
     def _stock(self):
         return IngredientStock.objects.get(ingredient=self.flour).current_stock
+
+    def _price(self):
+        return IngredientStock.objects.get(ingredient=self.flour).current_price
+
+    def _deliver(self, quantity, supplier_id):
+        return self.api.post(
+            f'/api/products/ingredients/{self.flour.pk}/stock/',
+            {'kind': 'delivery', 'quantity': quantity, 'supplier_id': supplier_id}, format='json',
+        )
 
     def test_admin_creates_ingredient_with_initial_stock(self):
         self.api.force_authenticate(self.admin)
@@ -142,7 +159,10 @@ class WarehouseApiTests(TestCase):
         self.api.force_authenticate(self.baker)
         url = f'/api/products/ingredients/{self.flour.pk}/stock/'
 
-        self.assertEqual(self.api.post(url, {'kind': 'delivery', 'quantity': '50'}, format='json').status_code, 200)
+        self.assertEqual(
+            self.api.post(url, {'kind': 'delivery', 'quantity': '50', 'supplier_id': self.mill.pk}, format='json').status_code,
+            200,
+        )
         self.assertEqual(self._stock(), Decimal('150'))
         self.assertEqual(self.api.post(url, {'kind': 'loss', 'quantity': '10', 'note': 'Zawilgocony worek'}, format='json').status_code, 200)
         self.assertEqual(self._stock(), Decimal('140'))
@@ -155,6 +175,93 @@ class WarehouseApiTests(TestCase):
             [Decimal('50'), Decimal('-10'), Decimal('-2.5')],
         )
         self.assertEqual(AuditEntry.objects.filter(action__startswith='stock.').count(), 3)
+
+    def test_delivery_updates_weighted_average_price(self):
+        self.api.force_authenticate(self.baker)
+
+        response = self._deliver('50', self.mill.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._stock(), Decimal('150'))
+        self.assertEqual(self._price(), Decimal('2.33'))
+        self.assertEqual(response.data['current_price'], '2.33')
+        movement = StockMovement.objects.get(kind=StockMovement.KIND_DELIVERY)
+        self.assertEqual(movement.note, 'Młyn')
+        changes = AuditEntry.objects.get(action='stock.delivery').changes
+        self.assertEqual(changes[1], {
+            'field': 'current_price', 'label': 'Cena magazynowa', 'old': '2.00 zł/kg', 'new': '2.33 zł/kg',
+        })
+
+    def test_delivery_to_empty_stock_takes_supplier_price(self):
+        IngredientStock.objects.filter(ingredient=self.flour).update(current_stock=Decimal('0'), current_price=None)
+        self.api.force_authenticate(self.baker)
+
+        self._deliver('10', self.mill.pk)
+
+        self.assertEqual(self._price(), Decimal('3.00'))
+
+    def test_loss_and_count_keep_price(self):
+        self.api.force_authenticate(self.baker)
+        url = f'/api/products/ingredients/{self.flour.pk}/stock/'
+
+        self.api.post(url, {'kind': 'loss', 'quantity': '10'}, format='json')
+        self.api.post(url, {'kind': 'count', 'quantity': '120'}, format='json')
+
+        self.assertEqual(self._price(), Decimal('2.00'))
+
+    def test_delivery_needs_active_assigned_supplier_with_price(self):
+        self.api.force_authenticate(self.baker)
+        idle = Supplier.objects.create(name='Stary młyn', is_active=False)
+        SupplierIngredient.objects.create(supplier=idle, ingredient=self.flour, last_price=Decimal('1.00'))
+        unassigned = Supplier.objects.create(name='Odpięty młyn')
+        SupplierIngredient.objects.create(
+            supplier=unassigned, ingredient=self.flour, last_price=Decimal('1.00'), is_assigned=False
+        )
+        unpriced = Supplier.objects.create(name='Młyn bez ceny')
+        SupplierIngredient.objects.create(supplier=unpriced, ingredient=self.flour)
+
+        for supplier_id in (None, idle.pk, unassigned.pk, unpriced.pk):
+            with self.subTest(supplier_id=supplier_id):
+                response = self._deliver('10', supplier_id)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('supplier_id', response.data)
+        self.assertEqual(self._stock(), Decimal('100'))
+        self.assertEqual(self._price(), Decimal('2.00'))
+
+    def test_own_delivery_uses_entered_price(self):
+        self.api.force_authenticate(self.baker)
+
+        response = self.api.post(
+            f'/api/products/ingredients/{self.flour.pk}/stock/',
+            {'kind': 'delivery', 'quantity': '100', 'unit_price': '4.00', 'note': 'Makro'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._stock(), Decimal('200'))
+        self.assertEqual(self._price(), Decimal('3.00'))
+        self.assertEqual(StockMovement.objects.get(kind=StockMovement.KIND_DELIVERY).note, 'Dostawa własna · Makro')
+
+    def test_own_delivery_needs_positive_price(self):
+        self.api.force_authenticate(self.baker)
+
+        for price in ('0', '-1', 'tanio'):
+            with self.subTest(price=price):
+                response = self.api.post(
+                    f'/api/products/ingredients/{self.flour.pk}/stock/',
+                    {'kind': 'delivery', 'quantity': '10', 'unit_price': price}, format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._stock(), Decimal('100'))
+
+    def test_warehouse_lists_active_assigned_suppliers(self):
+        idle = Supplier.objects.create(name='Stary młyn', is_active=False)
+        SupplierIngredient.objects.create(supplier=idle, ingredient=self.flour, last_price=Decimal('1.00'))
+        self.api.force_authenticate(self.baker)
+
+        row = self.api.get('/api/products/warehouse/').data['items'][0]
+
+        self.assertEqual(row['current_price'], '2.00')
+        self.assertEqual(row['suppliers'], [{'supplier_id': self.mill.pk, 'name': 'Młyn', 'price': '3.00'}])
 
     def test_loss_above_stock_is_rejected(self):
         self.api.force_authenticate(self.baker)

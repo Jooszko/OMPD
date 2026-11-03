@@ -9,7 +9,7 @@ from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport, RecurringExpense
 from .serializers import SupplierSerializer
-from products.models import Ingredient
+from products.models import Ingredient, IngredientStock
 from django.db import transaction
 from audit.services import field_changes, record_event, snapshot
 from .overview import build_overview
@@ -426,42 +426,48 @@ class ProfitabilityView(APIView):
         return Response(build_profitability(*period))
 
 
-class SupplierIngredientPriceView(APIView):
+class IngredientPriceView(APIView):
     permission_classes = [AdminOnly]
 
     @extend_schema(
-        summary='Zmiana ceny surowca u dostawcy',
-        description='Cena służy do liczenia kosztu surowców i rentowności produktów.',
+        summary='Zmiana ceny magazynowej surowca',
+        description=(
+            'Cena służy do liczenia kosztu surowców i rentowności produktów. '
+            'Kolejne przyjęcia dostaw przeliczają ją średnią ważoną.'
+        ),
         request=PriceInputSerializer,
         responses={
             200: PriceResultSerializer,
             400: error_response('Nieprawidłowa cena.'),
-            404: OpenApiResponse(description='Nie znaleziono pozycji asortymentu.'),
+            404: OpenApiResponse(description='Nie znaleziono surowca.'),
         },
     )
     def patch(self, request, pk):
-        item = get_object_or_404(SupplierIngredient.objects.select_related('supplier', 'ingredient'), pk=pk)
-        price, error = parse_price(request.data.get('last_price'))
+        ingredient = get_object_or_404(Ingredient, pk=pk)
+        price, error = parse_price(request.data.get('current_price'))
         if error:
             return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
 
-        unit = item.ingredient.unit
-        before = price_label(item.last_price, unit)
+        unit = ingredient.unit
         with transaction.atomic():
-            item.last_price = price
-            item.save(update_fields=['last_price', 'updated_at'])
+            stock, _ = IngredientStock.objects.select_for_update().get_or_create(ingredient=ingredient)
+            before = price_label(stock.current_price, unit)
+            stock.current_price = price
+            stock.save(update_fields=['current_price', 'updated_at'])
             if before != price_label(price, unit):
                 record_event(
-                    request, category='finance', action='supplier.price_changed', obj=item.supplier,
-                    object_label=f'{item.supplier.name} – {item.ingredient.name}',
-                    description=f'Zmieniono cenę surowca „{item.ingredient.name}” u dostawcy {item.supplier.name}.',
-                    changes=[{'field': 'last_price', 'label': 'Cena', 'old': before, 'new': price_label(price, unit)}],
+                    request, category='finance', action='ingredient.price_changed', obj=ingredient,
+                    object_label=ingredient.name,
+                    description=f'Zmieniono cenę magazynową surowca „{ingredient.name}”.',
+                    changes=[{
+                        'field': 'current_price', 'label': 'Cena magazynowa',
+                        'old': before, 'new': price_label(price, unit),
+                    }],
                 )
         return Response({
-            'supplier_ingredient_id': item.pk,
-            'supplier': item.supplier.name,
-            'ingredient': item.ingredient.name,
-            'last_price': str(item.last_price),
+            'ingredient_id': ingredient.pk,
+            'ingredient': ingredient.name,
+            'current_price': str(stock.current_price),
         })
 def _statement_period(params):
     kind = params.get('period', 'month')

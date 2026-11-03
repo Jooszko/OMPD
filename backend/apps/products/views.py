@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from audit.services import field_changes, record_event
+from finance.models import SupplierIngredient
 from users.permissions import AdminOnly, AdminOrBaker
 from .models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from .serializers import (
@@ -111,6 +112,10 @@ def _amount(value):
     return f'{value.normalize():f}'
 
 
+def _price(value, unit):
+    return f'{value} zł/{unit}' if value is not None else 'brak'
+
+
 def _ingredient_state(ingredient):
     return {'name': ingredient.name, 'unit': ingredient.unit}
 
@@ -182,12 +187,54 @@ class IngredientStockView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
+        unit_price = None
+        note = data['note']
+        if data['kind'] == StockMovement.KIND_DELIVERY and data['supplier_id'] is None:
+            if data['unit_price'] is None:
+                return Response(
+                    {'supplier_id': ['Wybierz dostawcę albo dostawę własną z ceną.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            unit_price = data['unit_price']
+            note = ' · '.join(filter(None, ['Dostawa własna', note]))[:200]
+        elif data['kind'] == StockMovement.KIND_DELIVERY:
+            offer = SupplierIngredient.objects.select_related('supplier').filter(
+                ingredient=ingredient, supplier_id=data['supplier_id'], is_assigned=True, supplier__is_active=True,
+            ).first()
+            if offer is None:
+                return Response(
+                    {'supplier_id': ['Wybierz aktywnego dostawcę tego surowca.']}, status=status.HTTP_400_BAD_REQUEST
+                )
+            if offer.last_price is None:
+                return Response(
+                    {'supplier_id': ['Ten dostawca nie ma ceny tego surowca. Uzupełnij ją w Kontrahentach.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            unit_price = offer.last_price
+            note = ' · '.join(filter(None, [offer.supplier.name, note]))[:200]
+
         with transaction.atomic():
+            price_before = (
+                IngredientStock.objects.filter(ingredient=ingredient).values_list('current_price', flat=True).first()
+            )
             try:
-                movement = adjust_stock(ingredient, data['kind'], data['quantity'], user=request.user, note=data['note'])
+                movement = adjust_stock(
+                    ingredient, data['kind'], data['quantity'], user=request.user, note=note,
+                    unit_price=unit_price,
+                )
             except StockError as error:
                 return Response({'error': str(error)}, status=status.HTTP_409_CONFLICT)
+            price_after = IngredientStock.objects.get(ingredient=ingredient).current_price
             before = movement.balance_after - movement.quantity
+            changes = [{
+                'field': 'current_stock', 'label': 'Stan magazynowy',
+                'old': f'{before} {ingredient.unit}', 'new': f'{movement.balance_after} {ingredient.unit}',
+            }]
+            if price_after != price_before:
+                changes.append({
+                    'field': 'current_price', 'label': 'Cena magazynowa',
+                    'old': _price(price_before, ingredient.unit), 'new': _price(price_after, ingredient.unit),
+                })
             record_event(
                 request, category='products', action=f'stock.{movement.kind}', obj=ingredient,
                 object_label=ingredient.name,
@@ -195,10 +242,7 @@ class IngredientStockView(APIView):
                     name=ingredient.name, unit=ingredient.unit,
                     amount=_amount(abs(movement.quantity)), balance=_amount(movement.balance_after),
                 ) + (f' {movement.note}' if movement.note else ''),
-                changes=[{
-                    'field': 'current_stock', 'label': 'Stan magazynowy',
-                    'old': f'{before} {ingredient.unit}', 'new': f'{movement.balance_after} {ingredient.unit}',
-                }],
+                changes=changes,
             )
         return Response(warehouse_row(ingredient), status=status.HTTP_200_OK)
 

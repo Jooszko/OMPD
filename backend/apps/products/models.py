@@ -19,6 +19,7 @@ class IngredientStock(models.Model):
     )
     current_stock = models.DecimalField(max_digits=10, decimal_places=3, default=0.000)
     min_stock_level = models.DecimalField(max_digits=10, decimal_places=3, default=0.000)
+    current_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

@@ -12,7 +12,7 @@ from .views import (
     ClosingListView,
     ClosingDetailView,
     FinanceExportView,
-    SupplierIngredientPriceView,
+    IngredientPriceView,
 )
 
 urlpatterns = [
@@ -24,7 +24,7 @@ urlpatterns = [
     path('closings/', ClosingListView.as_view(), name='finance-closings'),
     path('closings/<str:day>/', ClosingDetailView.as_view(), name='finance-closing-detail'),
     path('exports/<str:kind>/', FinanceExportView.as_view(), name='finance-export'),
-    path('supplier-ingredients/<int:pk>/', SupplierIngredientPriceView.as_view(), name='finance-supplier-ingredient-price'),
+    path('ingredient-prices/<int:pk>/', IngredientPriceView.as_view(), name='finance-ingredient-price'),
     path('expenses/', ExpenseListCreateView.as_view(), name='finance-expenses'),
     path('expenses/<int:pk>/', ExpenseDetailView.as_view(), name='finance-expense-detail'),
     path('recurring-expenses/', RecurringExpenseListView.as_view(), name='finance-recurring-expenses'),

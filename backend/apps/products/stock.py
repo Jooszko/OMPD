@@ -10,12 +10,15 @@ from decimal import Decimal
 from django.db.models import Max, Sum
 from django.utils import timezone
 
+from finance.models import SupplierIngredient
+
 from .models import Ingredient, IngredientStock, StockMovement
 
 USAGE_WINDOW_DAYS = 7
 CONSUMPTION_KINDS = (StockMovement.KIND_PRODUCTION, StockMovement.KIND_LOSS)
 MANUAL_KINDS = (StockMovement.KIND_DELIVERY, StockMovement.KIND_LOSS, StockMovement.KIND_COUNT)
 THOUSANDTH = Decimal('0.001')
+CENT = Decimal('0.01')
 
 
 class StockError(Exception):
@@ -38,7 +41,14 @@ def record_movement(ingredient_id, kind, quantity, *, user=None, note='', at=Non
     )
 
 
-def adjust_stock(ingredient, kind, amount, *, user, note=''):
+def weighted_price(stock, amount, unit_price):
+    held = max(stock.current_stock, Decimal('0'))
+    if stock.current_price is None or held == 0:
+        return unit_price.quantize(CENT)
+    return ((held * stock.current_price + amount * unit_price) / (held + amount)).quantize(CENT)
+
+
+def adjust_stock(ingredient, kind, amount, *, user, note='', unit_price=None):
     """Ręczna zmiana z magazynu: przyjęcie, rozchód albo stan z inwentaryzacji."""
     if kind not in MANUAL_KINDS:
         raise StockError('Nieznany rodzaj zmiany stanu.')
@@ -56,7 +66,12 @@ def adjust_stock(ingredient, kind, amount, *, user, note=''):
         delta = -amount
     else:
         delta = amount
-    return record_movement(ingredient.pk, kind, delta, user=user, note=note)
+    movement = record_movement(ingredient.pk, kind, delta, user=user, note=note)
+    if kind == StockMovement.KIND_DELIVERY and unit_price is not None:
+        IngredientStock.objects.filter(pk=ingredient.pk).update(
+            current_price=weighted_price(stock, amount, unit_price)
+        )
+    return movement
 
 
 def weekly_usage(ingredient_ids=None):
@@ -93,6 +108,25 @@ def _iso(value):
     return value.isoformat() if value else None
 
 
+def delivery_offers(ingredient_ids=None):
+    offers = (
+        SupplierIngredient.objects
+        .filter(is_assigned=True, supplier__is_active=True)
+        .select_related('supplier')
+        .order_by('supplier__name')
+    )
+    if ingredient_ids is not None:
+        offers = offers.filter(ingredient_id__in=ingredient_ids)
+    result = defaultdict(list)
+    for offer in offers:
+        result[offer.ingredient_id].append({
+            'supplier_id': offer.supplier_id,
+            'name': offer.supplier.name,
+            'price': str(offer.last_price) if offer.last_price is not None else None,
+        })
+    return result
+
+
 def warehouse_rows(ingredient_ids=None):
     """Surowce ze stanem, progiem, średnim dziennym zużyciem z 7 dni i zapasem w dniach."""
     movements = StockMovement.objects.all()
@@ -102,6 +136,7 @@ def warehouse_rows(ingredient_ids=None):
         ingredients = ingredients.filter(pk__in=ingredient_ids)
 
     usage = weekly_usage(ingredient_ids)
+    offers = delivery_offers(ingredient_ids)
     last_delivery = dict(
         movements.filter(kind=StockMovement.KIND_DELIVERY)
         .values('ingredient_id').annotate(last=Max('created_at')).values_list('ingredient_id', 'last')
@@ -112,6 +147,7 @@ def warehouse_rows(ingredient_ids=None):
         stock = getattr(ingredient, 'stock', None)
         current = stock.current_stock if stock else Decimal('0')
         minimum = stock.min_stock_level if stock else Decimal('0')
+        price = stock.current_price if stock else None
         daily_usage = (usage.get(ingredient.pk, Decimal('0')) / USAGE_WINDOW_DAYS).quantize(THOUSANDTH)
         days_left = round(float(max(current, Decimal('0')) / daily_usage), 1) if daily_usage > 0 else None
         rows.append({
@@ -124,6 +160,8 @@ def warehouse_rows(ingredient_ids=None):
             'days_left': days_left,
             'last_delivery_at': _iso(last_delivery.get(ingredient.pk)),
             'updated_at': _iso(stock.updated_at if stock else None),
+            'current_price': str(price) if price is not None else None,
+            'suppliers': offers.get(ingredient.pk, []),
         })
     return rows
 

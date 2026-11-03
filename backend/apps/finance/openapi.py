@@ -163,12 +163,7 @@ class ProductProfitSerializer(serializers.Serializer):
     revenue = money()
     period_margin = money(allow_null=True)
     has_recipe = serializers.BooleanField()
-    missing_prices = serializers.ListField(child=serializers.CharField(), help_text='Surowce bez ceny u dostawcy.')
-
-
-class SupplierOfferSerializer(serializers.Serializer):
-    supplier_ingredient_id = serializers.IntegerField()
-    supplier = serializers.CharField()
+    missing_prices = serializers.ListField(child=serializers.CharField(), help_text='Surowce bez ceny magazynowej.')
 
 
 class MissingPriceSerializer(serializers.Serializer):
@@ -176,7 +171,6 @@ class MissingPriceSerializer(serializers.Serializer):
     name = serializers.CharField()
     unit = serializers.CharField()
     products = serializers.ListField(child=serializers.CharField())
-    suppliers = SupplierOfferSerializer(many=True)
 
 
 class ProfitabilitySerializer(serializers.Serializer):
@@ -262,11 +256,10 @@ class SupplierInputSerializer(SupplierSerializer):
 
 
 class PriceInputSerializer(serializers.Serializer):
-    last_price = money(allow_null=True)
+    current_price = money(allow_null=True)
 
 
 class PriceResultSerializer(serializers.Serializer):
-    supplier_ingredient_id = serializers.IntegerField()
-    supplier = serializers.CharField()
+    ingredient_id = serializers.IntegerField()
     ingredient = serializers.CharField()
-    last_price = money(allow_null=True)
+    current_price = money(allow_null=True)

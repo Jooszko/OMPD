@@ -6,9 +6,9 @@ from django.utils import timezone
 
 from clients.models import Client, Route
 from finance.calculations import daily_results, period_totals
-from finance.models import Expense, Supplier, SupplierIngredient
+from finance.models import Expense
 from orders.models import DailyOrder, ProductReturn
-from products.models import Ingredient, Product, Recipe, StockMovement
+from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 
 
 class DailyResultsTests(TestCase):
@@ -24,10 +24,8 @@ class DailyResultsTests(TestCase):
         self.yeast = Ingredient.objects.create(name='Drożdże Calc', unit='kg')
         Recipe.objects.create(product=self.bread, ingredient=self.flour, amount=Decimal('0.500'))
         Recipe.objects.create(product=self.bread, ingredient=self.yeast, amount=Decimal('0.010'))
-        mill_a = Supplier.objects.create(name='Młyn A')
-        mill_b = Supplier.objects.create(name='Młyn B')
-        SupplierIngredient.objects.create(supplier=mill_a, ingredient=self.flour, last_price=Decimal('3.00'))
-        SupplierIngredient.objects.create(supplier=mill_b, ingredient=self.flour, last_price=Decimal('5.00'))
+        IngredientStock.objects.create(ingredient=self.flour, current_price=Decimal('4.00'))
+        IngredientStock.objects.create(ingredient=self.yeast)
 
     def order(self, day, quantity, status='delivered'):
         DailyOrder.objects.create(
@@ -62,7 +60,7 @@ class DailyResultsTests(TestCase):
         self.assertEqual(day['returns'], Decimal('10.00'))
         self.assertEqual(day['revenue'], Decimal('90.00'))
 
-    def test_cogs_uses_recipe_and_average_supplier_price(self):
+    def test_cogs_uses_recipe_and_warehouse_price(self):
         self.order(self.day1, 10)
         self.order(self.day1, 2, status='failed')
         self.order(self.day1, 5, status='cancelled')

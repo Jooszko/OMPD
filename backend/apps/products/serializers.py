@@ -50,6 +50,13 @@ class StockAdjustmentSerializer(serializers.Serializer):
         **STOCK_FIELD, help_text='Przyjęcie i rozchód: ilość. Inwentaryzacja: policzony stan.'
     )
     note = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
+    supplier_id = serializers.IntegerField(
+        required=False, allow_null=True, default=None, help_text='Przyjęcie: aktywny dostawca tego surowca.'
+    )
+    unit_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.01'), required=False, allow_null=True, default=None,
+        help_text='Przyjęcie bez dostawcy (dostawa własna): cena za jednostkę.',
+    )
 
 
 class ProductSerializer(serializers.ModelSerializer):

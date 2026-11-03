@@ -4,7 +4,16 @@ import { adjustStock, type StockAdjustmentKind, type WarehouseRow } from '../../
 import { Modal } from '../../dashboard/components/Modal';
 import { ERROR_CLASS, FIELD_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
-import { formatQty, parseQuantity, STATUS_LABELS, stockStatus, type StockItem } from '../lib/warehouse';
+import { formatMoney } from '../../finance/lib/money';
+import {
+  formatQty,
+  parsePrice,
+  parseQuantity,
+  STATUS_LABELS,
+  stockStatus,
+  type StockItem,
+  weightedPrice,
+} from '../lib/warehouse';
 
 const KINDS: {
   kind: StockAdjustmentKind;
@@ -35,6 +44,8 @@ export function StockDialog({
   const [kind, setKind] = useState<StockAdjustmentKind>(initialKind);
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
+  const [source, setSource] = useState<number | 'own' | null>(null);
+  const [priceText, setPriceText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +54,26 @@ export function StockDialog({
   const amount = parseQuantity(quantity);
   const after = amount === null ? null : kind === 'delivery' ? item.current + amount : kind === 'loss' ? item.current - amount : amount;
   const tooMuch = kind === 'loss' && amount !== null && amount > item.current;
-  const invalid = amount === null || (kind !== 'count' && amount <= 0) || tooMuch;
+  const offers = item.suppliers;
+  const delivery = kind === 'delivery';
+  const selected = offers.length === 0 ? 'own' : source;
+  const own = delivery && selected === 'own';
+  const offer = offers.find((option) => option.supplier_id === selected && option.price !== null) ?? null;
+  const ownPrice = parsePrice(priceText);
+  const unitPrice = offer ? Number(offer.price) : own ? ownPrice : null;
+  const currentPrice = item.current_price === null ? null : Number(item.current_price);
+  const newPrice =
+    delivery && unitPrice !== null && amount !== null && amount > 0
+      ? weightedPrice(item.current, currentPrice, amount, unitPrice)
+      : null;
+  const invalid =
+    amount === null || (kind !== 'count' && amount <= 0) || tooMuch || (delivery && unitPrice === null);
+
+  const changeIngredient = (id: number) => {
+    setIngredientId(id);
+    setSource(null);
+    setPriceText('');
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -51,7 +81,13 @@ export function StockDialog({
     setSaving(true);
     setError(null);
     try {
-      const row = await adjustStock(item.ingredient_id, { kind, quantity: String(amount), note: note.trim() });
+      const row = await adjustStock(item.ingredient_id, {
+        kind,
+        quantity: String(amount),
+        note: note.trim(),
+        supplier_id: delivery && offer ? offer.supplier_id : null,
+        unit_price: own && ownPrice !== null ? ownPrice.toFixed(2) : null,
+      });
       onSaved(row, kind);
       onClose();
     } catch (err) {
@@ -89,7 +125,7 @@ export function StockDialog({
           Surowiec
           <select
             value={item.ingredient_id}
-            onChange={(event) => setIngredientId(Number(event.target.value))}
+            onChange={(event) => changeIngredient(Number(event.target.value))}
             className={FIELD_CLASS}
           >
             {items.map((option) => (
@@ -99,6 +135,54 @@ export function StockDialog({
             ))}
           </select>
         </label>
+
+        {delivery && (
+          <label className={LABEL_CLASS}>
+            Dostawca
+            <select
+              value={selected ?? ''}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSource(value === 'own' ? 'own' : value ? Number(value) : null);
+              }}
+              className={FIELD_CLASS}
+            >
+              {offers.length > 0 && <option value="">Wybierz dostawcę</option>}
+              {offers.map((option) => (
+                <option key={option.supplier_id} value={option.supplier_id} disabled={option.price === null}>
+                  {option.name} –{' '}
+                  {option.price === null ? 'brak ceny' : `${formatMoney(option.price, { cents: true })}/${item.unit}`}
+                </option>
+              ))}
+              <option value="own">Dostawa własna – cena ręcznie</option>
+            </select>
+            {offers.length === 0 && (
+              <span className="text-xs font-semibold text-[#5f5a58]">
+                Surowiec nie ma aktywnego dostawcy, więc przyjmujesz go jako dostawę własną.
+              </span>
+            )}
+          </label>
+        )}
+        {own && (
+          <label className={LABEL_CLASS}>
+            Cena za 1 {item.unit}
+            <span className="relative">
+              <input
+                inputMode="decimal"
+                autoComplete="off"
+                value={priceText}
+                onChange={(event) => setPriceText(event.target.value)}
+                placeholder="0,00"
+                aria-invalid={priceText !== '' && ownPrice === null}
+                className={`${FIELD_CLASS} pr-14 tabular-nums`}
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#5f5a58]">zł</span>
+            </span>
+          </label>
+        )}
+        {own && priceText !== '' && ownPrice === null && (
+          <p className={ERROR_CLASS}>Wpisz cenę większą od zera, np. 4,50 (najwyżej 2 miejsca po przecinku).</p>
+        )}
 
         <label className={LABEL_CLASS}>
           {config.field}
@@ -132,6 +216,24 @@ export function StockDialog({
             )}
           </span>
         </div>
+
+        {delivery && newPrice !== null && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#f6f2f0] text-sm font-bold">
+            <span className="text-[#5f5a58]">
+              Cena{' '}
+              <span className="text-bakery-dark tabular-nums">
+                {currentPrice === null ? '—' : `${formatMoney(currentPrice, { cents: true })}/${item.unit}`}
+              </span>
+            </span>
+            <span aria-hidden className="text-[#8a8381]">→</span>
+            <span className="text-[#5f5a58]" aria-live="polite">
+              Po dostawie{' '}
+              <span className="text-bakery-dark font-extrabold tabular-nums">
+                {formatMoney(newPrice, { cents: true })}/{item.unit}
+              </span>
+            </span>
+          </div>
+        )}
 
         {quantity !== '' && amount === null && (
           <p className={ERROR_CLASS}>Wpisz liczbę, np. 12,5 (najwyżej 3 miejsca po przecinku).</p>
