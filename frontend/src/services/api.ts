@@ -508,10 +508,11 @@ export interface IngredientPayload {
   name?: string;
   unit?: string;
   current_stock?: string;
+  current_price?: string;
 }
 
 export async function createIngredient(
-  payload: IngredientPayload & Pick<AppIngredient, 'name' | 'unit'>
+  payload: IngredientPayload & Pick<AppIngredient, 'name' | 'unit'> & { current_price: string }
 ): Promise<WarehouseRow> {
   const response = await apiFetch(`${API_BASE}/products/ingredients/`, {
     method: 'POST',
@@ -523,7 +524,7 @@ export async function createIngredient(
 
 export async function updateIngredient(
   ingredientId: number,
-  payload: Omit<IngredientPayload, 'current_stock'>
+  payload: Omit<IngredientPayload, 'current_stock' | 'current_price'>
 ): Promise<WarehouseRow> {
   const response = await apiFetch(`${API_BASE}/products/ingredients/${ingredientId}/`, {
     method: 'PATCH',
