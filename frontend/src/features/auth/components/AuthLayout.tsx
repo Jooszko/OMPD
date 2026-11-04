@@ -1,15 +1,6 @@
 import type { ReactNode } from 'react';
 import background from '../../../assets/login-background.jpg';
-
-function BreadMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 11c0-3.3 3.6-6 8-6s8 2.7 8 6c0 1.4-.9 2-2 2v5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-5c-1.1 0-2-.6-2-2z" />
-      <path d="M10 9.5v3" />
-      <path d="M14 9.5v3" />
-    </svg>
-  );
-}
+import logo from '../../../assets/logo.png';
 
 export function AuthLayout({
   eyebrow,
@@ -30,10 +21,8 @@ export function AuthLayout({
 
       <div className="relative z-10 flex min-h-dvh flex-col p-3 sm:p-6 lg:px-16 lg:py-12">
         <div className="flex items-center gap-3 px-2 pt-2 sm:px-0 sm:pt-0">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f49f1c] text-[#1c1410] lg:h-11 lg:w-11 lg:rounded-[14px]">
-            <BreadMark />
-          </span>
-          <span className="font-display text-xl font-extrabold tracking-tight lg:text-2xl">OMPD</span>
+          <img src={logo} alt="" aria-hidden className="h-10 w-10 lg:h-11 lg:w-11" />
+          <span className="font-display text-xl font-extrabold tracking-tight lg:text-2xl">BakeryOS</span>
         </div>
 
         <div className="flex flex-1 flex-col justify-end gap-6 pt-10 lg:flex-row lg:items-center lg:justify-between lg:gap-12 lg:pt-0">

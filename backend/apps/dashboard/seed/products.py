@@ -9,163 +9,51 @@ from production.models import BatchIngredient, BatchStageLog, ProductionBatch
 from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from products.stock import recalculate_min_stock
 
+from dashboard.seed.production import product_recipe
+
 INGREDIENT_DATA = [
     # (name, unit, typowe dzienne zużycie, na ile dni starcza obecny stan)
-    ('Mąka pszenna typ 550', 'kg', Decimal('280'), Decimal('16')),
-    ('Mąka żytnia typ 720', 'kg', Decimal('22'), Decimal('12')),
-    ('Mąka pszenna typ 750', 'kg', Decimal('17'), Decimal('18')),
-    ('Woda', 'l', Decimal('175'), Decimal('30')),
-    ('Drożdże świeże', 'kg', Decimal('6.5'), Decimal('9')), 
-    ('Sól', 'kg', Decimal('4.9'), Decimal('21')),
-    ('Cukier', 'kg', Decimal('2.4'), Decimal('17')),
-    ('Masło', 'kg', Decimal('2.9'), Decimal('9.5')), 
-    ('Olej rzepakowy', 'l', Decimal('1.5'), Decimal('1')), 
-    ('Jaja', 'szt', Decimal('14'), Decimal('12')),
-    ('Mleko', 'l', Decimal('11'), Decimal('11')),
-    ('Ser żółty', 'kg', Decimal('0.9'), Decimal('13')),
-    ('Twaróg', 'kg', Decimal('1.2'), Decimal('15')),
-    ('Mak', 'kg', Decimal('0.35'), Decimal('19')),
-    ('Rodzynki', 'kg', Decimal('0.3'), Decimal('14')),
-    ('Cynamon', 'kg', Decimal('0.09'), Decimal('24')),
-    ('Ziarna słonecznika', 'kg', Decimal('0.45'), Decimal('13')),
-    ('Płatki owsiane', 'kg', Decimal('0.6'), Decimal('16')),
-    ('Miód', 'kg', Decimal('0.25'), Decimal('11')),
-    ('Czekolada', 'kg', Decimal('0.9'), Decimal('2')),  
+    ('Mąka pszenna typ 550', 'kg', Decimal('281'), Decimal('16')),
+    ('Mąka pszenna typ 750', 'kg', Decimal('33'), Decimal('18')),
+    ('Mąka pszenna graham typ 1850', 'kg', Decimal('4.8'), Decimal('14')),
+    ('Mąka żytnia typ 720', 'kg', Decimal('47'), Decimal('12')),
+    ('Mąka żytnia razowa typ 2000', 'kg', Decimal('14'), Decimal('15')),
+    ('Woda', 'l', Decimal('219'), Decimal('30')),
+    ('Drożdże świeże', 'kg', Decimal('8.8'), Decimal('9')),
+    ('Sól', 'kg', Decimal('7.8'), Decimal('21')),
+    ('Cukier', 'kg', Decimal('6.7'), Decimal('17')),
+    ('Cukier puder', 'kg', Decimal('0.65'), Decimal('20')),
+    ('Masło', 'kg', Decimal('6.4'), Decimal('9.5')),
+    ('Olej rzepakowy', 'l', Decimal('1.5'), Decimal('1')),
+    ('Jaja', 'szt', Decimal('133'), Decimal('12')),
+    ('Mleko', 'l', Decimal('19.4'), Decimal('11')),
+    ('Ser żółty', 'kg', Decimal('1.1'), Decimal('13')),
+    ('Twaróg', 'kg', Decimal('4.8'), Decimal('15')),
+    ('Mak', 'kg', Decimal('2'), Decimal('19')),
+    ('Rodzynki', 'kg', Decimal('0.93'), Decimal('14')),
+    ('Cynamon', 'kg', Decimal('0.05'), Decimal('24')),
+    ('Ziarna słonecznika', 'kg', Decimal('1.3'), Decimal('13')),
+    ('Konfitura różana', 'kg', Decimal('2.9'), Decimal('2')),
 ]
 
 PRODUCT_DATA = [
-    # (name, category, base_price, current_stock, [(ingredient_name, amount), ...])
-    ('Chleb pszenny 500g', 'bread', Decimal('4.50'), 200, [
-        ('Mąka pszenna typ 550', Decimal('0.500')),
-        ('Woda', Decimal('0.300')),
-        ('Drożdże świeże', Decimal('0.010')),
-        ('Sól', Decimal('0.008')),
-    ]),
-    ('Chleb razowy 500g', 'bread', Decimal('5.20'), 150, [
-        ('Mąka żytnia typ 720', Decimal('0.400')),
-        ('Mąka pszenna typ 550', Decimal('0.100')),
-        ('Woda', Decimal('0.280')),
-        ('Drożdże świeże', Decimal('0.008')),
-        ('Sól', Decimal('0.008')),
-    ]),
-    ('Chleb wiejski 750g', 'bread', Decimal('6.00'), 120, [
-        ('Mąka pszenna typ 750', Decimal('0.500')),
-        ('Mąka żytnia typ 720', Decimal('0.150')),
-        ('Woda', Decimal('0.350')),
-        ('Drożdże świeże', Decimal('0.012')),
-        ('Sól', Decimal('0.010')),
-    ]),
-    ('Chleb na zakwasie', 'bread', Decimal('7.50'), 80, [
-        ('Mąka żytnia typ 720', Decimal('0.450')),
-        ('Woda', Decimal('0.300')),
-        ('Sól', Decimal('0.010')),
-    ]),
-    ('Bagietka francuska', 'bread', Decimal('3.20'), 100, [
-        ('Mąka pszenna typ 550', Decimal('0.250')),
-        ('Woda', Decimal('0.160')),
-        ('Drożdże świeże', Decimal('0.005')),
-        ('Sól', Decimal('0.005')),
-    ]),
-    ('Chleb słonecznikowy', 'bread', Decimal('6.20'), 70, [
-        ('Mąka pszenna typ 550', Decimal('0.350')),
-        ('Ziarna słonecznika', Decimal('0.050')),
-        ('Woda', Decimal('0.220')),
-        ('Drożdże świeże', Decimal('0.010')),
-        ('Sól', Decimal('0.008')),
-    ]),
-    ('Bułka pszenna', 'buns', Decimal('0.80'), 500, [
-        ('Mąka pszenna typ 550', Decimal('0.080')),
-        ('Woda', Decimal('0.045')),
-        ('Drożdże świeże', Decimal('0.002')),
-        ('Sól', Decimal('0.001')),
-    ]),
-    ('Bułka grahamka', 'buns', Decimal('0.90'), 300, [
-        ('Mąka pszenna typ 750', Decimal('0.070')),
-        ('Woda', Decimal('0.040')),
-        ('Drożdże świeże', Decimal('0.002')),
-        ('Sól', Decimal('0.001')),
-    ]),
-    ('Bułka z serem', 'buns', Decimal('1.80'), 120, [
-        ('Mąka pszenna typ 550', Decimal('0.080')),
-        ('Ser żółty', Decimal('0.030')),
-        ('Woda', Decimal('0.040')),
-        ('Drożdże świeże', Decimal('0.002')),
-    ]),
-    ('Bułka mleczna', 'buns', Decimal('1.00'), 180, [
-        ('Mąka pszenna typ 550', Decimal('0.070')),
-        ('Mleko', Decimal('0.040')),
-        ('Cukier', Decimal('0.008')),
-        ('Masło', Decimal('0.010')),
-        ('Drożdże świeże', Decimal('0.002')),
-    ]),
-    ('Rogal maślany', 'buns', Decimal('2.20'), 200, [
-        ('Mąka pszenna typ 550', Decimal('0.100')),
-        ('Masło', Decimal('0.030')),
-        ('Cukier', Decimal('0.010')),
-        ('Drożdże świeże', Decimal('0.003')),
-        ('Jaja', Decimal('0.020')),
-    ]),
-    ('Drożdżówka z serem', 'buns', Decimal('2.50'), 100, [
-        ('Mąka pszenna typ 550', Decimal('0.120')),
-        ('Woda', Decimal('0.050')),
-        ('Drożdże świeże', Decimal('0.004')),
-        ('Cukier', Decimal('0.020')),
-        ('Masło', Decimal('0.030')),
-        ('Olej rzepakowy', Decimal('0.010')),
-    ]),
-    ('Drożdżówka z makiem', 'pastry', Decimal('2.60'), 90, [
-        ('Mąka pszenna typ 550', Decimal('0.120')),
-        ('Mak', Decimal('0.030')),
-        ('Cukier', Decimal('0.020')),
-        ('Masło', Decimal('0.025')),
-        ('Drożdże świeże', Decimal('0.004')),
-    ]),
-    ('Pączek z nadzieniem różanym', 'pastry', Decimal('3.00'), 150, [
-        ('Mąka pszenna typ 550', Decimal('0.100')),
-        ('Jaja', Decimal('0.020')),
-        ('Cukier', Decimal('0.015')),
-        ('Masło', Decimal('0.020')),
-        ('Drożdże świeże', Decimal('0.004')),
-    ]),
-    ('Sernik kawałek', 'pastry', Decimal('6.50'), 40, [
-        ('Twaróg', Decimal('0.200')),
-        ('Jaja', Decimal('0.050')),
-        ('Cukier', Decimal('0.040')),
-        ('Masło', Decimal('0.030')),
-    ]),
-    ('Szarlotka kawałek', 'pastry', Decimal('5.80'), 40, [
-        ('Mąka pszenna typ 550', Decimal('0.080')),
-        ('Masło', Decimal('0.040')),
-        ('Cukier', Decimal('0.030')),
-        ('Jaja', Decimal('0.020')),
-    ]),
-    ('Chałka z rodzynkami', 'pastry', Decimal('8.00'), 50, [
-        ('Mąka pszenna typ 550', Decimal('0.300')),
-        ('Jaja', Decimal('0.040')),
-        ('Cukier', Decimal('0.030')),
-        ('Masło', Decimal('0.030')),
-        ('Rodzynki', Decimal('0.040')),
-        ('Drożdże świeże', Decimal('0.010')),
-    ]),
-    ('Ciasteczka owsiane', 'pastry', Decimal('1.50'), 200, [
-        ('Płatki owsiane', Decimal('0.030')),
-        ('Masło', Decimal('0.015')),
-        ('Cukier', Decimal('0.010')),
-        ('Miód', Decimal('0.005')),
-    ]),
-    ('Croissant czekoladowy', 'pastry', Decimal('3.50'), 90, [
-        ('Mąka pszenna typ 550', Decimal('0.090')),
-        ('Masło', Decimal('0.040')),
-        ('Czekolada', Decimal('0.020')),
-        ('Cukier', Decimal('0.010')),
-    ]),
-    ('Rogalik cynamonowy', 'pastry', Decimal('2.80'), 100, [
-        ('Mąka pszenna typ 550', Decimal('0.090')),
-        ('Cynamon', Decimal('0.005')),
-        ('Cukier', Decimal('0.015')),
-        ('Masło', Decimal('0.025')),
-        ('Drożdże świeże', Decimal('0.003')),
-    ]),
+    # (name, category, base_price, current_stock) — receptura wynika z ciasta i dodatków (seed/production.py)
+    ('Chleb pszenny 500g', 'bread', Decimal('4.50'), 200),
+    ('Chleb razowy 500g', 'bread', Decimal('5.20'), 150),
+    ('Chleb wiejski 750g', 'bread', Decimal('6.00'), 120),
+    ('Chleb na zakwasie', 'bread', Decimal('7.50'), 80),
+    ('Bagietka francuska', 'bread', Decimal('3.20'), 100),
+    ('Chleb słonecznikowy', 'bread', Decimal('6.20'), 70),
+    ('Chałka z rodzynkami', 'bread', Decimal('8.00'), 50),
+    ('Bułka pszenna', 'buns', Decimal('0.80'), 500),
+    ('Bułka grahamka', 'buns', Decimal('0.90'), 300),
+    ('Bułka z serem', 'buns', Decimal('1.80'), 120),
+    ('Bułka mleczna', 'buns', Decimal('1.00'), 180),
+    ('Rogal maślany', 'buns', Decimal('2.20'), 200),
+    ('Drożdżówka z serem', 'buns', Decimal('2.50'), 100),
+    ('Drożdżówka z makiem', 'buns', Decimal('2.60'), 90),
+    ('Drożdżówka cynamonowa', 'buns', Decimal('2.60'), 100),
+    ('Pączek z nadzieniem różanym', 'buns', Decimal('3.00'), 150),
 ]
 
 
@@ -180,12 +68,12 @@ def create_ingredients():
 
 def create_products(ingredients):
     products = {}
-    for name, category, price, stock, recipe in PRODUCT_DATA:
+    for name, category, price, stock in PRODUCT_DATA:
         product, _ = Product.objects.get_or_create(
             name=name,
             defaults={'category': category, 'base_price': price, 'current_stock': stock},
         )
-        for ingredient_name, amount in recipe:
+        for ingredient_name, amount in product_recipe(name).items():
             Recipe.objects.get_or_create(
                 product=product,
                 ingredient=ingredients[ingredient_name],
