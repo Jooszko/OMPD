@@ -22,7 +22,7 @@ function pageTitle(pathname: string, active: string | null): string {
   const item = NAV_GROUPS.flatMap((group) => group.items).find((entry) => entry.path === active);
   if (item) return item.label;
   if (pathname.startsWith('/notifications')) return 'Powiadomienia';
-  return 'Bakery Flow';
+  return 'BakeryOS';
 }
 
 export const DashboardLayout: React.FC = () => {
