@@ -1,6 +1,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
+from finance.calculations import LOSS_BUFFER
 from production.models import Dough, DoughIngredient, Mixer, ProductBakeSpec
 
 MIXER_DATA = [
@@ -9,8 +10,9 @@ MIXER_DATA = [
     ('Mieszałka spiralna mała', Decimal('5.000'), Decimal('40.000')),
 ]
 
-# Jednolity bufor strat technologicznych dla wszystkich ciast (upraszcza przeliczenia kosztów).
-LOSS_BUFFER_PCT = Decimal('5.00')
+# Bufor strat ciasta = ten sam bufor, który finanse doliczają do kosztu surowców,
+# dzięki czemu odważki w produkcji zgadzają się z kosztem w finansach.
+LOSS_BUFFER_PCT = ((LOSS_BUFFER - 1) * 100).quantize(Decimal('0.01'))
 
 # Receptury liczone z procentów piekarskich (mąka = 100 %) na 1 kg gotowego ciasta.
 # Woda i mleko w litrach (1 l ≈ 1 kg), jaja w sztukach (ok. 50 g bez skorupki).
@@ -145,13 +147,15 @@ RECIPE_PRECISION = Decimal('0.001')
 
 
 def product_recipe(product_name):
-    """Receptura jednej sztuki: porcja ciasta (kęs + bufor strat) przeliczona na surowce plus dodatki."""
+    """Receptura jednej sztuki: kęs ciasta przeliczony na surowce plus dodatki.
+
+    Bez bufora strat — doliczają go finanse (LOSS_BUFFER), więc receptura to czysty skład wyrobu.
+    """
     _, dough_name, weight, _, _, extras = next(spec for spec in BAKE_SPEC_DATA if spec[0] == product_name)
-    _, _, loss, _, _, _, _, dough_recipe = next(dough for dough in DOUGH_DATA if dough[0] == dough_name)
-    dough_mass = weight * (1 + loss / 100)
+    *_, dough_recipe = next(dough for dough in DOUGH_DATA if dough[0] == dough_name)
     amounts = defaultdict(Decimal)
     for ingredient_name, per_kg in dough_recipe:
-        amounts[ingredient_name] += per_kg * dough_mass
+        amounts[ingredient_name] += per_kg * weight
     for ingredient_name, amount in extras:
         amounts[ingredient_name] += amount
     return {name: max(amount.quantize(RECIPE_PRECISION), RECIPE_PRECISION) for name, amount in amounts.items()}
