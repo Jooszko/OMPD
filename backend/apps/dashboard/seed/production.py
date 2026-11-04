@@ -9,18 +9,21 @@ MIXER_DATA = [
     ('Mieszałka spiralna mała', Decimal('5.000'), Decimal('40.000')),
 ]
 
+# Jednolity bufor strat technologicznych dla wszystkich ciast (upraszcza przeliczenia kosztów).
+LOSS_BUFFER_PCT = Decimal('5.00')
+
 # Receptury liczone z procentów piekarskich (mąka = 100 %) na 1 kg gotowego ciasta.
 # Woda i mleko w litrach (1 l ≈ 1 kg), jaja w sztukach (ok. 50 g bez skorupki).
 DOUGH_DATA = [
     # (name, mixer_name, loss_buffer_pct, mixing_time_min, target_temp_c, proofing_time_min, instructions, [(ingredient_name, amount_per_kg_of_dough), ...])
-    ('Ciasto pszenne', 'Mieszałka spiralna duża', Decimal('3.00'), 12, Decimal('26.0'), 50,
+    ('Ciasto pszenne', 'Mieszałka spiralna duża', LOSS_BUFFER_PCT, 12, Decimal('26.0'), 50,
      'Mąka i woda 4 min na wolnych obrotach, dodać drożdże, sól na 2 min przed końcem, 8 min na szybkich.', [
          ('Mąka pszenna typ 550', Decimal('0.6013')),
          ('Woda', Decimal('0.3728')),
          ('Drożdże świeże', Decimal('0.0150')),
          ('Sól', Decimal('0.0108')),
      ]),
-    ('Ciasto pszenno-żytnie', 'Mieszałka spiralna duża', Decimal('3.00'), 10, Decimal('27.0'), 60,
+    ('Ciasto pszenno-żytnie', 'Mieszałka spiralna duża', LOSS_BUFFER_PCT, 10, Decimal('27.0'), 60,
      'Mąki z wodą 5 min wolno, autoliza 15 min, następnie drożdże i sól, 5 min szybko.', [
          ('Mąka pszenna typ 750', Decimal('0.4706')),
          ('Mąka żytnia typ 720', Decimal('0.1176')),
@@ -28,7 +31,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0118')),
          ('Sól', Decimal('0.0118')),
      ]),
-    ('Ciasto żytnie na zakwasie', 'Mieszałka spiralna mała', Decimal('4.00'), 8, Decimal('29.0'), 90,
+    ('Ciasto żytnie na zakwasie', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 8, Decimal('29.0'), 90,
      'Zakwas z 40 % mąki żytniej i równej ilości wody nastawić 16 h wcześniej. '
      'Mieszać tylko na wolnych obrotach, bez drożdży, ciasto ma pozostać lepkie.', [
          ('Mąka żytnia typ 720', Decimal('0.4023')),
@@ -36,7 +39,7 @@ DOUGH_DATA = [
          ('Woda', Decimal('0.4138')),
          ('Sól', Decimal('0.0115')),
      ]),
-    ('Ciasto żytnie razowe', 'Mieszałka spiralna mała', Decimal('4.00'), 8, Decimal('29.0'), 60,
+    ('Ciasto żytnie razowe', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 8, Decimal('29.0'), 60,
      'Zakwas z połowy mąki razowej nastawić 16 h wcześniej. Mieszać wolno, '
      'odrobina drożdży tylko dla pewności garu. Kłaść do form.', [
          ('Mąka żytnia razowa typ 2000', Decimal('0.4372')),
@@ -45,7 +48,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0055')),
          ('Sól', Decimal('0.0109')),
      ]),
-    ('Ciasto graham', 'Mieszałka spiralna mała', Decimal('3.00'), 10, Decimal('27.0'), 45,
+    ('Ciasto graham', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 10, Decimal('27.0'), 45,
      'Mąka graham chłonie więcej wody — mieszać 4 min wolno, 6 min szybko, odpoczynek 10 min przed dzieleniem.', [
          ('Mąka pszenna graham typ 1850', Decimal('0.5821')),
          ('Woda', Decimal('0.3842')),
@@ -53,7 +56,7 @@ DOUGH_DATA = [
          ('Sól', Decimal('0.0105')),
          ('Cukier', Decimal('0.0058')),
      ]),
-    ('Ciasto słonecznikowe', 'Mieszałka spiralna mała', Decimal('3.00'), 11, Decimal('26.0'), 55,
+    ('Ciasto słonecznikowe', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 11, Decimal('26.0'), 55,
      'Słonecznik namoczyć 30 min wcześniej i dodać w ostatniej minucie na wolnych obrotach.', [
          ('Mąka pszenna typ 550', Decimal('0.4632')),
          ('Mąka żytnia typ 720', Decimal('0.0817')),
@@ -62,7 +65,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0136')),
          ('Sól', Decimal('0.0109')),
      ]),
-    ('Ciasto maślane', 'Mieszałka spiralna mała', Decimal('2.50'), 12, Decimal('26.0'), 45,
+    ('Ciasto maślane', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 12, Decimal('26.0'), 45,
      'Mąka, mleko, jaja i drożdże 4 min wolno, cukier i sól, masło na ostatnie 3 min.', [
          ('Mąka pszenna typ 550', Decimal('0.5450')),
          ('Mleko', Decimal('0.2997')),
@@ -72,7 +75,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0218')),
          ('Sól', Decimal('0.0082')),
      ]),
-    ('Ciasto chałkowe', 'Mieszałka spiralna mała', Decimal('2.50'), 14, Decimal('25.0'), 60,
+    ('Ciasto chałkowe', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 14, Decimal('25.0'), 60,
      'Masło dodać pod koniec, rodzynki (sparzone) w ostatniej minucie na wolnych obrotach. Pleść z 3–4 wałków.', [
          ('Mąka pszenna typ 550', Decimal('0.4995')),
          ('Mleko', Decimal('0.1998')),
@@ -83,7 +86,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0250')),
          ('Sól', Decimal('0.0060')),
      ]),
-    ('Ciasto drożdżowe słodkie', 'Mieszałka spiralna mała', Decimal('2.50'), 14, Decimal('25.0'), 50,
+    ('Ciasto drożdżowe słodkie', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 14, Decimal('25.0'), 50,
      'Masło dodać pod koniec mieszania, ciasto gładkie i elastyczne. Nadzienie nakładać po dzieleniu.', [
          ('Mąka pszenna typ 550', Decimal('0.5076')),
          ('Mleko', Decimal('0.2284')),
@@ -93,7 +96,7 @@ DOUGH_DATA = [
          ('Drożdże świeże', Decimal('0.0305')),
          ('Sól', Decimal('0.0051')),
      ]),
-    ('Ciasto pączkowe', 'Mieszałka spiralna mała', Decimal('3.00'), 15, Decimal('27.0'), 40,
+    ('Ciasto pączkowe', 'Mieszałka spiralna mała', LOSS_BUFFER_PCT, 15, Decimal('27.0'), 40,
      'Ciasto bogate w żółtka, mieszać do odklejania się od dzieży. Po garze smażyć w oleju w 175 °C, '
      'po 3–4 min z każdej strony, nadziewać po ostudzeniu.', [
          ('Mąka pszenna typ 550', Decimal('0.5208')),
