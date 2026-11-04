@@ -9,7 +9,7 @@ from clients.models import Client, Route
 from finance.models import DailyFinancialReport, Expense
 from orders.models import DailyOrder
 from products.models import Product
-from users.models import User
+from users.models import Notification, User
 
 URL = '/api/finance/closings/'
 
@@ -33,12 +33,24 @@ class ClosingTests(TestCase):
         return self.api.post(URL, {'date': str(day)}, format='json')
 
     def test_closing_freezes_the_day_and_is_logged(self):
+        second_admin = User.objects.create_user(
+            username='second_admin_cl', password='x', role='admin', full_name='Drugi administrator'
+        )
+
         response = self.close(self.yesterday)
 
         report = DailyFinancialReport.objects.get(report_date=self.yesterday)
         self.assertEqual(response.status_code, 201)
         self.assertEqual((report.total_revenue, report.net_profit, report.generated_by), (Decimal('200.00'), Decimal('200.00'), self.admin))
         self.assertEqual(response.data['closed']['closed_by'], 'Anna Admin')
+        notifications = Notification.objects.order_by('user_id')
+        self.assertEqual(set(notifications.values_list('user_id', flat=True)), {self.admin.pk, second_admin.pk})
+        self.assertEqual(set(notifications.values_list('title', flat=True)), {'Zamknięto dzień'})
+        self.assertEqual(
+            set(notifications.values_list('message', flat=True)),
+            {f'Zamknięto dzień {self.yesterday:%d.%m.%Y}.'},
+        )
+        self.assertTrue(all(notification.sender_id == self.admin.pk for notification in notifications))
         entry = AuditEntry.objects.get(action='report.closed')
         self.assertIn(('Zysk netto', None, '200.00'), [(c['label'], c['old'], c['new']) for c in entry.changes])
 
@@ -76,9 +88,14 @@ class ClosingTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(DailyFinancialReport.objects.exists())
+        self.assertEqual(Notification.objects.count(), 1)
         entry = AuditEntry.objects.get(action='report.reopened')
         self.assertIn(('Zysk netto', '200.00', None), [(c['label'], c['old'], c['new']) for c in entry.changes])
         self.assertEqual(self.api.delete(f'{URL}{self.yesterday}/').status_code, 404)
+
+    def test_invalid_closing_does_not_notify_admins(self):
+        self.assertEqual(self.close(self.today + timedelta(days=1)).status_code, 400)
+        self.assertFalse(Notification.objects.exists())
 
     def test_rejects_too_long_or_future_ranges(self):
         far = self.today - timedelta(days=200)

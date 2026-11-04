@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from users.models import Notification, User
 from users.permissions import AdminOnly
 from django.shortcuts import get_object_or_404
 from .models import Supplier, SupplierIngredient, Expense, DailyFinancialReport, RecurringExpense
@@ -590,6 +591,15 @@ class ClosingListView(APIView):
                 description=f'Zamknięto dzień {day:%d.%m.%Y} – kwoty zapisano na stałe.',
                 changes=field_changes({}, _report_amounts(report), REPORT_AUDIT_LABELS),
             )
+            Notification.objects.bulk_create([
+                Notification(
+                    user=admin,
+                    sender=request.user,
+                    title='Zamknięto dzień',
+                    message=f'Zamknięto dzień {day:%d.%m.%Y}.',
+                )
+                for admin in User.objects.filter(role='admin')
+            ])
         return Response(build_closings(day, day)[0], status=status.HTTP_201_CREATED)
 
 

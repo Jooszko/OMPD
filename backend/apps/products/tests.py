@@ -11,7 +11,7 @@ from finance.models import Supplier, SupplierIngredient
 from orders.models import DailyOrder
 from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from products.stock import recalculate_min_stock, record_movement, warehouse_row
-from users.models import User
+from users.models import Notification, User
 
 
 class IngredientCreateApiTests(TestCase):
@@ -191,6 +191,35 @@ class WarehouseApiTests(TestCase):
         self.assertEqual(changes[1], {
             'field': 'current_price', 'label': 'Cena magazynowa', 'old': '2.00 zł/kg', 'new': '2.33 zł/kg',
         })
+
+    def test_delivery_notifies_every_admin_with_ingredient_name(self):
+        second_admin = User.objects.create_user(
+            username='second_admin_wh', password='x', role='admin', full_name='Drugi administrator'
+        )
+        self.api.force_authenticate(self.baker)
+
+        response = self._deliver('50', self.mill.pk)
+
+        self.assertEqual(response.status_code, 200)
+        notifications = Notification.objects.order_by('user_id')
+        self.assertEqual(notifications.count(), 2)
+        self.assertEqual(set(notifications.values_list('user_id', flat=True)), {self.admin.pk, second_admin.pk})
+        self.assertEqual(set(notifications.values_list('title', flat=True)), {'Przyjęto nową dostawę'})
+        self.assertEqual(
+            set(notifications.values_list('message', flat=True)),
+            {'Przyjęto 50 kg surowca: Mąka.'},
+        )
+        self.assertTrue(all(notification.sender_id == self.baker.pk for notification in notifications))
+
+    def test_non_delivery_stock_adjustments_do_not_notify_admins(self):
+        self.api.force_authenticate(self.baker)
+        url = f'/api/products/ingredients/{self.flour.pk}/stock/'
+
+        loss = self.api.post(url, {'kind': 'loss', 'quantity': '10'}, format='json')
+        count = self.api.post(url, {'kind': 'count', 'quantity': '95'}, format='json')
+
+        self.assertEqual((loss.status_code, count.status_code), (200, 200))
+        self.assertFalse(Notification.objects.exists())
 
     def test_delivery_to_empty_stock_takes_supplier_price(self):
         IngredientStock.objects.filter(ingredient=self.flour).update(current_stock=Decimal('0'), current_price=None)

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, ExternalLink } from 'lucide-react';
@@ -7,6 +7,7 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  NOTIFICATIONS_UPDATED_EVENT,
   type AppNotification,
 } from '../../../services/api';
 
@@ -36,20 +37,29 @@ export function NotificationBell({ variant = 'sidebar', collapsed = false }: Not
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const loadNotifications = () => {
+  const loadNotifications = useCallback(() => {
     fetchNotifications()
       .then((data) => {
         setNotifications(data.results);
         setUnreadCount(data.unread_count);
       })
       .catch((err) => console.error('Błąd podczas ładowania powiadomień:', err));
-  };
+  }, []);
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(loadNotifications, 15000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadNotifications();
+    };
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, loadNotifications);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, loadNotifications);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadNotifications]);
 
   useEffect(() => {
     if (!isOpen) return;

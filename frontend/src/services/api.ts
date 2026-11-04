@@ -1,6 +1,11 @@
 import { clearCache } from './offlineCache';
 
 const API_BASE = '/api';
+export const NOTIFICATIONS_UPDATED_EVENT = 'app:notifications-updated';
+
+function notifyNotificationsUpdated(): void {
+  window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
+}
 
 export interface LoginResponse {
   refresh: string;
@@ -602,7 +607,9 @@ export async function adjustStock(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  return handleJsonResponse(response);
+  const row: WarehouseRow = await handleJsonResponse(response);
+  if (payload.kind === 'delivery') notifyNotificationsUpdated();
+  return row;
 }
 
 export async function fetchProducts(): Promise<AppProduct[]> {
@@ -1820,7 +1827,10 @@ export async function fetchClosings(): Promise<ClosingDay[]> {
 }
 
 export async function closeDay(date: string): Promise<ClosingDay> {
-  return (await sendJson(`${API_BASE}/finance/closings/`, 'POST', { date })).json();
+  const response = await sendJson(`${API_BASE}/finance/closings/`, 'POST', { date });
+  const closing: ClosingDay = await response.json();
+  notifyNotificationsUpdated();
+  return closing;
 }
 
 export async function reopenDay(date: string): Promise<void> {
