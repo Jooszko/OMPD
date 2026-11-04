@@ -22,8 +22,8 @@ class SeedSuppliersTests(TestCase):
 
         links = create_supplier_ingredients(suppliers, self.ingredients)
 
-        self.assertEqual(len(links), 20)
-        self.assertEqual(SupplierIngredient.objects.count(), 20)
+        self.assertEqual(len(links), len(self.ingredients))
+        self.assertEqual(SupplierIngredient.objects.count(), len(self.ingredients))
 
     def test_supplier_prices_become_warehouse_prices(self):
         links = create_supplier_ingredients(create_suppliers(), self.ingredients)

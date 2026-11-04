@@ -12,6 +12,8 @@ from finance.models import (
 from orders.models import DailyOrder, DeliveryProof, ProductReturn, StandingOrder
 from production.models import Dough, Mixer, ProductBakeSpec, ProductionPlan
 from products.models import Ingredient, IngredientStock, Product, Recipe
+from dashboard.seed.production import DOUGH_DATA
+from dashboard.seed.products import INGREDIENT_DATA, PRODUCT_DATA
 from users.models import Notification, User
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp()
@@ -29,15 +31,15 @@ class SeedDashboardCommandTests(TestCase):
         self.assertEqual(User.objects.count(), 20)
         self.assertEqual(Route.objects.count(), 6)
         self.assertEqual(Client.objects.count(), 40)
-        self.assertEqual(Ingredient.objects.count(), 20)
-        self.assertEqual(IngredientStock.objects.count(), 20)
-        self.assertEqual(Product.objects.count(), 20)
+        self.assertEqual(Ingredient.objects.count(), len(INGREDIENT_DATA))
+        self.assertEqual(IngredientStock.objects.count(), len(INGREDIENT_DATA))
+        self.assertEqual(Product.objects.count(), len(PRODUCT_DATA))
         self.assertGreater(Recipe.objects.count(), 20)
         self.assertEqual(Mixer.objects.count(), 2)
-        self.assertEqual(Dough.objects.count(), 4)
-        self.assertEqual(ProductBakeSpec.objects.count(), 9)
+        self.assertEqual(Dough.objects.count(), len(DOUGH_DATA))
+        self.assertEqual(ProductBakeSpec.objects.count(), len(PRODUCT_DATA))
         self.assertEqual(Supplier.objects.count(), 10)
-        self.assertEqual(SupplierIngredient.objects.count(), 20)
+        self.assertEqual(SupplierIngredient.objects.count(), len(INGREDIENT_DATA))
         self.assertGreaterEqual(StandingOrder.objects.count(), 45)
         self.assertGreater(DailyOrder.objects.count(), 0)
         self.assertGreater(ProductReturn.objects.count(), 0)
@@ -55,7 +57,7 @@ class SeedDashboardCommandTests(TestCase):
 
         self.assertEqual(User.objects.count(), 20)
         self.assertEqual(Client.objects.count(), 40)
-        self.assertEqual(Product.objects.count(), 20)
+        self.assertEqual(Product.objects.count(), len(PRODUCT_DATA))
 
     def test_seed_dashboard_clear_removes_seed_users(self):
         call_command('seed_dashboard')
