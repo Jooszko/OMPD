@@ -9,6 +9,7 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_sche
 from audit.services import field_changes, record_event
 from finance.models import SupplierIngredient
 from users.permissions import AdminOnly, AdminOrBaker
+from users.models import Notification, User
 from .models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from .serializers import (
     IngredientCreateSerializer,
@@ -244,6 +245,17 @@ class IngredientStockView(APIView):
                 ) + (f' {movement.note}' if movement.note else ''),
                 changes=changes,
             )
+            if movement.kind == StockMovement.KIND_DELIVERY:
+                admins = User.objects.filter(role='admin')
+                Notification.objects.bulk_create([
+                    Notification(
+                        user=admin,
+                        sender=request.user,
+                        title='Przyjęto nową dostawę',
+                        message=f'Przyjęto {_amount(abs(movement.quantity))} {ingredient.unit} surowca: {ingredient.name}.',
+                    )
+                    for admin in admins
+                ])
         return Response(warehouse_row(ingredient), status=status.HTTP_200_OK)
 
 

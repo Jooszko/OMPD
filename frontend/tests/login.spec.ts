@@ -6,8 +6,8 @@ test.describe('Moduł Logowania', () => {
 
     await page.goto('http://localhost:5173/login');
 
-    await page.fill('input[type="text"], input[name="username"], input[type="email"]', 'test1');
-    await page.fill('input[type="password"]', 'Zaq12wsx');
+    await page.fill('input[type="text"], input[name="username"], input[type="email"]', 'mklukowski');
+    await page.fill('input[type="password"]', 'bakery2026');
 
     await page.click('button[type="submit"]');
 
