@@ -20,22 +20,23 @@ CLIENT_PROFILES = [
     ]),
     ('Restauracja', EVERY_DAY, [('Bagietka francuska', 20), ('Bułka mleczna', 40)]),
     ('Kawiarnia', EVERY_DAY, [
-        ('Croissant czekoladowy', 20), ('Rogalik cynamonowy', 15), ('Sernik kawałek', 10), ('Szarlotka kawałek', 10),
+        ('Drożdżówka cynamonowa', 20), ('Rogal maślany', 15), ('Drożdżówka z serem', 10),
+        ('Pączek z nadzieniem różanym', 10),
     ]),
     ('Stołówka', MON_TO_FRI, [('Chleb pszenny 500g', 25), ('Bułka pszenna', 120)]),
     ('Hotel', EVERY_DAY, [
-        ('Bułka pszenna', 60), ('Rogal maślany', 30), ('Croissant czekoladowy', 20), ('Chleb na zakwasie', 6),
+        ('Bułka pszenna', 60), ('Rogal maślany', 30), ('Bułka mleczna', 20), ('Chleb na zakwasie', 6),
     ]),
     ('Bar Mleczny', MON_TO_SAT, [('Chleb pszenny 500g', 20), ('Bułka pszenna', 50), ('Drożdżówka z serem', 15)]),
     ('Delikatesy', MON_TO_SAT, [
-        ('Chleb na zakwasie', 12), ('Chleb słonecznikowy', 10), ('Bagietka francuska', 15), ('Ciasteczka owsiane', 20),
+        ('Chleb na zakwasie', 12), ('Chleb słonecznikowy', 10), ('Bagietka francuska', 15), ('Chałka z rodzynkami', 5),
     ]),
     ('Sklep Osiedlowy', MON_TO_SAT, [
         ('Chleb pszenny 500g', 20), ('Bułka pszenna', 60), ('Drożdżówka z makiem', 15),
         ('Pączek z nadzieniem różanym', 15),
     ]),
     ('Cukiernia', MON_TO_SAT, [
-        ('Pączek z nadzieniem różanym', 30), ('Drożdżówka z serem', 20), ('Sernik kawałek', 12),
+        ('Pączek z nadzieniem różanym', 30), ('Drożdżówka z serem', 20), ('Drożdżówka z makiem', 12),
     ]),
 ]
 CLIENT_SIZES = [1.0, 0.7, 1.3, 0.9, 1.5, 0.8]
@@ -71,7 +72,7 @@ SEED_DELIVERY_NOTES = [
 DELIVERY_NOTE_EVERY = 9
 
 RETURNING_CLIENTS = ('Sklep Spożywczy', 'Sklep Osiedlowy', 'Delikatesy', 'Piekarnia', 'Cukiernia')
-RETURNED_CATEGORIES = ('buns', 'pastry')
+RETURNED_CATEGORIES = ('buns',)
 RETURN_EVERY = 5
 
 
