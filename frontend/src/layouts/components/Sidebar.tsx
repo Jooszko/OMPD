@@ -1,14 +1,11 @@
 import { Link } from 'react-router-dom';
-import { ChevronsLeft, ChevronsRight, Croissant, LogOut } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, LogOut } from 'lucide-react';
+import logo from '../../assets/logo.png';
 import { NotificationBell } from '../../features/dashboard/components/NotificationBell';
 import { ROLE_LABELS, visibleGroups, type NavItem, type UserRole } from '../navigation';
 
 export function BrandMark({ small = false }: { small?: boolean }) {
-  return (
-    <span aria-hidden className={`shrink-0 flex items-center justify-center bg-bakery-accent text-bakery-dark ${small ? 'size-8 rounded-[10px]' : 'size-10 rounded-xl'}`}>
-      <Croissant className={small ? 'size-5' : 'size-6'} strokeWidth={2.2} />
-    </span>
-  );
+  return <img src={logo} alt="" aria-hidden className={`shrink-0 ${small ? 'size-8' : 'size-10'}`} />;
 }
 
 export function UserAvatar({ fullName }: { fullName: string }) {
