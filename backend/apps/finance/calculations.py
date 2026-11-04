@@ -13,6 +13,7 @@ ZERO = Decimal('0')
 MONEY = DecimalField(max_digits=12, decimal_places=2)
 COGS_STATUSES = ['planned', 'in_production', 'in_delivery', 'delivered', 'failed']
 STOCK_LOSS_KINDS = [StockMovement.KIND_LOSS, StockMovement.KIND_COUNT]
+LOSS_BUFFER = Decimal('1.05')
 
 
 def days_between(start, end):
@@ -64,7 +65,7 @@ def cogs_by_day(start, end, prices):
     cogs = defaultdict(lambda: ZERO)
     for row in usage:
         price = prices.get(row['ingredient_id']) or ZERO
-        cogs[row['product__daily_orders__order_date']] += row['total_amount'] * price
+        cogs[row['product__daily_orders__order_date']] += row['total_amount'] * price * LOSS_BUFFER
     return {day: amount.quantize(Decimal('0.01')) for day, amount in cogs.items()}
 
 

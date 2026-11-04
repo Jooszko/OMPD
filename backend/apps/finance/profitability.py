@@ -6,7 +6,7 @@ from django.db.models import ExpressionWrapper, F, Sum
 from orders.models import DailyOrder, ProductReturn
 from products.models import Product, Recipe
 
-from .calculations import COGS_STATUSES, MONEY, ZERO, ingredient_prices
+from .calculations import COGS_STATUSES, LOSS_BUFFER, MONEY, ZERO, ingredient_prices
 from .overview import money
 
 SALE_VALUE = ExpressionWrapper(F('quantity') * F('price_at_sale'), output_field=MONEY)
@@ -35,7 +35,7 @@ def _unit_cost(recipe, prices):
         if price is None:
             missing.append(ingredient.name)
         else:
-            cost += amount * price
+            cost += amount * price * LOSS_BUFFER
     return cost.quantize(CENT), missing
 
 

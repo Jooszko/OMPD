@@ -67,7 +67,7 @@ class DailyResultsTests(TestCase):
 
         day = daily_results(self.day1, self.day1)[0]
 
-        self.assertEqual(day['cogs'], Decimal('24.00'))
+        self.assertEqual(day['cogs'], Decimal('25.20'))
 
     def test_stock_losses_price_losses_and_inventory_differences_only(self):
         self.movement(self.flour, StockMovement.KIND_LOSS, '-2', datetime(2026, 9, 1, 10))
@@ -88,10 +88,10 @@ class DailyResultsTests(TestCase):
 
         day = daily_results(self.day1, self.day1)[0]
 
-        self.assertEqual(day['materials'], Decimal('20.00'))
+        self.assertEqual(day['materials'], Decimal('21.00'))
         self.assertEqual(day['stock_losses'], Decimal('8.00'))
-        self.assertEqual(day['cogs'], Decimal('28.00'))
-        self.assertEqual(day['net_profit'], Decimal('72.00'))
+        self.assertEqual(day['cogs'], Decimal('29.00'))
+        self.assertEqual(day['net_profit'], Decimal('71.00'))
 
     def test_stock_losses_use_polish_day_and_skip_unpriced_ingredients(self):
         self.movement(self.flour, StockMovement.KIND_LOSS, '-1', datetime(2026, 9, 1, 23, 30))
@@ -113,4 +113,4 @@ class DailyResultsTests(TestCase):
 
         self.assertEqual(day['operating_expenses'], Decimal('55.00'))
         self.assertEqual(day['expenses_by_category'], {'fuel': Decimal('25.00'), 'rent': Decimal('30.00')})
-        self.assertEqual(day['net_profit'], Decimal('100.00') - Decimal('20.00') - Decimal('55.00'))
+        self.assertEqual(day['net_profit'], Decimal('100.00') - Decimal('21.00') - Decimal('55.00'))

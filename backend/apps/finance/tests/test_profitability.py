@@ -49,7 +49,7 @@ class ProfitabilityTests(TestCase):
     def test_unit_margin_comes_from_recipe_and_warehouse_price(self):
         bread = self.products()['Chleb']
 
-        self.assertEqual((bread['unit_cost'], bread['unit_margin'], bread['margin_pct']), ('2.00', '6.00', 75.0))
+        self.assertEqual((bread['unit_cost'], bread['unit_margin'], bread['margin_pct']), ('2.10', '5.90', 73.8))
         self.assertEqual(bread['missing_prices'], [])
 
     def test_period_margin_uses_sales_returns_and_baked_quantity(self):
@@ -64,8 +64,8 @@ class ProfitabilityTests(TestCase):
 
         bread = self.products()['Chleb']
 
-        # przychód 10 × 8 − zwrot 8 = 72 zł; surowce 12 upieczonych × 2 zł = 24 zł
-        self.assertEqual((bread['sold'], bread['revenue'], bread['period_margin']), (9, '72.00', '48.00'))
+        # przychód 10 × 8 − zwrot 8 = 72 zł; surowce 12 upieczonych × 2,10 zł = 25,20 zł
+        self.assertEqual((bread['sold'], bread['revenue'], bread['period_margin']), (9, '72.00', '46.80'))
 
     def test_missing_warehouse_prices_are_listed_and_excluded_from_average(self):
         self.order(self.bread, 10)
@@ -75,8 +75,8 @@ class ProfitabilityTests(TestCase):
         challah = {p['name']: p for p in data['products']}['Chałka']
 
         self.assertEqual(challah['missing_prices'], ['Masło'])
-        self.assertEqual(challah['unit_cost'], '1.00')
-        self.assertEqual(data['average_margin_pct'], 75.0)
+        self.assertEqual(challah['unit_cost'], '1.05')
+        self.assertEqual(data['average_margin_pct'], 73.8)
         self.assertEqual(data['missing_prices'], [{
             'ingredient_id': self.butter.pk, 'name': 'Masło', 'unit': 'kg', 'products': ['Chałka'],
         }])

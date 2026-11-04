@@ -78,10 +78,10 @@ class StatementTests(TestCase):
         data = build_statement('month', date(2026, 9, 15), today=date(2026, 10, 14))
         lines = {line['key']: (line['level'], line['amount']) for line in data['lines']}
 
-        self.assertEqual(lines['materials'], ('sub', '-20.00'))
+        self.assertEqual(lines['materials'], ('sub', '-21.00'))
         self.assertEqual(lines['stock_losses'], ('sub', '-8.00'))
-        self.assertEqual(lines['cogs'], ('item', '-28.00'))
-        self.assertEqual(lines['gross_margin'], ('sum', '72.00'))
+        self.assertEqual(lines['cogs'], ('item', '-29.00'))
+        self.assertEqual(lines['gross_margin'], ('sum', '71.00'))
 
     def test_trend_and_days(self):
         self.sale(date(2026, 9, 5), 10)
