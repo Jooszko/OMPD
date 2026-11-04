@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from finance.calculations import LOSS_BUFFER
 from production.models import ProductBakeSpec
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from dashboard.seed.dates import build_date_range
@@ -61,6 +62,16 @@ class SeedProductsTests(TestCase):
             self.assertEqual(recipe, product_recipe(product.name))
             flour = sum(amount for name, amount in recipe.items() if name.startswith('Mąka'))
             self.assertGreater(flour, spec.piece_weight_kg * Decimal('0.45'), product.name)
+
+    def test_loss_buffer_is_counted_once_in_finance_not_in_recipes(self):
+        ingredients = create_ingredients()
+        products = create_products(ingredients)
+        _, doughs, _ = create_production_setup(ingredients, products)
+
+        for dough in doughs.values():
+            self.assertEqual(1 + dough.loss_buffer_pct / 100, LOSS_BUFFER, dough.name)
+        roll = Recipe.objects.filter(product__name='Bułka pszenna', ingredient__name='Mąka pszenna typ 550').get()
+        self.assertEqual(roll.amount, Decimal('0.039'))  # 0,065 kg kęsa × 0,6013 kg mąki/kg, bez bufora
 
     def test_dough_recipes_add_up_to_one_kilogram(self):
         egg_kg = Decimal('0.05')
