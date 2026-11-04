@@ -17,7 +17,7 @@ class SupplierCatalogApiTests(TestCase):
 
     def test_newly_created_ingredient_can_be_assigned_to_supplier(self):
         ingredient_response = self.api.post(
-            '/api/products/ingredients/', {'name': 'Nowy składnik', 'unit': 'kg'}, format='json'
+            '/api/products/ingredients/', {'name': 'Nowy składnik', 'unit': 'kg', 'current_price': '3.00'}, format='json'
         )
         self.assertEqual(ingredient_response.status_code, 201)
         ingredient_id = ingredient_response.data['ingredient_id']

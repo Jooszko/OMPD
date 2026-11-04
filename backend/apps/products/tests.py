@@ -28,14 +28,15 @@ class IngredientCreateApiTests(TestCase):
         self.api.force_authenticate(self.admin)
 
         response = self.api.post(
-            '/api/products/ingredients/', {'name': 'Zakwas', 'unit': 'kg'}, format='json'
+            '/api/products/ingredients/', {'name': 'Zakwas', 'unit': 'kg', 'current_price': '6.40'}, format='json'
         )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['name'], 'Zakwas')
         self.assertEqual(response.data['unit'], 'kg')
+        self.assertEqual(response.data['current_price'], '6.40')
         ingredient = Ingredient.objects.get(pk=response.data['ingredient_id'])
-        self.assertTrue(IngredientStock.objects.filter(ingredient=ingredient).exists())
+        self.assertEqual(IngredientStock.objects.get(ingredient=ingredient).current_price, Decimal('6.40'))
         self.assertEqual(AuditEntry.objects.get(action='ingredient.created').object_id, str(ingredient.pk))
 
     def test_baker_cannot_create_ingredient(self):
@@ -46,6 +47,19 @@ class IngredientCreateApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+        self.assertFalse(Ingredient.objects.exists())
+
+    def test_price_is_required_and_positive(self):
+        self.api.force_authenticate(self.admin)
+
+        for price in (None, '0', '-2', 'tanio'):
+            with self.subTest(price=price):
+                payload = {'name': 'Zakwas', 'unit': 'kg'}
+                if price is not None:
+                    payload['current_price'] = price
+                response = self.api.post('/api/products/ingredients/', payload, format='json')
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('current_price', response.data)
         self.assertFalse(Ingredient.objects.exists())
 
     def test_name_and_unit_are_required(self):
@@ -141,7 +155,7 @@ class WarehouseApiTests(TestCase):
 
         response = self.api.post(
             '/api/products/ingredients/',
-            {'name': 'Siemię lniane', 'unit': 'kg', 'current_stock': '12.5', 'min_stock_level': '3'},
+            {'name': 'Siemię lniane', 'unit': 'kg', 'current_stock': '12.5', 'current_price': '9.80', 'min_stock_level': '3'},
             format='json',
         )
 

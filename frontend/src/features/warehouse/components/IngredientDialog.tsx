@@ -5,7 +5,7 @@ import { createIngredient, updateIngredient, type WarehouseRow } from '../../../
 import { Modal } from '../../dashboard/components/Modal';
 import { ERROR_CLASS, FIELD_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
-import { parseQuantity, UNIT_OPTIONS, type StockItem } from '../lib/warehouse';
+import { parsePrice, parseQuantity, UNIT_OPTIONS, type StockItem } from '../lib/warehouse';
 
 export function IngredientDialog({
   item,
@@ -19,22 +19,35 @@ export function IngredientDialog({
   const [name, setName] = useState(item?.name ?? '');
   const [unit, setUnit] = useState(item?.unit ?? 'kg');
   const [initial, setInitial] = useState('');
+  const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const initialValue = initial.trim() === '' ? 0 : parseQuantity(initial);
-  const fieldError = !item && initialValue === null ? 'Stan wpisz jako liczbę, np. 12,5.' : null;
+  const priceValue = parsePrice(price);
+  const fieldError = item
+    ? null
+    : initialValue === null
+      ? 'Stan wpisz jako liczbę, np. 12,5.'
+      : price.trim() !== '' && priceValue === null
+        ? 'Cenę wpisz jako liczbę większą od zera, np. 4,50.'
+        : null;
+  const missingPrice = !item && priceValue === null;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (fieldError || !name.trim() || !unit.trim()) return;
+    if (fieldError || missingPrice || !name.trim() || !unit.trim()) return;
     setSaving(true);
     setError(null);
     const payload = { name: name.trim(), unit: unit.trim() };
     try {
       const row = item
         ? await updateIngredient(item.ingredient_id, payload)
-        : await createIngredient({ ...payload, current_stock: String(initialValue) });
+        : await createIngredient({
+            ...payload,
+            current_stock: String(initialValue),
+            current_price: (priceValue ?? 0).toFixed(2),
+          });
       onSaved(row, !item);
       onClose();
     } catch (err) {
@@ -118,19 +131,36 @@ export function IngredientDialog({
         </div>
 
         {!item && (
-          <label className={LABEL_CLASS}>
-            Stan początkowy
-            <span className="relative">
-              <input
-                inputMode="decimal"
-                value={initial}
-                onChange={(event) => setInitial(event.target.value)}
-                placeholder="0"
-                className={`${FIELD_CLASS} pr-12 tabular-nums`}
-              />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#5f5a58]">{unit}</span>
-            </span>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className={LABEL_CLASS}>
+              Stan początkowy
+              <span className="relative">
+                <input
+                  inputMode="decimal"
+                  value={initial}
+                  onChange={(event) => setInitial(event.target.value)}
+                  placeholder="0"
+                  className={`${FIELD_CLASS} pr-12 tabular-nums`}
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#5f5a58]">{unit}</span>
+              </span>
+            </label>
+            <label className={LABEL_CLASS}>
+              Cena za 1 {unit}
+              <span className="relative">
+                <input
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="0,00"
+                  aria-invalid={price.trim() !== '' && priceValue === null}
+                  className={`${FIELD_CLASS} pr-12 tabular-nums`}
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#5f5a58]">zł</span>
+              </span>
+            </label>
+          </div>
         )}
 
         <p className="m-0 px-3.5 py-2.5 rounded-xl bg-[#f6f2f0] text-[13px] font-semibold leading-relaxed text-[#3d3937]">
@@ -151,7 +181,7 @@ export function IngredientDialog({
           </button>
           <button
             type="submit"
-            disabled={saving || Boolean(fieldError) || !name.trim() || !unit.trim()}
+            disabled={saving || Boolean(fieldError) || missingPrice || !name.trim() || !unit.trim()}
             className={PRIMARY_BUTTON}
           >
             {saving ? 'Zapisywanie…' : item ? 'Zapisz zmiany' : 'Dodaj składnik'}

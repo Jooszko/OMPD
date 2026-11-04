@@ -272,12 +272,13 @@ export default function SuppliersPanel() {
             setToast({ text: 'Jednostka miary jest wymagana.' });
             return;
         }
-        if (trimmedPrice && (
-            !Number.isFinite(Number(trimmedPrice))
+        if (
+            !trimmedPrice
+            || !Number.isFinite(Number(trimmedPrice))
             || Number(trimmedPrice) <= 0
             || Number(trimmedPrice) > 99999999.99
-        )) {
-            setToast({ text: 'Cena musi być większa od zera i nie może przekraczać 99999999,99.' });
+        ) {
+            setToast({ text: 'Podaj cenę większą od zera, najwyżej 99999999,99.' });
             return;
         }
         if (globalProducts.some(p => p.name.toLowerCase() === `${trimmedName} (${trimmedUnit})`.toLowerCase())) {
@@ -287,7 +288,11 @@ export default function SuppliersPanel() {
 
         setIsCreatingProduct(true);
         try {
-            const ingredient = await createIngredient({ name: trimmedName, unit: trimmedUnit });
+            const ingredient = await createIngredient({
+                name: trimmedName,
+                unit: trimmedUnit,
+                current_price: Number(trimmedPrice).toFixed(2),
+            });
             setGlobalProducts(current => [
                 ...current,
                 {
@@ -768,11 +773,11 @@ export default function SuppliersPanel() {
                                 </select>
                             </label>
                             <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
-                                Cena u dostawcy (zł/{newProductUnit || 'jednostkę'}) — opcjonalnie
+                                Cena (zł/{newProductUnit || 'jednostkę'})
                                 <input type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="np. 12,50" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" />
                             </label>
                             <span className="text-[10px] text-gray-400 font-medium block">
-                                Składnik zostanie zapisany na stałe w bazie surowców. Cena u tego dostawcy zapisze się dopiero po zapisaniu kartoteki.
+                                Składnik zostanie zapisany na stałe w bazie surowców, a cena od razu stanie się jego ceną w magazynie. U tego dostawcy zapisze się dopiero po zapisaniu kartoteki.
                             </span>
                         </div>
 
