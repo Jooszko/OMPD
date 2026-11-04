@@ -22,7 +22,7 @@ export function AuthLayout({
       <div className="relative z-10 flex min-h-dvh flex-col p-3 sm:p-6 lg:px-16 lg:py-12">
         <div className="flex items-center gap-3 px-2 pt-2 sm:px-0 sm:pt-0">
           <img src={logo} alt="" aria-hidden className="h-10 w-10 lg:h-11 lg:w-11" />
-          <span className="font-display text-xl font-extrabold tracking-tight lg:text-2xl">OMPD</span>
+          <span className="font-display text-xl font-extrabold tracking-tight lg:text-2xl">BakeryOS</span>
         </div>
 
         <div className="flex flex-1 flex-col justify-end gap-6 pt-10 lg:flex-row lg:items-center lg:justify-between lg:gap-12 lg:pt-0">

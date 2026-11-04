@@ -60,7 +60,7 @@ export function Sidebar({ role, fullName, active, collapsed, onToggle, onLogout 
           <BrandMark />
           {!collapsed && (
             <span className="flex flex-col min-w-0">
-              <span className="font-display text-lg leading-tight font-extrabold">Bakery Flow</span>
+              <span className="font-display text-lg leading-tight font-extrabold">BakeryOS</span>
               <span className="text-[11px] font-bold tracking-[0.12em] text-[#a8a09d]">PIEKARNIA · ERP</span>
             </span>
           )}
