@@ -6,6 +6,7 @@ import {
   productMatches,
   recipeMassLooksWrong,
   recipeMassPerKg,
+  suggestionVerdict,
   validateBakeSpec,
   validateDough,
   validateMixer,
@@ -14,7 +15,6 @@ import {
 
 const dough = (overrides: Partial<DoughDraft> = {}): DoughDraft => ({
   name: 'Ciasto pszenne',
-  loss_buffer_pct: '3',
   mixing_time_min: '12',
   target_dough_temp_c: '26',
   proofing_time_min: '50',
@@ -109,6 +109,16 @@ describe('validateBakeSpec', () => {
   });
 });
 
+describe('suggestionVerdict', () => {
+  it('ocenia zgodność względem progu z backendu', () => {
+    expect(suggestionVerdict(1, 0.8)).toBe('very_good');
+    expect(suggestionVerdict(0.95, 0.8)).toBe('very_good');
+    expect(suggestionVerdict(0.86, 0.8)).toBe('good');
+    expect(suggestionVerdict(0.8, 0.8)).toBe('good');
+    expect(suggestionVerdict(0.79, 0.8)).toBe('weak');
+  });
+});
+
 const product = (id: number, name: string, doughId: number | null, category = 'bread'): ProductBakeSpecRow => ({
   product_id: id,
   product_name: name,
@@ -123,13 +133,14 @@ const doughRow = (id: number, name: string): ProductionDough => ({
   dough_id: id,
   name,
   mixer_id: null,
-  loss_buffer_pct: '3',
+  loss_buffer_pct: '5.00',
   mixing_time_min: 10,
   target_dough_temp_c: '26',
   proofing_time_min: 45,
   mixing_instructions: '',
   ingredients: [],
   products_count: 0,
+  is_locked: false,
 });
 
 describe('productMatches', () => {

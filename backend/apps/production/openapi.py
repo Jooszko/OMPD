@@ -264,6 +264,41 @@ class ProductionSettingsSerializer(serializers.Serializer):
     doughs = DoughSerializer(many=True)
     products = BakeSpecRowSerializer(many=True)
     ingredients = SettingsIngredientSerializer(many=True)
+    loss_buffer_pct = serializers.DecimalField(
+        max_digits=5, decimal_places=2, help_text='Wspólny bufor strat ciast i finansów (stała systemowa).'
+    )
+
+class DoughSuggestionAdditionSerializer(serializers.Serializer):
+    ingredient_id = serializers.IntegerField()
+    name = serializers.CharField()
+    unit = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=3, help_text='Na sztukę, w jednostce surowca.')
+
+
+class DoughSuggestionSerializer(serializers.Serializer):
+    dough_id = serializers.IntegerField()
+    dough_name = serializers.CharField()
+    score = serializers.DecimalField(max_digits=4, decimal_places=3, help_text='Zgodność składu 0–1.')
+    piece_weight_kg = serializers.DecimalField(max_digits=7, decimal_places=3, help_text='Proponowana waga kęsa.')
+    additions = DoughSuggestionAdditionSerializer(
+        many=True, help_text='Surowce receptury spoza ciasta, które nie występują w żadnym cieście (nadzienia, posypki).'
+    )
+    foreign = serializers.ListField(
+        child=serializers.CharField(),
+        help_text='Surowce receptury, których to ciasto nie ma, choć zwykle wchodzą do ciast (mąka, jaja…).',
+    )
+    mismatched = serializers.ListField(
+        child=serializers.CharField(), help_text='Surowce wspólne, których ilość w recepturze nie zgadza się z ciastem.'
+    )
+    missing = serializers.ListField(child=serializers.CharField(), help_text='Surowce ciasta, których brak w recepturze.')
+
+
+class DoughSuggestionsSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    has_recipe = serializers.BooleanField()
+    good_match = serializers.DecimalField(max_digits=3, decimal_places=2, help_text='Próg dobrego dopasowania.')
+    suggestions = DoughSuggestionSerializer(many=True)
+
 
 class PlanCalendarDaySerializer(serializers.Serializer):
     delivery_date = serializers.DateField()

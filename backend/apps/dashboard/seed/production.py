@@ -1,18 +1,15 @@
-from collections import defaultdict
 from decimal import Decimal
 
-from finance.calculations import LOSS_BUFFER
+from common.losses import LOSS_BUFFER_PCT
 from production.models import Dough, DoughIngredient, Mixer, ProductBakeSpec
+from production.services.recipes import compose
+from products.models import ProductAddition
 
 MIXER_DATA = [
     # (name, min_capacity_kg, max_capacity_kg)
     ('Mieszałka spiralna duża', Decimal('20.000'), Decimal('120.000')),
     ('Mieszałka spiralna mała', Decimal('5.000'), Decimal('40.000')),
 ]
-
-# Bufor strat ciasta = ten sam bufor, który finanse doliczają do kosztu surowców,
-# dzięki czemu odważki w produkcji zgadzają się z kosztem w finansach.
-LOSS_BUFFER_PCT = ((LOSS_BUFFER - 1) * 100).quantize(Decimal('0.01'))
 
 # Receptury liczone z procentów piekarskich (mąka = 100 %) na 1 kg gotowego ciasta.
 # Woda i mleko w litrach (1 l ≈ 1 kg), jaja w sztukach (ok. 50 g bez skorupki).
@@ -113,7 +110,8 @@ DOUGH_DATA = [
 
 BAKE_SPEC_DATA = [
     # (product_name, dough_name, piece_weight_kg, bake_temp_c, bake_time_min, [(ingredient_name, amount_per_piece), ...])
-    # Lista na końcu to dodatki spoza ciasta: nadzienia, posypki, smarowanie, olej do smażenia.
+    # Lista na końcu to dodatki spoza ciasta: nadzienia, posypki, olej do smażenia.
+    # Surowiec ze składu ciasta nie może być dodatkiem (np. jajo do smarowania przy cieście z jajami).
     ('Chleb pszenny 500g', 'Ciasto pszenne', Decimal('0.580'), 230, 35, []),
     ('Bagietka francuska', 'Ciasto pszenne', Decimal('0.290'), 250, 22, []),
     ('Bułka pszenna', 'Ciasto pszenne', Decimal('0.065'), 240, 14, []),
@@ -122,29 +120,17 @@ BAKE_SPEC_DATA = [
     ('Chleb na zakwasie', 'Ciasto żytnie na zakwasie', Decimal('0.900'), 230, 55, []),
     ('Chleb razowy 500g', 'Ciasto żytnie razowe', Decimal('0.600'), 220, 55, []),
     ('Bułka grahamka', 'Ciasto graham', Decimal('0.075'), 230, 16, []),
-    ('Chleb słonecznikowy', 'Ciasto słonecznikowe', Decimal('0.600'), 225, 40, [('Ziarna słonecznika', Decimal('0.010'))]),
-    ('Bułka mleczna', 'Ciasto maślane', Decimal('0.070'), 200, 14, [('Jaja', Decimal('0.050'))]),
-    ('Rogal maślany', 'Ciasto maślane', Decimal('0.090'), 200, 15, [('Masło', Decimal('0.006')), ('Jaja', Decimal('0.050'))]),
-    ('Chałka z rodzynkami', 'Ciasto chałkowe', Decimal('0.450'), 180, 30, [
-        ('Jaja', Decimal('0.100')), ('Masło', Decimal('0.005')), ('Cukier', Decimal('0.005')),
-        ('Mąka pszenna typ 550', Decimal('0.006')),
-    ]),
-    ('Drożdżówka z serem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [
-        ('Twaróg', Decimal('0.035')), ('Cukier', Decimal('0.006')), ('Jaja', Decimal('0.100')),
-    ]),
-    ('Drożdżówka z makiem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [
-        ('Mak', Decimal('0.020')), ('Cukier', Decimal('0.008')), ('Masło', Decimal('0.003')), ('Jaja', Decimal('0.050')),
-    ]),
-    ('Drożdżówka cynamonowa', 'Ciasto drożdżowe słodkie', Decimal('0.080'), 190, 15, [
-        ('Masło', Decimal('0.006')), ('Cukier', Decimal('0.008')), ('Cynamon', Decimal('0.001')),
-    ]),
+    ('Chleb słonecznikowy', 'Ciasto słonecznikowe', Decimal('0.600'), 225, 40, []),
+    ('Bułka mleczna', 'Ciasto maślane', Decimal('0.070'), 200, 14, []),
+    ('Rogal maślany', 'Ciasto maślane', Decimal('0.090'), 200, 15, []),
+    ('Chałka z rodzynkami', 'Ciasto chałkowe', Decimal('0.450'), 180, 30, []),
+    ('Drożdżówka z serem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [('Twaróg', Decimal('0.035'))]),
+    ('Drożdżówka z makiem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [('Mak', Decimal('0.020'))]),
+    ('Drożdżówka cynamonowa', 'Ciasto drożdżowe słodkie', Decimal('0.080'), 190, 15, [('Cynamon', Decimal('0.002'))]),
     ('Pączek z nadzieniem różanym', 'Ciasto pączkowe', Decimal('0.060'), 175, 8, [
         ('Konfitura różana', Decimal('0.018')), ('Olej rzepakowy', Decimal('0.009')), ('Cukier puder', Decimal('0.004')),
     ]),
 ]
-
-RECIPE_PRECISION = Decimal('0.001')
-
 
 def product_recipe(product_name):
     """Receptura jednej sztuki: kęs ciasta przeliczony na surowce plus dodatki.
@@ -153,12 +139,8 @@ def product_recipe(product_name):
     """
     _, dough_name, weight, _, _, extras = next(spec for spec in BAKE_SPEC_DATA if spec[0] == product_name)
     *_, dough_recipe = next(dough for dough in DOUGH_DATA if dough[0] == dough_name)
-    amounts = defaultdict(Decimal)
-    for ingredient_name, per_kg in dough_recipe:
-        amounts[ingredient_name] += per_kg * weight
-    for ingredient_name, amount in extras:
-        amounts[ingredient_name] += amount
-    return {name: max(amount.quantize(RECIPE_PRECISION), RECIPE_PRECISION) for name, amount in amounts.items()}
+    # Ten sam wzór co w aplikacji (production.services.recipes), tylko po nazwach surowców.
+    return compose({name: per_kg * weight for name, per_kg in dough_recipe}, dict(extras))
 
 
 def create_production_setup(ingredients, products):
@@ -188,10 +170,15 @@ def create_production_setup(ingredients, products):
         doughs[name] = dough
 
     specs = []
-    for product_name, dough_name, weight, temp, minutes, _extras in BAKE_SPEC_DATA:
+    for product_name, dough_name, weight, temp, minutes, extras in BAKE_SPEC_DATA:
+        product = products[product_name]
         spec, _ = ProductBakeSpec.objects.get_or_create(
-            product=products[product_name],
+            product=product,
             defaults={'dough': doughs[dough_name], 'piece_weight_kg': weight, 'bake_temp_c': temp, 'bake_time_min': minutes},
         )
+        for ingredient_name, amount in extras:
+            ProductAddition.objects.get_or_create(
+                product=product, ingredient=ingredients[ingredient_name], defaults={'amount': amount}
+            )
         specs.append(spec)
     return mixers, doughs, specs

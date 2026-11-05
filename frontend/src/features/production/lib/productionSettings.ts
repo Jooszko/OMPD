@@ -31,7 +31,6 @@ export interface RecipeDraftItem {
 
 export interface DoughDraft {
   name: string;
-  loss_buffer_pct: string;
   mixing_time_min: string;
   target_dough_temp_c: string;
   proofing_time_min: string;
@@ -40,8 +39,6 @@ export interface DoughDraft {
 
 export function validateDough(draft: DoughDraft): string | null {
   if (!draft.name.trim()) return 'Podaj nazwę ciasta.';
-  const buffer = parseDecimal(draft.loss_buffer_pct);
-  if (buffer === null || buffer < 0 || buffer >= 100) return 'Bufor strat musi mieścić się w przedziale 0–99%.';
   for (const [label, value] of [
     ['Czas mieszania', draft.mixing_time_min],
     ['Czas garowania', draft.proofing_time_min],
@@ -92,6 +89,21 @@ export function validateBakeSpec(draft: BakeSpecDraft): string | null {
   if (minutes === null || minutes <= 0 || !Number.isInteger(minutes)) return 'Podaj czas wypieku w pełnych minutach.';
   return null;
 }
+
+export type SuggestionVerdict = 'very_good' | 'good' | 'weak';
+
+/** Ocena podpowiedzi ciasta: bardzo dobra od 95%, dobra od progu z backendu, poniżej — słaba. */
+export function suggestionVerdict(score: number, goodMatch: number): SuggestionVerdict {
+  if (score >= 0.95) return 'very_good';
+  if (score >= goodMatch) return 'good';
+  return 'weak';
+}
+
+export const VERDICT_LABELS: Record<SuggestionVerdict, string> = {
+  very_good: 'bardzo dobre dopasowanie',
+  good: 'dobre dopasowanie',
+  weak: 'słabe dopasowanie',
+};
 
 export const CATEGORY_LABELS: Record<string, string> = {
   bread: 'Chleby',

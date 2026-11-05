@@ -492,11 +492,21 @@ export interface RecipeItem {
   amount: string;
 }
 
+/** Podział receptury wyrobu przypisanego do ciasta: część z ciasta (tylko do odczytu) i dodatki. */
+export interface RecipeDough {
+  dough_id: number;
+  dough_name: string;
+  piece_weight_kg: string;
+  dough_items: RecipeItem[];
+  additions: RecipeItem[];
+}
+
 export interface AppRecipe {
   product_id: number;
   name: string;
   category: string;
   items: RecipeItem[];
+  dough: RecipeDough | null;
 }
 
 export async function fetchIngredients(): Promise<AppIngredient[]> {
@@ -1485,6 +1495,8 @@ export interface ProductionDough {
   mixing_instructions: string;
   ingredients: DoughRecipeItem[];
   products_count: number;
+  /** Ciasto było używane w produkcji — skład jest zablokowany. */
+  is_locked: boolean;
 }
 
 export interface BakeSpecValues {
@@ -1506,10 +1518,15 @@ export interface ProductionSettings {
   doughs: ProductionDough[];
   products: ProductBakeSpecRow[];
   ingredients: { ingredient_id: number; name: string; unit: string }[];
+  /** Wspólny bufor strat ciast i finansów — stała systemowa, nie do edycji. */
+  loss_buffer_pct: string;
 }
 
 export type MixerInput = Omit<ProductionMixer, 'mixer_id'>;
-export type DoughInput = Omit<ProductionDough, 'dough_id' | 'products_count' | 'ingredients'> & {
+export type DoughInput = Omit<
+  ProductionDough,
+  'dough_id' | 'products_count' | 'ingredients' | 'is_locked' | 'loss_buffer_pct'
+> & {
   ingredients: { ingredient_id: number; amount_per_kg: string }[];
 };
 
@@ -1550,6 +1567,36 @@ export function saveBakeSpec(productId: number, payload: BakeSpecValues): Promis
 
 export function deleteBakeSpec(productId: number): Promise<void> {
   return sendProductionSettings(`bake-specs/${productId}/`, 'DELETE');
+}
+
+export interface DoughSuggestion {
+  dough_id: number;
+  dough_name: string;
+  /** Zgodność składu 0–1. */
+  score: string;
+  piece_weight_kg: string;
+  /** Surowce receptury spoza ciasta, które nie występują w żadnym cieście — po przypisaniu staną się dodatkami. */
+  additions: { ingredient_id: number; name: string; unit: string; amount: string }[];
+  /** Surowce receptury, których to ciasto nie ma, choć zwykle wchodzą do ciast (mąka, jaja…). */
+  foreign: string[];
+  /** Surowce wspólne, których ilość w recepturze nie zgadza się z ciastem. */
+  mismatched: string[];
+  /** Surowce ciasta, których brak w recepturze wyrobu. */
+  missing: string[];
+}
+
+export interface DoughSuggestions {
+  product_id: number;
+  has_recipe: boolean;
+  good_match: string;
+  suggestions: DoughSuggestion[];
+}
+
+export async function fetchDoughSuggestions(productId: number): Promise<DoughSuggestions> {
+  const response = await apiFetch(`${API_BASE}/production/products/${productId}/dough-suggestions/`, {
+    headers: authHeaders(),
+  });
+  return productionJson(response);
 }
 
 export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics' | 'production';

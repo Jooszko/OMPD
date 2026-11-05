@@ -27,6 +27,7 @@ ACTIONS = {
         'recipe.created': 'Dodanie receptury',
         'recipe.updated': 'Zmiana receptury',
         'recipe.deleted': 'Usunięcie receptury',
+        'recipe.recalculated': 'Przeliczenie receptury z ciasta',
     },
     'orders': {
         'order.created': 'Nowe zamówienie',

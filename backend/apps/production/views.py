@@ -9,16 +9,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
+from common.losses import LOSS_BUFFER_PCT
 from products.models import Ingredient, Product
 
 from . import audit as production_audit
 from .models import BatchStageLog, Dough, Mixer, ProductBakeSpec, ProductionBatch, ProductionPlan, WasteRecord
 from .serializers import BakeSpecSerializer, DoughSerializer, MixerSerializer
+from .services import recipes
+from .services.recommend import recommend_doughs
 from common.openapi import error_response
 from .openapi import (
     DELIVERY_DATE_PARAM, FORBIDDEN, FORM_ERROR, NOT_FOUND, BakeSpecRowSerializer, BatchActionResultSerializer,
-    DeliveryDateInputSerializer, PlanCalendarDaySerializer, ProductionBoardSerializer, ProductionPlanSerializer, ProductionSettingsSerializer,
-    StageInputSerializer, WasteInputSerializer, WasteResultSerializer,
+    DeliveryDateInputSerializer, DoughSuggestionsSerializer, PlanCalendarDaySerializer, ProductionBoardSerializer,
+    ProductionPlanSerializer, ProductionSettingsSerializer, StageInputSerializer, WasteInputSerializer,
+    WasteResultSerializer,
 )
 from .services.lifecycle import (
     BatchActionError,
@@ -444,6 +448,7 @@ class ProductionSettingsView(APIView):
                 {'ingredient_id': i.ingredient_id, 'name': i.name, 'unit': i.unit}
                 for i in Ingredient.objects.order_by('name')
             ],
+            'loss_buffer_pct': str(LOSS_BUFFER_PCT),
         })
 
 
@@ -529,9 +534,12 @@ class DoughDetailView(APIView):
         serializer = DoughSerializer(dough, data=request.data, partial=True)
         if not serializer.is_valid():
             return _invalid(serializer)
+        composition_before = serializer.instance_composition()
         with transaction.atomic():
             dough = serializer.save()
             production_audit.dough_saved(request, dough, before)
+            if serializer.instance_composition() != composition_before:
+                recipes.rebuild_for_dough(dough, request)
         return Response(DoughSerializer(_dough_queryset().get(pk=dough.pk)).data)
 
     @extend_schema(
@@ -561,6 +569,26 @@ class DoughDetailView(APIView):
         return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
+class DoughSuggestionsView(APIView):
+    """Podpowiedź ciasta dla wyrobu: ranking ciast według zgodności z recepturą wyrobu."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Rekomendacja ciasta dla wyrobu',
+        description=(
+            'Porównuje recepturę wyrobu ze składem każdego ciasta i zwraca do 3 najlepiej pasujących, '
+            'z proponowaną wagą kęsa i dodatkami spoza ciasta. Tylko podpowiedź – niczego nie zapisuje.'
+        ),
+        responses={200: DoughSuggestionsSerializer, 403: FORBIDDEN, 404: NOT_FOUND},
+    )
+    def get(self, request, product_id):
+        if request.user.role not in PRODUCTION_ROLES:
+            return _forbidden()
+        product = get_object_or_404(Product, pk=product_id)
+        return Response(DoughSuggestionsSerializer(recommend_doughs(product)).data)
+
+
 class BakeSpecDetailView(APIView):
     """Parametry produkcyjne wyrobu: PUT tworzy lub nadpisuje, DELETE wyłącza wyrób z planowania."""
 
@@ -582,8 +610,13 @@ class BakeSpecDetailView(APIView):
         if not serializer.is_valid():
             return _invalid(serializer)
         with transaction.atomic():
+            first_assignment = spec is None
             spec = serializer.save(product=product)
             production_audit.bake_spec_saved(request, product, before, spec)
+            if first_assignment:
+                recipes.adopt_dough(product, request)
+            else:
+                recipes.rebuild_recipe(product, request, reason=' (zmiana parametrów wyrobu)')
         product = Product.objects.select_related('bake_spec__dough').get(pk=product.pk)
         return Response(_bake_spec_row(product))
 
@@ -601,5 +634,6 @@ class BakeSpecDetailView(APIView):
                 before = production_audit.bake_spec_state(spec)
                 product = spec.product
                 spec.delete()
+                recipes.release_dough(product)
                 production_audit.bake_spec_deleted(request, product, before)
         return Response(status=http_status.HTTP_204_NO_CONTENT)
