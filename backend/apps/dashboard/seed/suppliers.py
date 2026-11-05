@@ -32,18 +32,48 @@ def create_suppliers():
     return suppliers
 
 
+MILL = 'Młyn „Złoty Kłos"'
+DAIRY = 'Nabiał Podhalański Sp. z o.o.'
+SWEET = 'Cukiernia Hurt „SłodkiPak"'
+GRAIN = 'Piekarnia Surowce „ZbożePlus"'
+OIL = 'Tłuszcze Roślinne "OleoTrade"'
+FERM = 'Dodatki Piekarnicze "FermPlus"'
+WHOLESALE = 'Hurtownia Ogólnospożywcza "MegaHurt"'
+
+# (dostawca, cena hurtowa netto za jednostkę surowca) — ceny orientacyjne z 2026 r.
+INGREDIENT_SUPPLY = {
+    'Mąka pszenna typ 550': (MILL, Decimal('2.20')),
+    'Mąka pszenna typ 750': (MILL, Decimal('2.40')),
+    'Mąka pszenna graham typ 1850': (MILL, Decimal('3.40')),
+    'Mąka żytnia typ 720': (MILL, Decimal('2.60')),
+    'Mąka żytnia razowa typ 2000': (MILL, Decimal('3.10')),
+    'Woda': (WHOLESALE, Decimal('0.02')),
+    'Drożdże świeże': (FERM, Decimal('11.50')),
+    'Sól': (WHOLESALE, Decimal('1.60')),
+    'Cukier': (SWEET, Decimal('3.80')),
+    'Cukier puder': (SWEET, Decimal('6.20')),
+    'Masło': (DAIRY, Decimal('31.00')),
+    'Olej rzepakowy': (OIL, Decimal('7.90')),
+    'Jaja': (DAIRY, Decimal('0.85')),
+    'Mleko': (DAIRY, Decimal('3.40')),
+    'Ser żółty': (DAIRY, Decimal('29.00')),
+    'Twaróg': (DAIRY, Decimal('17.50')),
+    'Mak': (GRAIN, Decimal('22.00')),
+    'Rodzynki': (SWEET, Decimal('16.00')),
+    'Cynamon': (SWEET, Decimal('58.00')),
+    'Ziarna słonecznika': (GRAIN, Decimal('8.50')),
+    'Konfitura różana': (SWEET, Decimal('26.00')),
+}
+
+
 def create_supplier_ingredients(suppliers, ingredients):
-    supplier_list = list(suppliers.values())
-    ingredient_list = list(ingredients.values())
     links = []
-    for idx, ingredient in enumerate(ingredient_list):
-        supplier = supplier_list[idx % len(supplier_list)]
-        part_no = f'SKU-{idx + 1:03d}'
-        price = (Decimal('2.00') + (Decimal(idx % 14) * Decimal('0.95'))).quantize(Decimal('0.01'))
+    for idx, (name, ingredient) in enumerate(ingredients.items()):
+        supplier_name, price = INGREDIENT_SUPPLY[name]
         link, _ = SupplierIngredient.objects.get_or_create(
-            supplier=supplier,
+            supplier=suppliers[supplier_name],
             ingredient=ingredient,
-            defaults={'supplier_part_no': part_no, 'last_price': price},
+            defaults={'supplier_part_no': f'SKU-{idx + 1:03d}', 'last_price': price},
         )
         IngredientStock.objects.filter(ingredient=ingredient).update(current_price=link.last_price)
         links.append(link)
