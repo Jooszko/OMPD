@@ -143,7 +143,6 @@ html, body {
 }
 
 :root {
-  /* Mapowanie kolorów shadcn na Wasze kolory bakery */
   --background: #d3cdcd;          /* bakery-main */
   --foreground: #1a1a1a;          /* bakery-dark */
   --card: #e2dede;                /* bakery-inactive */

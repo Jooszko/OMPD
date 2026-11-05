@@ -1,22 +1,3 @@
-"""Rekomendacja ciasta dla wyrobu na podstawie jego receptury.
-
-Dla każdego ciasta szuka wagi kęsa w (najmniejsze kwadraty po masie surowców wspólnych), przy której
-skład ciasta na 1 kg x w najlepiej odtwarza recepturę wyrobu. Potem ocenia każdy surowiec osobno:
-
-- surowiec ciasta i receptury: 1, gdy ilości się zgadzają, malejąco do 0 przy różnicy MAX_DEVIATION,
-- surowiec ciasta, którego nie ma w recepturze: 0,
-- surowiec receptury spoza ciasta, który w piekarni pełni rolę surowca ciasta (mąka, jaja, mleko…): 0 —
-  ciasto go nie daje, a dodatkiem być nie powinien,
-- surowiec receptury spoza ciasta w roli dodatku (konfitura, mak, ser): dodatek, nie wpływa na ocenę.
-
-Rolę surowca rozstrzyga większość jego użyć: jest surowcem ciasta, gdy występuje w większej liczbie ciast niż
-dodatków wyrobów (przy remisie — dodatek). Dzięki temu jedno ciasto z makiem nie robi z maku surowca ciasta.
-
-Ocena surowców wspólnych to średnia dwóch średnich: zwykłej (sól i drożdże ważą tyle co mąka) i ważonej masą
-(pomyłka w mące waży więcej niż w soli). Zgodność to ta ocena pomnożona przez kwadrat pokrycia (udział
-surowców wspólnych wśród ocenianych), więc brak surowca waży więcej niż różnica ilości.
-1,0 oznacza, że wyrób to dokładnie to ciasto (+ dodatki).
-"""
 from decimal import ROUND_HALF_UP, Decimal
 
 from collections import Counter
@@ -40,7 +21,6 @@ MAX_SUGGESTIONS = 3
 
 def _ingredient_accuracy(actual, expected):
     """1 przy zgodnej ilości, 0 przy różnicy MAX_DEVIATION i większej; ilości w jednostce surowca."""
-    # Receptura zaokrągla do 0,001 i nie zapisuje mniej niż 0,001 (np. sól w małej bułce).
     expected = max(expected, RECIPE_MINIMUM)
     difference = max(abs(actual - expected) - ROUNDING_TOLERANCE, Decimal('0'))
     deviation = difference / max(actual, expected)
@@ -80,7 +60,6 @@ def match_dough(product_amounts, dough_amounts, units, dough_like=frozenset()):
     judged = len(shared) + len(missing) + len(foreign)
     score = Decimal('0')
     if shared:
-        # Brak surowca to inna receptura, a nie drobna różnica — pokrycie liczy się podwójnie.
         coverage = Decimal(len(shared)) / judged
         plain = sum(accuracies.values()) / len(shared)
         masses = {i: product_amounts[i] * mass[i] for i in shared}

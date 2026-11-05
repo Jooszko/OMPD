@@ -1575,7 +1575,7 @@ export interface DoughSuggestion {
   /** Zgodność składu 0–1. */
   score: string;
   piece_weight_kg: string;
-  /** Surowce receptury spoza ciasta, które nie występują w żadnym cieście — po przypisaniu staną się dodatkami. */
+  /** Surowce receptury spoza ciasta w roli dodatku — po przypisaniu staną się dodatkami. */
   additions: { ingredient_id: number; name: string; unit: string; amount: string }[];
   /** Surowce receptury, których to ciasto nie ma, choć zwykle wchodzą do ciast (mąka, jaja…). */
   foreign: string[];
