@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { Search, Plus, Edit, Phone, Mail, MapPin, X, Package, SearchCheck, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { createIngredient, fetchSuppliers, saveSupplier, fetchIngredients, type AppIngredient } from '../../../services/api';
+import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 
 interface SupplierProduct {
     product_id: number;
@@ -558,7 +559,12 @@ export default function SuppliersPanel() {
                             </button>
                         </div>
 
-                        <div className="p-5 flex-1 overflow-y-auto flex flex-col min-h-0">
+                        <DashboardListScrollbar
+                            className="flex-1 min-h-0"
+                            viewportClassName="overscroll-contain"
+                            contentClassName="p-5 flex flex-col"
+                            thumbTrackPadding={6}
+                        >
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4 border-b border-[#e6e1df] pb-4 mb-4">
                                 <div>
                                     <label className="text-xs font-extrabold text-[#3d3937] block mb-1.5">Pełna nazwa firmy Dostawcy *</label>
@@ -639,7 +645,12 @@ export default function SuppliersPanel() {
                                         </span>
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    <DashboardListScrollbar
+                                        className="flex-1 min-h-0"
+                                        viewportClassName="overscroll-contain"
+                                        contentClassName="p-2 space-y-1"
+                                        thumbTrackPadding={4}
+                                    >
                                         {globalProducts
                                             .filter(p => !supplierProducts.some(sp => sp.product_id === p.product_id))
                                             .filter(p => p.name.toLowerCase().includes(ingredientSearch.toLowerCase().trim()))
@@ -667,7 +678,7 @@ export default function SuppliersPanel() {
                                                 {ingredientSearch ? 'Nie znaleziono pasującego surowca.' : 'Wszystkie surowce zostały przypisane.'}
                                             </div>
                                         )}
-                                    </div>
+                                    </DashboardListScrollbar>
                                 </div>
 
                                 <div className="border border-bakery-btnBorder rounded-xl bg-white flex flex-col h-56 overflow-hidden">
@@ -675,7 +686,12 @@ export default function SuppliersPanel() {
                                         <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"><Package className="w-3.5 h-3.5 text-bakery-dark" /> Przypisane Surowce</span>
                                         <span className="text-[10px] font-bold font-mono text-gray-500 bg-bakery-rowBg px-1.5 py-0.5 rounded border border-bakery-btnBorder">{supplierProducts.length}</span>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    <DashboardListScrollbar
+                                        className="flex-1 min-h-0"
+                                        viewportClassName="overscroll-contain"
+                                        contentClassName="p-2 space-y-1"
+                                        thumbTrackPadding={4}
+                                    >
                                         {supplierProducts.length > 0 ? (
                                             supplierProducts.map(p => (
                                                 <div key={p.product_id} className="p-2 px-2.5 bg-[#f3efed] rounded-lg text-[13px] font-semibold text-bakery-dark flex items-center gap-2">
@@ -700,10 +716,10 @@ export default function SuppliersPanel() {
                                         ) : (
                                             <div className="text-center py-10 text-gray-400 text-xs font-semibold italic">Lista asortymentu jest pusta.<br />Dodaj produkty z listy po lewej stronie.</div>
                                         )}
-                                    </div>
+                                    </DashboardListScrollbar>
                                 </div>
                             </div>
-                        </div>
+                        </DashboardListScrollbar>
 
                         <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex justify-end gap-2 shrink-0">
                             <button type="submit" className="min-h-10 px-4 text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded-xl transition">

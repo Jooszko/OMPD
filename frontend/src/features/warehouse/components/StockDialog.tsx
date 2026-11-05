@@ -97,7 +97,14 @@ export function StockDialog({
   };
 
   return (
-    <Modal title="Zmiana stanu magazynu" subtitle={config.hint} closeDisabled={saving} onClose={onClose} initialFocusSelector="#stock-quantity">
+    <Modal
+      title="Zmiana stanu magazynu"
+      subtitle={config.hint}
+      closeDisabled={saving}
+      customScrollbar
+      onClose={onClose}
+      initialFocusSelector="#stock-quantity"
+    >
       <form onSubmit={submit} className="flex flex-col gap-4 font-auth">
         <div role="radiogroup" aria-label="Rodzaj zmiany" className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[#ece7e5]">
           {KINDS.map((option) => {
