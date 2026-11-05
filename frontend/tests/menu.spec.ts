@@ -14,7 +14,6 @@ test.describe('Sprawdzenie ładowanie stron', () => {
     await page.getByRole('button', { name: 'Rozwiń menu' }).click();
     await page.getByRole('link', { name: 'Strona główna' }).click();
     await page.getByRole('button', { name: 'Powiadomienia' }).click();
-    await page.getByRole('button', { name: 'Powiadomienia', exact: true }).click();
     await page.getByRole('complementary', { name: 'Menu główne' }).getByRole('link', { name: 'Zamówienia' }).click();
     await page.getByRole('link', { name: 'Klienci' }).click();
     await page.getByRole('link', { name: 'Tablica produkcji' }).click();

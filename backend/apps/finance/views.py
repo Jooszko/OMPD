@@ -93,14 +93,32 @@ def _save_supplier_catalog(supplier, products_data):
             continue
 
 
-def _supplier_catalog_error(products_data):
+def _supplier_catalog_error(products_data, supplier=None):
     if not isinstance(products_data, list):
         return 'Lista surowców dostawcy jest nieprawidłowa.'
+    saved_prices = {}
+    if supplier:
+        saved_prices = dict(
+            SupplierIngredient.objects.filter(supplier=supplier).values_list('ingredient_id', 'last_price')
+        )
     for item in products_data:
         if not isinstance(item, dict):
             return 'Dane surowca dostawcy są nieprawidłowe.'
         if 'is_assigned' in item and not isinstance(item['is_assigned'], bool):
             return 'Status przypisania surowca jest nieprawidłowy.'
+        product_id = item.get('product_id')
+        saved_price = saved_prices.get(product_id) if isinstance(product_id, int) else None
+        if item.get('is_assigned', True) and (
+            (
+                'last_price' not in item
+                and (saved_price is None or saved_price <= 0)
+            )
+            or (
+                'last_price' in item
+                and (item['last_price'] is None or not str(item['last_price']).strip())
+            )
+        ):
+            return 'Każdy przypisany surowiec musi mieć cenę większą od zera.'
         if item.get('last_price') is not None:
             _, error = parse_price(item['last_price'])
             if error:
@@ -170,7 +188,7 @@ class SupplierDetailView(APIView):
         products_provided = 'products' in data
         products_data = data.pop('products') if products_provided else None
         if products_provided:
-            catalog_error = _supplier_catalog_error(products_data)
+            catalog_error = _supplier_catalog_error(products_data, supplier)
             if catalog_error:
                 return Response({'error': catalog_error}, status=status.HTTP_400_BAD_REQUEST)
 

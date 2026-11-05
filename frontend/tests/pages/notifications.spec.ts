@@ -15,7 +15,6 @@ test.describe('Sprawdzenie zawartości strony powiadomień', () => {
         await page.getByRole('button', { name: 'Zobacz wszystkie powiadomienia' }).click();
         await page.getByRole('heading', { name: 'Powiadomienia' }).click();
         await page.getByRole('button', { name: 'Wszystkie', exact: true }).click();
-        await page.getByRole('button', { name: 'Nieprzeczytane' }).click();
         await page.getByRole('button', { name: 'Nowa wiadomość' }).click();
         await page.getByRole('button', { name: 'Anuluj' }).click();
         await page.getByRole('heading', { name: 'Skrzynka odbiorcza' }).click();

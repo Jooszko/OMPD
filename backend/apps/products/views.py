@@ -92,7 +92,7 @@ class IngredientListView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         initial = serializer.validated_data.pop('current_stock', Decimal('0'))
-        price = serializer.validated_data.pop('current_price')
+        price = serializer.validated_data.pop('current_price', None)
         with transaction.atomic():
             ingredient = serializer.save()
             IngredientStock.objects.create(ingredient=ingredient, current_price=price)
@@ -105,7 +105,15 @@ class IngredientListView(APIView):
                     {'field': 'name', 'label': 'Nazwa', 'old': None, 'new': ingredient.name},
                     {'field': 'unit', 'label': 'Jednostka', 'old': None, 'new': ingredient.unit},
                     {'field': 'current_stock', 'label': 'Stan początkowy', 'old': None, 'new': str(initial)},
-                    {'field': 'current_price', 'label': 'Cena magazynowa', 'old': None, 'new': _price(price, ingredient.unit)},
+                    *(
+                        [{
+                            'field': 'current_price',
+                            'label': 'Cena magazynowa',
+                            'old': None,
+                            'new': _price(price, ingredient.unit),
+                        }]
+                        if price is not None else []
+                    ),
                 ],
             )
         return Response(warehouse_row(ingredient), status=status.HTTP_201_CREATED)

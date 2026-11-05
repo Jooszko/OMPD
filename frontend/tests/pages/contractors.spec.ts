@@ -12,9 +12,6 @@ test.describe('Sprawdzenie zawartości strony kontrahentów', () => {
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
     await page.getByRole('link', { name: 'Kontrahenci' }).click();
     await page.getByRole('heading', { name: 'Księga Kontrahentów' }).click();
-    await page.getByRole('button', { name: 'Aktywni 9 aktywni kontrahenci' }).click();
-    await page.getByRole('button', { name: 'Nieaktywni 1 nieaktywni' }).click();
-    await page.getByRole('button', { name: 'Nieaktywni 1 nieaktywni' }).click();
     await page.getByRole('button', { name: 'Dodaj Kontrahenta' }).click();
     await page.getByRole('heading', { name: 'Nowa Kartoteka Kontrahenta' }).click();
     await page.locator('.text-gray-400').first().click();

@@ -132,3 +132,51 @@ class SupplierCatalogApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(self.supplier.ingredients_catalog.exists())
+
+    def test_creating_supplier_rejects_missing_or_non_positive_assigned_ingredient_price(self):
+        ingredient = Ingredient.objects.create(name='Mąka', unit='kg')
+
+        for price in ('missing', None, '', '0', '-1'):
+            with self.subTest(price=price):
+                product = {'product_id': ingredient.pk}
+                if price != 'missing':
+                    product['last_price'] = price
+                response = self.api.post(
+                    '/api/finance/suppliers/',
+                    {'name': f'Dostawca {price}', 'products': [product]},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(Supplier.objects.exclude(pk=self.supplier.pk).exists())
+        self.assertFalse(self.supplier.ingredients_catalog.exists())
+
+    def test_editing_supplier_rejects_missing_or_non_positive_assigned_ingredient_price(self):
+        ingredient = Ingredient.objects.create(name='Mąka', unit='kg')
+
+        for price in ('missing', None, '', '0', '-1'):
+            with self.subTest(price=price):
+                product = {'product_id': ingredient.pk}
+                if price != 'missing':
+                    product['last_price'] = price
+                response = self.api.put(
+                    f'/api/finance/suppliers/{self.supplier.pk}/',
+                    {'name': self.supplier.name, 'products': [product]},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.supplier.ingredients_catalog.exists())
+
+    def test_unassigned_ingredient_can_have_no_price(self):
+        ingredient = Ingredient.objects.create(name='Mąka', unit='kg')
+
+        response = self.api.put(
+            f'/api/finance/suppliers/{self.supplier.pk}/',
+            {
+                'name': self.supplier.name,
+                'products': [{'product_id': ingredient.pk, 'last_price': None, 'is_assigned': False}],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(self.supplier.ingredients_catalog.get().last_price)

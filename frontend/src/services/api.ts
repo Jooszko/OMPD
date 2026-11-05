@@ -512,7 +512,7 @@ export interface IngredientPayload {
 }
 
 export async function createIngredient(
-  payload: IngredientPayload & Pick<AppIngredient, 'name' | 'unit'> & { current_price: string }
+  payload: IngredientPayload & Pick<AppIngredient, 'name' | 'unit'>
 ): Promise<WarehouseRow> {
   const response = await apiFetch(`${API_BASE}/products/ingredients/`, {
     method: 'POST',

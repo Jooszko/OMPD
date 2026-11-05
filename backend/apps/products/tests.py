@@ -39,6 +39,20 @@ class IngredientCreateApiTests(TestCase):
         self.assertEqual(IngredientStock.objects.get(ingredient=ingredient).current_price, Decimal('6.40'))
         self.assertEqual(AuditEntry.objects.get(action='ingredient.created').object_id, str(ingredient.pk))
 
+    def test_admin_can_create_ingredient_without_price(self):
+        self.api.force_authenticate(self.admin)
+
+        response = self.api.post(
+            '/api/products/ingredients/', {'name': 'Zakwas bez ceny', 'unit': 'kg'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, 201)
+        ingredient = Ingredient.objects.get(pk=response.data['ingredient_id'])
+        self.assertIsNone(IngredientStock.objects.get(ingredient=ingredient).current_price)
+        self.assertIsNone(response.data['current_price'])
+        changes = AuditEntry.objects.get(action='ingredient.created').changes
+        self.assertNotIn('current_price', [change['field'] for change in changes])
+
     def test_baker_cannot_create_ingredient(self):
         self.api.force_authenticate(self.baker)
 
@@ -49,15 +63,16 @@ class IngredientCreateApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Ingredient.objects.exists())
 
-    def test_price_is_required_and_positive(self):
+    def test_optional_price_must_be_positive_when_provided(self):
         self.api.force_authenticate(self.admin)
 
-        for price in (None, '0', '-2', 'tanio'):
+        for price in ('0', '-2', 'tanio'):
             with self.subTest(price=price):
-                payload = {'name': 'Zakwas', 'unit': 'kg'}
-                if price is not None:
-                    payload['current_price'] = price
-                response = self.api.post('/api/products/ingredients/', payload, format='json')
+                response = self.api.post(
+                    '/api/products/ingredients/',
+                    {'name': f'Zakwas {price}', 'unit': 'kg', 'current_price': price},
+                    format='json',
+                )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn('current_price', response.data)
         self.assertFalse(Ingredient.objects.exists())

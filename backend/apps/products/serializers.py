@@ -40,10 +40,9 @@ class IngredientSerializer(serializers.ModelSerializer):
 class IngredientCreateSerializer(IngredientSerializer):
     current_stock = serializers.DecimalField(**STOCK_FIELD, required=False, write_only=True)
     current_price = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=Decimal('0.01'), write_only=True,
-        help_text='Cena magazynowa za jednostkę.',
+        max_digits=10, decimal_places=2, min_value=Decimal('0.01'), required=False, allow_null=True,
+        write_only=True, help_text='Opcjonalna cena magazynowa za jednostkę.',
         error_messages={
-            'required': 'Podaj cenę składnika.',
             'null': 'Podaj cenę składnika.',
             'invalid': 'Cena musi być liczbą, np. 4.50.',
             'min_value': 'Cena musi być większa od zera.',

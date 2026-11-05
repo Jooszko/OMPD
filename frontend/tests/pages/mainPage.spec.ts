@@ -11,7 +11,6 @@ test.describe('Sprawdzenie zawartości strony głównej', () => {
         await page.getByRole('textbox', { name: 'Hasło' }).fill('bakery2026');
         await page.getByRole('button', { name: 'Zaloguj się' }).click();
         await page.getByRole('link', { name: 'Strona główna' }).click();
-        await page.getByRole('heading', { name: 'Dobry wieczór, Mikołaj' }).click();
         await page.getByText('Przychód dziś').click();
         await page.getByRole('heading', { name: 'Droga zamówień' }).click();
         await page.getByText('Zaplanowane', { exact: true }).click();

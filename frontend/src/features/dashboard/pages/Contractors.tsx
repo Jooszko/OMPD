@@ -55,7 +55,6 @@ export default function SuppliersPanel() {
     const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
     const [newProductName, setNewProductName] = useState('');
     const [newProductUnit, setNewProductUnit] = useState('');
-    const [newProductPrice, setNewProductPrice] = useState('');
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
     const closeToast = useCallback(() => setToast(null), []);
@@ -159,17 +158,17 @@ export default function SuppliersPanel() {
         const productsById = new Map<number, SupplierProduct>();
         for (const product of supplierProducts) {
             const rawPrice = product.last_price?.trim();
-            if (rawPrice) {
-                const normalizedPrice = rawPrice.replace(',', '.');
-                const price = Number(normalizedPrice);
-                if (!Number.isFinite(price) || price <= 0 || price > 99999999.99) {
-                    setToast({ text: `Wprowadź prawidłową cenę dla surowca ${product.name}.` });
-                    return;
-                }
-                productsById.set(product.product_id, { ...product, last_price: normalizedPrice, is_assigned: true });
-            } else {
-                productsById.set(product.product_id, { ...product, last_price: null, is_assigned: true });
+            if (!rawPrice) {
+                setToast({ text: `Podaj cenę większą od zera dla przypisanego surowca ${product.name}.` });
+                return;
             }
+            const normalizedPrice = rawPrice.replace(',', '.');
+            const price = Number(normalizedPrice);
+            if (!Number.isFinite(price) || price <= 0 || price > 99999999.99) {
+                setToast({ text: `Wprowadź prawidłową cenę dla surowca ${product.name}.` });
+                return;
+            }
+            productsById.set(product.product_id, { ...product, last_price: normalizedPrice, is_assigned: true });
         }
 
         const previouslyAssignedProductIds = new Set(
@@ -263,22 +262,12 @@ export default function SuppliersPanel() {
     const handleCreateNewGlobalProduct = async () => {
         const trimmedName = newProductName.trim();
         const trimmedUnit = newProductUnit.trim();
-        const trimmedPrice = newProductPrice.trim();
         if (!trimmedName) {
             setToast({ text: 'Nazwa składnika nie może być pusta.' });
             return;
         }
         if (!trimmedUnit) {
             setToast({ text: 'Jednostka miary jest wymagana.' });
-            return;
-        }
-        if (
-            !trimmedPrice
-            || !Number.isFinite(Number(trimmedPrice))
-            || Number(trimmedPrice) <= 0
-            || Number(trimmedPrice) > 99999999.99
-        ) {
-            setToast({ text: 'Podaj cenę większą od zera, najwyżej 99999999,99.' });
             return;
         }
         if (globalProducts.some(p => p.name.toLowerCase() === `${trimmedName} (${trimmedUnit})`.toLowerCase())) {
@@ -291,7 +280,6 @@ export default function SuppliersPanel() {
             const ingredient = await createIngredient({
                 name: trimmedName,
                 unit: trimmedUnit,
-                current_price: Number(trimmedPrice).toFixed(2),
             });
             setGlobalProducts(current => [
                 ...current,
@@ -301,11 +289,9 @@ export default function SuppliersPanel() {
                     unit: ingredient.unit,
                 },
             ]);
-            setProductPrices(current => ({ ...current, [ingredient.ingredient_id]: trimmedPrice }));
             setIsNewProductModalOpen(false);
             setNewProductName('');
             setNewProductUnit('');
-            setNewProductPrice('');
             setToast({ variant: 'success', text: 'Surowiec dodano do ogólnej bazy. Kliknij „+”, aby przypisać go do dostawcy.' });
         } catch (error: unknown) {
             console.error('Błąd podczas dodawania składnika do bazy:', error);
@@ -621,7 +607,6 @@ export default function SuppliersPanel() {
                                                 onClick={() => {
                                                     setNewProductName('');
                                                     setNewProductUnit('');
-                                                    setNewProductPrice('');
                                                     setIsNewProductModalOpen(true);
                                                 }} 
                                                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-bakery-dark hover:bg-[#2e2e2e] text-white rounded transition shadow-xs active:scale-[0.98]"
@@ -650,7 +635,7 @@ export default function SuppliersPanel() {
                                             )}
                                         </div>
                                         <span className="text-[10px] text-gray-500">
-                                            Kliknij „+”, aby przypisać surowiec; cena zapisze się z kartoteką.
+                                            Kliknij „+”, aby przypisać surowiec; cenę ustawisz po prawej stronie.
                                         </span>
                                     </div>
 
@@ -664,18 +649,6 @@ export default function SuppliersPanel() {
                                                     className="p-2 px-2.5 bg-[#f3efed] hover:bg-[#ebe4e1] rounded-lg text-[13px] font-semibold text-bakery-dark flex items-center gap-2 transition"
                                                 >
                                                     <span className="truncate flex-1 min-w-0">{p.name}</span>
-                                                    <div className="flex items-center gap-1 shrink-0">
-                                                        <input
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            value={productPrices[p.product_id] ?? ''}
-                                                            onChange={(e) => setProductPrices(current => ({ ...current, [p.product_id]: e.target.value }))}
-                                                            aria-label={`Cena ${p.name}`}
-                                                            placeholder="Cena"
-                                                            className="w-16 h-8 px-1.5 border border-bakery-btnBorder rounded-md text-xs bg-white text-bakery-dark outline-none focus:border-bakery-accent"
-                                                        />
-                                                        <span className="text-[10px] text-gray-500">zł/{p.unit ?? 'j.'}</span>
-                                                    </div>
                                                     <button 
                                                         type="button" 
                                                         onClick={() => handleAddProductToSupplier(p)} 
@@ -772,12 +745,8 @@ export default function SuppliersPanel() {
                                     <option value="szt">szt</option>
                                 </select>
                             </label>
-                            <label className="flex flex-col gap-1.5 text-xs font-extrabold text-[#3d3937]">
-                                Cena (zł/{newProductUnit || 'jednostkę'})
-                                <input type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="np. 12,50" className="w-full h-11 px-3.5 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent" />
-                            </label>
                             <span className="text-[10px] text-gray-400 font-medium block">
-                                Składnik zostanie zapisany na stałe w bazie surowców, a cena od razu stanie się jego ceną w magazynie. U tego dostawcy zapisze się dopiero po zapisaniu kartoteki.
+                                Składnik zostanie zapisany w ogólnej bazie surowców. Cenę ustawisz po przypisaniu go do kontrahenta.
                             </span>
                         </div>
 
