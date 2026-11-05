@@ -1,15 +1,3 @@
-"""Receptura wyrobu przypisanego do ciasta: część z ciasta + dodatki.
-
-Ciasto jest wzorcem technologicznym (skład na 1 kg), a receptura produktu (Recipe, na sztukę)
-jest z niego wyliczana:
-
-    Recipe = skład ciasta na 1 kg x waga kęsa + dodatki (ProductAddition)
-
-Dodatek to surowiec spoza ciasta, dokładany do gotowego kęsa (konfitura w pączku, mak do posypania).
-Surowiec ze składu ciasta nie może być dodatkiem — jego ilość wynika wyłącznie z ciasta.
-Recipe nie zawiera bufora strat — doliczają go finanse (common.losses). Wyroby bez ciasta mają
-recepturę wpisywaną ręcznie, jak dotąd.
-"""
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -107,7 +95,6 @@ def rebuild_recipe(product, request=None, reason='', action='recipe.recalculated
     if spec is None:
         return False
     part = dough_part(spec)
-    # Po zmianie ciasta lub jego składu surowiec z dodatków mógł trafić do ciasta — wtedy liczy się tylko ciasto.
     overlapping = ProductAddition.objects.filter(product=product, ingredient_id__in=part).select_related('ingredient')
     dropped = [f'{a.ingredient.name} {a.amount} {a.ingredient.unit}' for a in overlapping.order_by('ingredient__name')]
     overlapping.delete()

@@ -3,7 +3,6 @@ from .models import Supplier, SupplierIngredient
 from products.models import Ingredient
 
 class SupplierProductSerializer(serializers.ModelSerializer):
-    """Serializer mapujący produkt z perspektywy kontrahenta"""
     product_id = serializers.IntegerField(source='ingredient.ingredient_id')
     name = serializers.CharField(source='ingredient.name')
     unit = serializers.CharField(source='ingredient.unit')
