@@ -4,7 +4,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.cache import cache
 
@@ -13,6 +13,7 @@ USER_AGENT = 'OMPD-bakery-erp/1.0'
 MIN_INTERVAL_SECONDS = 1.1
 SEARCH_LIMIT = 5
 LAST_CALL_KEY = 'geocoding:last-call'
+COORDINATE_QUANTUM = Decimal('0.000001')
 
 
 class GeocodingError(Exception):
@@ -55,7 +56,9 @@ def lookup_address(address: str, *, country_codes: str = 'pl', timeout: int = 10
     try:
         for result in results:
             if _in_town(result, town):
-                return GeocodeMatch(Decimal(result['lat']), Decimal(result['lon']), result.get('display_name', ''))
+                latitude = Decimal(result['lat']).quantize(COORDINATE_QUANTUM, rounding=ROUND_HALF_UP)
+                longitude = Decimal(result['lon']).quantize(COORDINATE_QUANTUM, rounding=ROUND_HALF_UP)
+                return GeocodeMatch(latitude, longitude, result.get('display_name', ''))
     except (KeyError, ValueError, AttributeError) as exc:
         raise GeocodingError(f'Nieoczekiwany format odpowiedzi serwisu geokodowania: {exc}') from exc
     return None
