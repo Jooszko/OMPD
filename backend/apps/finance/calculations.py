@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 
+from common.losses import LOSS_BUFFER
 from orders.models import DailyOrder, ProductReturn
 from products.models import IngredientStock, Recipe, StockMovement
 
@@ -13,7 +14,6 @@ ZERO = Decimal('0')
 MONEY = DecimalField(max_digits=12, decimal_places=2)
 COGS_STATUSES = ['planned', 'in_production', 'in_delivery', 'delivered', 'failed']
 STOCK_LOSS_KINDS = [StockMovement.KIND_LOSS, StockMovement.KIND_COUNT]
-LOSS_BUFFER = Decimal('1.05')
 
 
 def days_between(start, end):

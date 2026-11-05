@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Tag, BookOpen, X, AlertTriangle, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Tag, BookOpen, X, AlertTriangle, Search, Lock } from 'lucide-react';
 import { DashboardListScrollbar } from '../components/DashboardListScrollbar';
 import { ActionToast, type ActionToastData } from '../components/ActionToast';
 import { Modal } from '../components/Modal';
@@ -15,6 +15,7 @@ import {
   type AppProduct,
   type AppIngredient,
   type AppRecipe,
+  type RecipeDough,
 } from '../../../services/api';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -56,6 +57,8 @@ export default function ProductsPanel() {
   const [recipeProductCategory, setRecipeProductCategory] = useState<string>('bread');
 
   const [recipeItems, setRecipeItems] = useState<DraftItem[]>([]);
+  // Wyrób z ciastem: część z ciasta jest tylko do odczytu, a recipeItems to same dodatki.
+  const [editingDough, setEditingDough] = useState<RecipeDough | null>(null);
   const [selectedIngredientId, setSelectedIngredientId] = useState<number | null>(null);
   const [ingredientAmount, setIngredientAmount] = useState<string>('');
 
@@ -124,6 +127,7 @@ export default function ProductsPanel() {
     setRecipeProductName('');
     setRecipeProductCategory('bread');
     setRecipeItems([]);
+    setEditingDough(null);
     setIsRecipeModalOpen(true);
   };
 
@@ -132,7 +136,9 @@ export default function ProductsPanel() {
     setEditingProductId(recipe.product_id);
     setRecipeProductName(recipe.name);
     setRecipeProductCategory(recipe.category);
-    setRecipeItems(recipe.items.map(i => ({ ingredient_id: i.ingredient_id, amount: parseFloat(i.amount) })));
+    setEditingDough(recipe.dough);
+    const editable = recipe.dough ? recipe.dough.additions : recipe.items;
+    setRecipeItems(editable.map(i => ({ ingredient_id: i.ingredient_id, amount: parseFloat(i.amount) })));
     setIsRecipeModalOpen(true);
   };
 
@@ -160,7 +166,7 @@ export default function ProductsPanel() {
       return;
     }
 
-    if (recipeItems.length === 0) {
+    if (recipeItems.length === 0 && !editingDough) {
       setToast({ text: 'Receptura musi zawierać co najmniej jeden składnik.' });
       return;
     }
@@ -180,10 +186,10 @@ export default function ProductsPanel() {
         setRecipes(recipes.map(r => r.product_id === editingProductId ? updated : r));
       }
       setIsRecipeModalOpen(false);
-      setToast({ variant: 'success', text: 'Receptura została zapisana.' });
+      setToast({ variant: 'success', text: editingDough ? 'Dodatki zostały zapisane.' : 'Receptura została zapisana.' });
     } catch (error) {
       console.error('Błąd podczas zapisu receptury:', error);
-      setToast({ text: 'Nie udało się zapisać receptury.' });
+      setToast({ text: error instanceof Error ? error.message : 'Nie udało się zapisać receptury.' });
     }
   };
 
@@ -445,6 +451,12 @@ export default function ProductsPanel() {
                       >
                         <span className="min-w-0 flex flex-col gap-0.5">
                           <span className="text-[15px] font-extrabold text-bakery-dark">{recipe.name}</span>
+                          {recipe.dough && (
+                            <span className="text-xs font-semibold text-[#5f5a58]">
+                              z ciasta: <span className="font-extrabold text-bakery-dark">{recipe.dough.dough_name}</span>
+                              {recipe.dough.additions.length > 0 && ` + ${recipe.dough.additions.length} dodatk.`}
+                            </span>
+                          )}
                           <span className="md:hidden text-xs font-semibold text-[#5f5a58]">
                             {CATEGORY_LABELS[recipe.category] ?? recipe.category} · {recipe.items.length} składn.
                           </span>
@@ -486,7 +498,7 @@ export default function ProductsPanel() {
 
       {isRecipeModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] h-[520px] font-auth">
+          <div className={`bg-bakery-card border border-bakery-btnBorder rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] ${editingDough ? 'h-[640px]' : 'h-[520px]'} font-auth`}>
 
             <div className="bg-bakery-dark text-white px-5 py-4 flex justify-between items-center shrink-0">
               <h2 className="m-0 text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
@@ -534,8 +546,33 @@ export default function ProductsPanel() {
                 </div>
               </div>
 
+              {editingDough && (
+                <section aria-label="Część z ciasta" className="bg-[#f3efed] border border-bakery-btnBorder p-4 rounded-xl flex flex-col gap-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-xs font-extrabold text-[#4a4543] flex items-center gap-1.5">
+                      <Lock aria-hidden className="w-3.5 h-3.5" /> Z ciasta: {editingDough.dough_name}
+                    </span>
+                    <span className="text-xs font-semibold text-[#5f5a58] tabular-nums">
+                      kęs {Number(editingDough.piece_weight_kg).toLocaleString('pl-PL')} kg · wyliczane automatycznie
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editingDough.dough_items.map(item => (
+                      <span key={item.ingredient_id} className="bg-white border border-bakery-btnBorder px-2.5 py-1 rounded-lg text-[#4a4543] font-semibold text-[11px]">
+                        {item.ingredient_name}: <span className="text-bakery-dark font-extrabold">{item.amount} {item.unit}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="m-0 text-[11px] font-semibold text-[#5f5a58]">
+                    Ciasto i wagę kęsa zmienisz w ustawieniach produkcji. Tutaj edytujesz tylko dodatki spoza ciasta.
+                  </p>
+                </section>
+              )}
+
               <div className="bg-white border border-bakery-btnBorder p-4 rounded-xl">
-                <span className="text-xs font-extrabold text-[#4a4543] block mb-2.5">Dodaj komponent / surowiec</span>
+                <span className="text-xs font-extrabold text-[#4a4543] block mb-2.5">
+                  {editingDough ? 'Dodaj dodatek (nadzienie, posypka, smarowanie…)' : 'Dodaj komponent / surowiec'}
+                </span>
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1">
                     <select
@@ -565,7 +602,9 @@ export default function ProductsPanel() {
               </div>
 
               <div className="flex flex-col flex-1 min-h-0">
-                <span className="text-xs font-extrabold text-[#4a4543] block mb-1.5">Składniki przypisane do zestawu</span>
+                <span className="text-xs font-extrabold text-[#4a4543] block mb-1.5">
+                  {editingDough ? 'Dodatki spoza ciasta (na sztukę)' : 'Składniki przypisane do zestawu'}
+                </span>
                 <div className="border border-bakery-btnBorder rounded-xl bg-white flex-1 min-h-0 overflow-hidden">
                   <DashboardListScrollbar className="h-full" contentClassName="p-2 divide-y divide-[#e6e1df]">
                   {recipeItems.length > 0 ? (
@@ -584,7 +623,11 @@ export default function ProductsPanel() {
                       );
                     })
                   ) : (
-                    <div className="text-center py-12 px-4 text-[#5f5a58] text-sm font-semibold">Brak składników w tej karcie. Dodaj surowce powyżej.</div>
+                    <div className="text-center py-12 px-4 text-[#5f5a58] text-sm font-semibold">
+                      {editingDough
+                        ? 'Brak dodatków — receptura to sama część z ciasta.'
+                        : 'Brak składników w tej karcie. Dodaj surowce powyżej.'}
+                    </div>
                   )}
                   </DashboardListScrollbar>
                 </div>
@@ -594,7 +637,7 @@ export default function ProductsPanel() {
 
             <div className="bg-bakery-card p-3 border-t border-[#e6e1df] flex justify-end gap-2 shrink-0">
               <button type="button" onClick={handleSaveRecipe} className="min-h-10 px-4 rounded-xl text-[13px] font-extrabold bg-bakery-dark hover:bg-[#2e2e2e] text-white transition-colors">
-                Zapisz Recepturę i Produkt
+                {editingDough ? 'Zapisz dodatki' : 'Zapisz Recepturę i Produkt'}
               </button>
             </div>
 

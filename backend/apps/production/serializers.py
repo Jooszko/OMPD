@@ -7,6 +7,12 @@ from rest_framework import serializers
 from products.models import Ingredient
 
 from .models import Dough, DoughIngredient, Mixer, ProductBakeSpec
+from .services.recipes import dough_is_locked
+
+
+def composition_of(items):
+    """{ingredient_id: ilość na 1 kg} z danych formularza ciasta."""
+    return {item['ingredient'].pk: item['amount_per_kg'] for item in items}
 
 
 class MixerSerializer(serializers.ModelSerializer):
@@ -45,26 +51,29 @@ class DoughSerializer(serializers.ModelSerializer):
     )
     ingredients = DoughIngredientSerializer(source='dough_ingredients', many=True)
     products_count = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField(
+        help_text='Ciasto było używane w produkcji — jego składu nie można już zmienić.'
+    )
 
     class Meta:
         model = Dough
         fields = [
             'dough_id', 'name', 'mixer_id', 'loss_buffer_pct', 'mixing_time_min', 'target_dough_temp_c',
-            'proofing_time_min', 'mixing_instructions', 'ingredients', 'products_count',
+            'proofing_time_min', 'mixing_instructions', 'ingredients', 'products_count', 'is_locked',
         ]
+        # Bufor strat jest wspólny dla produkcji i finansów (common.losses) — nie ustawia się go w formularzu.
+        read_only_fields = ['loss_buffer_pct']
 
     def get_products_count(self, dough) -> int:
         return dough.bake_specs.count()
+
+    def get_is_locked(self, dough) -> bool:
+        return dough_is_locked(dough)
 
     def validate_name(self, value):
         value = value.strip()
         if not value:
             raise serializers.ValidationError('Podaj nazwę ciasta.')
-        return value
-
-    def validate_loss_buffer_pct(self, value):
-        if not Decimal('0') <= value < Decimal('100'):
-            raise serializers.ValidationError('Bufor strat musi mieścić się w przedziale 0–99,99%.')
         return value
 
     def validate_ingredients(self, items):
@@ -74,6 +83,19 @@ class DoughSerializer(serializers.ModelSerializer):
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError('Każdy surowiec może wystąpić w recepturze tylko raz.')
         return items
+
+    def validate(self, attrs):
+        items = attrs.get('dough_ingredients')
+        if self.instance is not None and items is not None and composition_of(items) != self.instance_composition():
+            if dough_is_locked(self.instance):
+                raise serializers.ValidationError({'ingredients': (
+                    'Ciasto było już używane w produkcji, więc jego składu nie można zmienić. '
+                    'Utwórz nowe ciasto i przepnij do niego wyroby.'
+                )})
+        return attrs
+
+    def instance_composition(self):
+        return {item.ingredient_id: item.amount_per_kg for item in self.instance.dough_ingredients.all()}
 
     @transaction.atomic
     def create(self, validated_data):

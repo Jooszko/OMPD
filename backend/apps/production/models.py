@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from common.losses import LOSS_BUFFER_PCT
 from common.models import TimeStampedModel
 
 
@@ -42,8 +43,8 @@ class Dough(TimeStampedModel):
         help_text='Domyślna mieszałka. Gdy brak — największa aktywna mieszałka.',
     )
     loss_buffer_pct = models.DecimalField(
-        max_digits=5, decimal_places=2, default=Decimal('3.00'),
-        help_text='Bufor na straty technologiczne (% masy ciasta).',
+        max_digits=5, decimal_places=2, default=LOSS_BUFFER_PCT,
+        help_text='Bufor na straty technologiczne (% masy ciasta) — wspólny z finansami (common.losses).',
     )
     mixing_instructions = models.TextField(blank=True, default='')
     mixing_time_min = models.PositiveIntegerField(default=10)

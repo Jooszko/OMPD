@@ -183,9 +183,14 @@ class ProductionAuditTests(PlanTestBase):
         api.delete(url)
 
         entries = list(AuditEntry.objects.filter(object_type='product', object_id=str(self.cake.pk)).order_by('entry_id'))
-        self.assertEqual([e.action for e in entries], ['bake_spec.updated', 'bake_spec.updated', 'bake_spec.deleted'])
+        self.assertEqual([e.action for e in entries], [
+            'bake_spec.updated', 'recipe.recalculated',
+            'bake_spec.updated', 'recipe.recalculated',
+            'bake_spec.deleted',
+        ])
         self.assertIn('Przypisano wyrób Sernik do ciasta Ciasto wiejskie', entries[0].description)
-        self.assertEqual(change_rows(entries[1]), [('Waga kęsa [kg]', '0.25', '0.3')])
+        self.assertEqual(change_rows(entries[2]), [('Waga kęsa [kg]', '0.25', '0.3')])
+        self.assertIn('zmiana parametrów wyrobu', entries[3].description)
 
     def test_rejected_settings_change_leaves_no_entry(self):
         self.as_user(self.admin).post(

@@ -88,3 +88,24 @@ class Recipe(models.Model):
 
     def __str__(self):
         return f"{self.amount} <- {self.ingredient.name} ({self.product.name})"
+
+
+class ProductAddition(models.Model):
+    """Dodatek spoza ciasta na sztukę wyrobu (nadzienie, posypka, smarowanie, olej do smażenia).
+
+    Dla wyrobu przypisanego do ciasta receptura (Recipe) jest wyliczana jako
+    część z ciasta (skład na 1 kg x waga kęsa) + dodatki.
+    """
+    addition_id = models.AutoField(primary_key=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='additions')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='product_additions')
+    amount = models.DecimalField(max_digits=10, decimal_places=3)
+
+    class Meta:
+        unique_together = ('product', 'ingredient')
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name='product_addition_amount_positive'),
+        ]
+
+    def __str__(self):
+        return f"+{self.amount} {self.ingredient.name} ({self.product.name})"

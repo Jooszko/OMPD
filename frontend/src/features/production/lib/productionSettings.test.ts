@@ -14,7 +14,6 @@ import {
 
 const dough = (overrides: Partial<DoughDraft> = {}): DoughDraft => ({
   name: 'Ciasto pszenne',
-  loss_buffer_pct: '3',
   mixing_time_min: '12',
   target_dough_temp_c: '26',
   proofing_time_min: '50',
@@ -123,13 +122,14 @@ const doughRow = (id: number, name: string): ProductionDough => ({
   dough_id: id,
   name,
   mixer_id: null,
-  loss_buffer_pct: '3',
+  loss_buffer_pct: '5.00',
   mixing_time_min: 10,
   target_dough_temp_c: '26',
   proofing_time_min: 45,
   mixing_instructions: '',
   ingredients: [],
   products_count: 0,
+  is_locked: false,
 });
 
 describe('productMatches', () => {

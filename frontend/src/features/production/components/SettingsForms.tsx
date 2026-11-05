@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Lock, Plus, Trash2 } from 'lucide-react';
 import type {
   BakeSpecValues,
   DoughInput,
@@ -163,7 +163,6 @@ export function DoughForm({
   const [draft, setDraft] = useState<DoughDraft & { mixer_id: number | ''; mixing_instructions: string }>({
     name: dough?.name ?? '',
     mixer_id: dough?.mixer_id ?? '',
-    loss_buffer_pct: dough ? String(Number(dough.loss_buffer_pct)) : '3',
     mixing_time_min: String(dough?.mixing_time_min ?? 10),
     target_dough_temp_c: dough ? String(Number(dough.target_dough_temp_c)) : '26',
     proofing_time_min: String(dough?.proofing_time_min ?? 45),
@@ -173,6 +172,7 @@ export function DoughForm({
       : [{ ingredient_id: '', amount_per_kg: '' }],
   });
   const { saving, error, submit } = useSubmit(onSaved);
+  const locked = dough?.is_locked ?? false;
 
   const unitOf = (id: number) => settings.ingredients.find((i) => i.ingredient_id === id)?.unit;
   const massPerKg = recipeMassPerKg(draft.ingredients, unitOf);
@@ -185,7 +185,6 @@ export function DoughForm({
       onSave({
         name: draft.name.trim(),
         mixer_id: draft.mixer_id === '' ? null : draft.mixer_id,
-        loss_buffer_pct: decimal(draft.loss_buffer_pct),
         mixing_time_min: Number(draft.mixing_time_min),
         target_dough_temp_c: decimal(draft.target_dough_temp_c),
         proofing_time_min: Number(draft.proofing_time_min),
@@ -222,8 +221,13 @@ export function DoughForm({
           </Field>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Field label="Bufor strat [%]">
-            <input className={INPUT} inputMode="decimal" value={draft.loss_buffer_pct} onChange={(e) => setDraft({ ...draft, loss_buffer_pct: e.target.value })} />
+          <Field label="Bufor strat [%]" hint="Wspólny z finansami.">
+            <input
+              className={`${INPUT} bg-[#f3efed] text-[#5f5a58] cursor-not-allowed`}
+              value={`${Number(settings.loss_buffer_pct).toLocaleString('pl-PL')}%`}
+              readOnly
+              aria-readonly
+            />
           </Field>
           <Field label="Mieszanie [min]">
             <input className={INPUT} inputMode="numeric" value={draft.mixing_time_min} onChange={(e) => setDraft({ ...draft, mixing_time_min: e.target.value })} />
@@ -250,13 +254,21 @@ export function DoughForm({
               Suma surowców wagowych: {massPerKg.toLocaleString('pl-PL', { maximumFractionDigits: 3 })} kg
             </span>
           </div>
+          {locked && (
+            <p className="m-0 flex items-start gap-2 rounded-xl bg-[#fff6e5] px-3.5 py-2.5 text-xs font-semibold text-[#7a4a00]">
+              <Lock aria-hidden className="w-4 h-4 shrink-0" />
+              Ciasto było już używane w produkcji, więc jego skład jest zablokowany. Aby zmienić recepturę, utwórz
+              nowe ciasto i przepnij do niego wyroby.
+            </p>
+          )}
           {draft.ingredients.map((item, index) => {
             const unit = item.ingredient_id === '' ? '' : unitOf(item.ingredient_id);
             return (
               <div key={index} className="flex gap-2 items-center">
                 <select
                   aria-label={`Surowiec ${index + 1}`}
-                  className={`${INPUT} cursor-pointer flex-1 min-w-0`}
+                  className={`${INPUT} cursor-pointer flex-1 min-w-0 disabled:cursor-not-allowed disabled:bg-[#f3efed]`}
+                  disabled={locked}
                   value={item.ingredient_id}
                   onChange={(e) => setItem(index, { ingredient_id: e.target.value === '' ? '' : Number(e.target.value) })}
                 >
@@ -269,31 +281,36 @@ export function DoughForm({
                 </select>
                 <input
                   aria-label={`Ilość surowca ${index + 1} na 1 kg ciasta`}
-                  className={`${FIELD} h-12 w-28 shrink-0 tabular-nums`}
+                  className={`${FIELD} h-12 w-28 shrink-0 tabular-nums disabled:cursor-not-allowed disabled:bg-[#f3efed]`}
+                  disabled={locked}
                   inputMode="decimal"
                   placeholder="np. 0,611"
                   value={item.amount_per_kg}
                   onChange={(e) => setItem(index, { amount_per_kg: e.target.value })}
                 />
                 <span className="w-8 shrink-0 text-xs font-bold text-[#5f5a58]">{unit}</span>
-                <button
-                  type="button"
-                  aria-label={`Usuń surowiec ${index + 1}`}
-                  onClick={() => setDraft({ ...draft, ingredients: draft.ingredients.filter((_, i) => i !== index) })}
-                  className="shrink-0 grid place-items-center size-12 rounded-xl border-0 bg-transparent text-[#5f5a58] cursor-pointer hover:text-[#b91c1c] hover:bg-[#fdecec]"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {!locked && (
+                  <button
+                    type="button"
+                    aria-label={`Usuń surowiec ${index + 1}`}
+                    onClick={() => setDraft({ ...draft, ingredients: draft.ingredients.filter((_, i) => i !== index) })}
+                    className="shrink-0 grid place-items-center size-12 rounded-xl border-0 bg-transparent text-[#5f5a58] cursor-pointer hover:text-[#b91c1c] hover:bg-[#fdecec]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setDraft({ ...draft, ingredients: [...draft.ingredients, { ingredient_id: '', amount_per_kg: '' }] })}
-            className="self-start inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark cursor-pointer hover:border-bakery-dark"
-          >
-            <Plus className="w-3.5 h-3.5" /> Dodaj surowiec
-          </button>
+          {!locked && (
+            <button
+              type="button"
+              onClick={() => setDraft({ ...draft, ingredients: [...draft.ingredients, { ingredient_id: '', amount_per_kg: '' }] })}
+              className="self-start inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark cursor-pointer hover:border-bakery-dark"
+            >
+              <Plus className="w-3.5 h-3.5" /> Dodaj surowiec
+            </button>
+          )}
           {recipeMassLooksWrong(massPerKg) && (
             <p className="m-0 text-xs font-semibold text-[#a35a00]">
               Dla kompletnej receptury suma surowców wagowych wynosi zwykle ok. 1 kg na 1 kg ciasta — sprawdź, czy
@@ -302,9 +319,9 @@ export function DoughForm({
           )}
         </section>
 
-        {dough && dough.products_count > 0 && (
+        {dough && !locked && dough.products_count > 0 && (
           <p className="m-0 text-xs font-semibold text-[#5f5a58]">
-            Zmiany obejmą przyszłe plany. Zapisane plany zachowują swoje listy odważeń.
+            Zmiana składu przeliczy receptury przypisanych wyrobów (dodatki zostaną bez zmian).
           </p>
         )}
         <FormError message={error} />

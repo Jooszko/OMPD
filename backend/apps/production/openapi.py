@@ -264,6 +264,9 @@ class ProductionSettingsSerializer(serializers.Serializer):
     doughs = DoughSerializer(many=True)
     products = BakeSpecRowSerializer(many=True)
     ingredients = SettingsIngredientSerializer(many=True)
+    loss_buffer_pct = serializers.DecimalField(
+        max_digits=5, decimal_places=2, help_text='Wspólny bufor strat ciast i finansów (stała systemowa).'
+    )
 
 class PlanCalendarDaySerializer(serializers.Serializer):
     delivery_date = serializers.DateField()

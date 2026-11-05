@@ -31,7 +31,6 @@ export interface RecipeDraftItem {
 
 export interface DoughDraft {
   name: string;
-  loss_buffer_pct: string;
   mixing_time_min: string;
   target_dough_temp_c: string;
   proofing_time_min: string;
@@ -40,8 +39,6 @@ export interface DoughDraft {
 
 export function validateDough(draft: DoughDraft): string | null {
   if (!draft.name.trim()) return 'Podaj nazwę ciasta.';
-  const buffer = parseDecimal(draft.loss_buffer_pct);
-  if (buffer === null || buffer < 0 || buffer >= 100) return 'Bufor strat musi mieścić się w przedziale 0–99%.';
   for (const [label, value] of [
     ['Czas mieszania', draft.mixing_time_min],
     ['Czas garowania', draft.proofing_time_min],

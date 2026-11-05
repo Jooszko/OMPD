@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { ProductionDough, ProductionSettings } from '../../../../services/api';
 import { plural } from '../../../home/lib/home';
 import { formatAmount } from '../../lib/productionStage';
@@ -74,7 +74,17 @@ function DoughCard({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="m-0 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">Receptura na 1 kg ciasta</h3>
+        <h3 className="m-0 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#5f5a58]">
+          Receptura na 1 kg ciasta
+          {dough.is_locked && (
+            <span
+              title="Ciasto było używane w produkcji — skład jest zablokowany."
+              className="inline-flex items-center gap-1 rounded-full bg-[#fff6e5] px-2 py-0.5 normal-case tracking-normal text-[#7a4a00]"
+            >
+              <Lock aria-hidden className="size-3" /> zablokowana
+            </span>
+          )}
+        </h3>
         <ul className="m-0 p-0 list-none grid sm:grid-cols-2 gap-x-6 px-4 py-1.5 rounded-[14px] bg-white border border-[#e6e1df]">
           {dough.ingredients.map((item) => (
             <li key={item.ingredient_id} className="flex justify-between gap-3 py-1.5 border-b border-[#f0ece9] text-[13px]">

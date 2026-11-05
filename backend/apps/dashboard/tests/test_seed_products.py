@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from finance.calculations import LOSS_BUFFER
+from common.losses import LOSS_BUFFER
 from production.models import ProductBakeSpec
 from products.models import Ingredient, IngredientStock, Product, Recipe
 from dashboard.seed.dates import build_date_range

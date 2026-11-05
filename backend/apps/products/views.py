@@ -8,6 +8,7 @@ from rest_framework import status
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from audit.services import field_changes, record_event
 from finance.models import SupplierIngredient
+from production.services import recipes
 from users.permissions import AdminOnly, AdminOrBaker
 from users.models import Notification, User
 from .models import Ingredient, IngredientStock, Product, Recipe, StockMovement
@@ -369,6 +370,18 @@ class ProductDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _recipe_items(amounts, ingredients):
+    return [
+        {
+            'ingredient_id': ingredient_id,
+            'ingredient_name': ingredients[ingredient_id].name,
+            'unit': ingredients[ingredient_id].unit,
+            'amount': str(amount),
+        }
+        for ingredient_id, amount in sorted(amounts.items(), key=lambda item: ingredients[item[0]].name)
+    ]
+
+
 def _serialize_recipe(product):
     items = [
         {
@@ -379,12 +392,44 @@ def _serialize_recipe(product):
         }
         for r in product.recipe_set.select_related('ingredient').all()
     ]
+    breakdown = recipes.recipe_breakdown(product)
+    dough = None
+    if breakdown is not None:
+        ingredients = Ingredient.objects.in_bulk(set(breakdown['dough_items']) | set(breakdown['additions']))
+        dough = {
+            'dough_id': breakdown['dough_id'],
+            'dough_name': breakdown['dough_name'],
+            'piece_weight_kg': str(breakdown['piece_weight_kg']),
+            'dough_items': _recipe_items(breakdown['dough_items'], ingredients),
+            'additions': _recipe_items(breakdown['additions'], ingredients),
+        }
     return {
         'product_id': product.product_id,
         'name': product.name,
         'category': product.category,
         'items': items,
+        'dough': dough,
     }
+
+
+def _parse_additions(items):
+    """{ingredient_id: ilość} z listy dodatków albo komunikat błędu."""
+    additions = {}
+    for item in items:
+        try:
+            ingredient_id = int(item['ingredient_id'])
+            amount = Decimal(str(item['amount']))
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            return None, 'Każdy dodatek musi mieć surowiec i ilość.'
+        if amount <= 0:
+            return None, 'Ilość dodatku musi być większa od zera.'
+        if ingredient_id in additions:
+            return None, 'Każdy surowiec może wystąpić w dodatkach tylko raz.'
+        additions[ingredient_id] = amount.quantize(recipes.RECIPE_PRECISION)
+    missing = set(additions) - set(Ingredient.objects.filter(pk__in=additions).values_list('pk', flat=True))
+    if missing:
+        return None, 'Wybrany surowiec nie istnieje.'
+    return additions, None
 
 
 class RecipeListCreateView(APIView):
@@ -455,6 +500,9 @@ class RecipeDetailView(APIView):
         product = get_object_or_404(Product, pk=product_id)
         items = request.data.get('items', [])
 
+        if recipes.bake_spec_of(product) is not None:
+            return self._save_additions(request, product, items)
+
         if not items:
             return Response(
                 {'error': 'Receptura musi zawierać co najmniej jeden składnik.'},
@@ -479,13 +527,38 @@ class RecipeDetailView(APIView):
 
         return Response(_serialize_recipe(product), status=status.HTTP_200_OK)
 
+    @staticmethod
+    def _save_additions(request, product, items):
+        """Wyrób z ciastem: zmienia się tylko dodatki, część z ciasta wylicza się sama."""
+        additions, error = _parse_additions(items)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            recipes.set_additions(product, additions)
+            recipes.rebuild_recipe(
+                product, request, action='recipe.updated',
+                description=f'Zmieniono dodatki w recepturze produktu {product.name}.',
+            )
+        return Response(_serialize_recipe(product), status=status.HTTP_200_OK)
+
     @extend_schema(
         summary='Usunięcie receptury',
-        description='Usuwa tylko recepturę – produkt zostaje.',
+        description=(
+            'Usuwa recepturę – produkt zostaje. Dla wyrobu z ciastem usuwa tylko dodatki: '
+            'receptura wraca do samej części z ciasta.'
+        ),
         responses={204: OpenApiResponse(description='Usunięto.'), 404: NOT_FOUND},
     )
     def delete(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
+        if recipes.bake_spec_of(product) is not None:
+            with transaction.atomic():
+                recipes.set_additions(product, {})
+                recipes.rebuild_recipe(
+                    product, request, action='recipe.updated',
+                    description=f'Usunięto dodatki z receptury produktu {product.name}.',
+                )
+            return Response(status=status.HTTP_204_NO_CONTENT)
         with transaction.atomic():
             before = _recipe_state(product)
             Recipe.objects.filter(product=product).delete()
