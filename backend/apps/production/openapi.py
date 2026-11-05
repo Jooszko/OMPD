@@ -280,7 +280,16 @@ class DoughSuggestionSerializer(serializers.Serializer):
     dough_name = serializers.CharField()
     score = serializers.DecimalField(max_digits=4, decimal_places=3, help_text='Zgodność składu 0–1.')
     piece_weight_kg = serializers.DecimalField(max_digits=7, decimal_places=3, help_text='Proponowana waga kęsa.')
-    additions = DoughSuggestionAdditionSerializer(many=True, help_text='Surowce ponad część z ciasta.')
+    additions = DoughSuggestionAdditionSerializer(
+        many=True, help_text='Surowce receptury spoza ciasta, które nie występują w żadnym cieście (nadzienia, posypki).'
+    )
+    foreign = serializers.ListField(
+        child=serializers.CharField(),
+        help_text='Surowce receptury, których to ciasto nie ma, choć zwykle wchodzą do ciast (mąka, jaja…).',
+    )
+    mismatched = serializers.ListField(
+        child=serializers.CharField(), help_text='Surowce wspólne, których ilość w recepturze nie zgadza się z ciastem.'
+    )
     missing = serializers.ListField(child=serializers.CharField(), help_text='Surowce ciasta, których brak w recepturze.')
 
 

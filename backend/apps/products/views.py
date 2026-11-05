@@ -533,6 +533,14 @@ class RecipeDetailView(APIView):
         additions, error = _parse_additions(items)
         if error:
             return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        spec = recipes.bake_spec_of(product)
+        conflicts = recipes.dough_conflicts(spec, additions)
+        if conflicts:
+            names = ', '.join(sorted(Ingredient.objects.filter(pk__in=conflicts).values_list('name', flat=True)))
+            return Response({'error': (
+                f'Surowce ze składu ciasta {spec.dough.name} nie mogą być dodatkami: {names}. '
+                'Dodatek to surowiec dokładany poza ciastem, np. nadzienie albo posypka.'
+            )}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             recipes.set_additions(product, additions)
             recipes.rebuild_recipe(

@@ -504,9 +504,19 @@ function DoughSuggestionsPanel({
                     dodatki: {suggestion.additions.map((a) => a.name).join(', ')}
                   </span>
                 )}
+                {suggestion.foreign.length > 0 && (
+                  <span className="text-xs font-semibold text-[#a35a00]">
+                    brak w cieście: {suggestion.foreign.join(', ')} — po wybraniu zostaną dodatkami
+                  </span>
+                )}
                 {suggestion.missing.length > 0 && (
                   <span className="text-xs font-semibold text-[#a35a00]">
                     brak w recepturze: {suggestion.missing.join(', ')}
+                  </span>
+                )}
+                {suggestion.mismatched.length > 0 && (
+                  <span className="text-xs font-semibold text-[#a35a00]">
+                    inna ilość: {suggestion.mismatched.join(', ')}
                   </span>
                 )}
               </span>
@@ -525,7 +535,7 @@ function DoughSuggestionsPanel({
       <p className="m-0 text-xs font-semibold text-[#5f5a58]">
         {bestIsWeak
           ? 'Żadne ciasto nie pasuje dobrze do receptury — rozważ utworzenie nowego ciasta.'
-          : 'Po zapisaniu część receptury ponad ciasto zostanie zapisana jako dodatki wyrobu.'}
+          : 'Po zapisaniu surowce spoza ciasta zostaną zapisane jako dodatki wyrobu, a surowce ciasta przeliczone z kęsa.'}
       </p>
     </section>
   );

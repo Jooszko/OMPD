@@ -33,17 +33,12 @@ class RecipeArithmeticTests(SimpleTestCase):
     def test_tiny_positive_amounts_do_not_round_to_zero(self):
         self.assertEqual(compose({1: Decimal('0.0004')}, {}), {1: Decimal('0.001')})
 
-    def test_surplus_over_dough_becomes_additions(self):
+    def test_only_ingredients_outside_the_dough_become_additions(self):
         part = {1: Decimal('0.0540'), 2: Decimal('0.0049')}
         recipe = {1: Decimal('0.054'), 2: Decimal('0.011'), 3: Decimal('0.020')}
 
-        self.assertEqual(surplus_over_dough(recipe, part), {2: Decimal('0.006'), 3: Decimal('0.020')})
-
-    def test_rounding_noise_and_shortfalls_are_not_additions(self):
-        part = {1: Decimal('0.0396'), 2: Decimal('0.0250')}
-        recipe = {1: Decimal('0.0405'), 2: Decimal('0.0200')}
-
-        self.assertEqual(surplus_over_dough(recipe, part), {})
+        # Nadwyżka masła (2) to nie dodatek — po przeliczeniu masło będzie tylko z ciasta.
+        self.assertEqual(surplus_over_dough(recipe, part), {3: Decimal('0.020')})
 
 
 class RecipeFromDoughTests(PlanTestBase):
@@ -154,6 +149,34 @@ class RecipeFromDoughTests(PlanTestBase):
 
         self.assertEqual(negative.status_code, 400)
         self.assertEqual(twice.status_code, 400)
+
+    def test_dough_ingredient_cannot_be_an_addition(self):
+        self.assign(self.cake)
+
+        response = self.api.put(f'/api/products/recipes/{self.cake.pk}/', {
+            'items': [{'ingredient_id': self.flour.pk, 'amount': '0.010'}],
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Mąka 750', response.data['error'])
+        self.assertFalse(ProductAddition.objects.filter(product=self.cake).exists())
+
+    def test_addition_that_joins_the_dough_is_dropped(self):
+        self.assign(self.cake)
+        ProductAddition.objects.create(product=self.cake, ingredient=self.cheese, amount=Decimal('0.030'))
+        rebuild_recipe(self.cake)
+
+        response = self.api.patch(f'/api/production/doughs/{self.dough.pk}/', {'ingredients': [
+            {'ingredient_id': self.flour.pk, 'amount_per_kg': '0.6000'},
+            {'ingredient_id': self.water.pk, 'amount_per_kg': '0.3000'},
+            {'ingredient_id': self.cheese.pk, 'amount_per_kg': '0.1000'},
+        ]}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ProductAddition.objects.filter(product=self.cake).exists())
+        self.assertEqual(recipe_of(self.cake), {'Mąka 750': Decimal('0.060'), 'Woda': Decimal('0.030'), 'Ser': Decimal('0.010')})
+        entry = AuditEntry.objects.filter(action='recipe.recalculated', object_id=str(self.cake.pk)).latest('entry_id')
+        self.assertIn('Usunięto dodatki, które są teraz w składzie ciasta: Ser 0.030 kg', entry.description)
 
     def test_unassigned_product_keeps_its_recipe_as_manual(self):
         self.assign(self.cake)

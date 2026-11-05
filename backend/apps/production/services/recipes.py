@@ -5,6 +5,8 @@ jest z niego wyliczana:
 
     Recipe = skład ciasta na 1 kg x waga kęsa + dodatki (ProductAddition)
 
+Dodatek to surowiec spoza ciasta, dokładany do gotowego kęsa (konfitura w pączku, mak do posypania).
+Surowiec ze składu ciasta nie może być dodatkiem — jego ilość wynika wyłącznie z ciasta.
 Recipe nie zawiera bufora strat — doliczają go finanse (common.losses). Wyroby bez ciasta mają
 recepturę wpisywaną ręcznie, jak dotąd.
 """
@@ -52,18 +54,23 @@ def compose(part, additions):
 
 
 def surplus_over_dough(recipe, part):
-    """Dodatki odczytane z ręcznej receptury: to, co jest w niej ponad część z ciasta.
+    """Dodatki odczytane z ręcznej receptury: surowce spoza ciasta, w ilości z receptury.
 
-    Dla surowców z ciasta różnica do 0,001 to błąd zaokrąglenia, a nie dodatek.
-    Ilości mniejsze niż część z ciasta pomija się — po przeliczeniu receptura dostaje pełną część z ciasta.
+    Surowce ciasta nie stają się dodatkami, nawet gdy ręczna receptura miała ich więcej —
+    po przeliczeniu dostają dokładnie tyle, ile wynika z ciasta.
     """
-    additions = {}
-    for ingredient_id, amount in recipe.items():
-        extra = amount - part.get(ingredient_id, Decimal('0'))
-        tolerance = RECIPE_PRECISION if ingredient_id in part else Decimal('0')
-        if extra > tolerance:
-            additions[ingredient_id] = extra.quantize(RECIPE_PRECISION, rounding=ROUND_HALF_UP)
+    additions = {
+        ingredient_id: amount.quantize(RECIPE_PRECISION, rounding=ROUND_HALF_UP)
+        for ingredient_id, amount in recipe.items()
+        if ingredient_id not in part
+    }
     return {ingredient_id: amount for ingredient_id, amount in additions.items() if amount > 0}
+
+
+def dough_conflicts(spec, additions):
+    """Surowce z dodatków, które są już w składzie ciasta wyrobu."""
+    part = dough_part(spec)
+    return [ingredient_id for ingredient_id in additions if ingredient_id in part]
 
 
 def _recipe_state(product):
@@ -99,16 +106,24 @@ def rebuild_recipe(product, request=None, reason='', action='recipe.recalculated
     spec = bake_spec_of(product)
     if spec is None:
         return False
-    amounts = compose(dough_part(spec), additions_of(product))
+    part = dough_part(spec)
+    # Po zmianie ciasta lub jego składu surowiec z dodatków mógł trafić do ciasta — wtedy liczy się tylko ciasto.
+    overlapping = ProductAddition.objects.filter(product=product, ingredient_id__in=part).select_related('ingredient')
+    dropped = [f'{a.ingredient.name} {a.amount} {a.ingredient.unit}' for a in overlapping.order_by('ingredient__name')]
+    overlapping.delete()
+    amounts = compose(part, additions_of(product))
     current = {r.ingredient_id: r.amount for r in Recipe.objects.filter(product=product)}
-    if amounts == current:
+    if amounts == current and not dropped:
         return False
     before = _recipe_state(product)
     _write_recipe(product, amounts)
     after = _recipe_state(product)
+    text = description or f'Przeliczono recepturę produktu {product.name} z ciasta {spec.dough.name}{reason}.'
+    if dropped:
+        text += f' Usunięto dodatki, które są teraz w składzie ciasta: {", ".join(dropped)}.'
     record_event(
         request, category='products', action=action, obj=product, object_label=product.name,
-        description=description or f'Przeliczono recepturę produktu {product.name} z ciasta {spec.dough.name}{reason}.',
+        description=text,
         changes=field_changes(before, after, {name: name for name in sorted(set(before) | set(after))}),
     )
     return True

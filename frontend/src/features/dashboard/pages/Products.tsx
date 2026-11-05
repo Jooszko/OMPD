@@ -128,8 +128,14 @@ export default function ProductsPanel() {
     setRecipeProductCategory('bread');
     setRecipeItems([]);
     setEditingDough(null);
+    setSelectedIngredientId(ingredients[0]?.ingredient_id ?? null);
     setIsRecipeModalOpen(true);
   };
+
+  // Dodatkiem może być tylko surowiec spoza ciasta — surowce ciasta mają ilość wyliczaną z kęsa.
+  const additionIngredients = (dough: RecipeDough | null) =>
+    dough ? ingredients.filter(i => !dough.dough_items.some(item => item.ingredient_id === i.ingredient_id)) : ingredients;
+  const selectableIngredients = additionIngredients(editingDough);
 
   const handleOpenEditRecipe = (recipe: AppRecipe) => {
     setRecipeModalMode('edit');
@@ -137,6 +143,7 @@ export default function ProductsPanel() {
     setRecipeProductName(recipe.name);
     setRecipeProductCategory(recipe.category);
     setEditingDough(recipe.dough);
+    setSelectedIngredientId(additionIngredients(recipe.dough)[0]?.ingredient_id ?? null);
     const editable = recipe.dough ? recipe.dough.additions : recipe.items;
     setRecipeItems(editable.map(i => ({ ingredient_id: i.ingredient_id, amount: parseFloat(i.amount) })));
     setIsRecipeModalOpen(true);
@@ -571,8 +578,13 @@ export default function ProductsPanel() {
 
               <div className="bg-white border border-bakery-btnBorder p-4 rounded-xl">
                 <span className="text-xs font-extrabold text-[#4a4543] block mb-2.5">
-                  {editingDough ? 'Dodaj dodatek (nadzienie, posypka, smarowanie…)' : 'Dodaj komponent / surowiec'}
+                  {editingDough ? 'Dodaj dodatek (nadzienie, posypka…)' : 'Dodaj komponent / surowiec'}
                 </span>
+                {editingDough && (
+                  <p className="m-0 -mt-1 mb-2.5 text-xs font-semibold text-[#5f5a58]">
+                    Surowców z ciasta nie można dodać jako dodatku — ich ilość wynika z wagi kęsa.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2 items-end">
                   <div className="flex-1">
                     <select
@@ -580,7 +592,7 @@ export default function ProductsPanel() {
                       onChange={(e) => setSelectedIngredientId(parseInt(e.target.value))}
                       className="w-full min-h-11 px-3 border border-bakery-btnBorder bg-white text-bakery-dark font-semibold rounded-xl text-sm outline-none focus:border-bakery-accent"
                     >
-                      {ingredients.map(i => (
+                      {selectableIngredients.map(i => (
                         <option key={i.ingredient_id} value={i.ingredient_id}>{i.name} ({i.unit})</option>
                       ))}
                     </select>

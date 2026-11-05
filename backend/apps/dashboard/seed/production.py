@@ -110,7 +110,8 @@ DOUGH_DATA = [
 
 BAKE_SPEC_DATA = [
     # (product_name, dough_name, piece_weight_kg, bake_temp_c, bake_time_min, [(ingredient_name, amount_per_piece), ...])
-    # Lista na końcu to dodatki spoza ciasta: nadzienia, posypki, smarowanie, olej do smażenia.
+    # Lista na końcu to dodatki spoza ciasta: nadzienia, posypki, olej do smażenia.
+    # Surowiec ze składu ciasta nie może być dodatkiem (np. jajo do smarowania przy cieście z jajami).
     ('Chleb pszenny 500g', 'Ciasto pszenne', Decimal('0.580'), 230, 35, []),
     ('Bagietka francuska', 'Ciasto pszenne', Decimal('0.290'), 250, 22, []),
     ('Bułka pszenna', 'Ciasto pszenne', Decimal('0.065'), 240, 14, []),
@@ -119,22 +120,13 @@ BAKE_SPEC_DATA = [
     ('Chleb na zakwasie', 'Ciasto żytnie na zakwasie', Decimal('0.900'), 230, 55, []),
     ('Chleb razowy 500g', 'Ciasto żytnie razowe', Decimal('0.600'), 220, 55, []),
     ('Bułka grahamka', 'Ciasto graham', Decimal('0.075'), 230, 16, []),
-    ('Chleb słonecznikowy', 'Ciasto słonecznikowe', Decimal('0.600'), 225, 40, [('Ziarna słonecznika', Decimal('0.010'))]),
-    ('Bułka mleczna', 'Ciasto maślane', Decimal('0.070'), 200, 14, [('Jaja', Decimal('0.050'))]),
-    ('Rogal maślany', 'Ciasto maślane', Decimal('0.090'), 200, 15, [('Masło', Decimal('0.006')), ('Jaja', Decimal('0.050'))]),
-    ('Chałka z rodzynkami', 'Ciasto chałkowe', Decimal('0.450'), 180, 30, [
-        ('Jaja', Decimal('0.100')), ('Masło', Decimal('0.005')), ('Cukier', Decimal('0.005')),
-        ('Mąka pszenna typ 550', Decimal('0.006')),
-    ]),
-    ('Drożdżówka z serem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [
-        ('Twaróg', Decimal('0.035')), ('Cukier', Decimal('0.006')), ('Jaja', Decimal('0.100')),
-    ]),
-    ('Drożdżówka z makiem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [
-        ('Mak', Decimal('0.020')), ('Cukier', Decimal('0.008')), ('Masło', Decimal('0.003')), ('Jaja', Decimal('0.050')),
-    ]),
-    ('Drożdżówka cynamonowa', 'Ciasto drożdżowe słodkie', Decimal('0.080'), 190, 15, [
-        ('Masło', Decimal('0.006')), ('Cukier', Decimal('0.008')), ('Cynamon', Decimal('0.001')),
-    ]),
+    ('Chleb słonecznikowy', 'Ciasto słonecznikowe', Decimal('0.600'), 225, 40, []),
+    ('Bułka mleczna', 'Ciasto maślane', Decimal('0.070'), 200, 14, []),
+    ('Rogal maślany', 'Ciasto maślane', Decimal('0.090'), 200, 15, []),
+    ('Chałka z rodzynkami', 'Ciasto chałkowe', Decimal('0.450'), 180, 30, []),
+    ('Drożdżówka z serem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [('Twaróg', Decimal('0.035'))]),
+    ('Drożdżówka z makiem', 'Ciasto drożdżowe słodkie', Decimal('0.070'), 190, 16, [('Mak', Decimal('0.020'))]),
+    ('Drożdżówka cynamonowa', 'Ciasto drożdżowe słodkie', Decimal('0.080'), 190, 15, [('Cynamon', Decimal('0.002'))]),
     ('Pączek z nadzieniem różanym', 'Ciasto pączkowe', Decimal('0.060'), 175, 8, [
         ('Konfitura różana', Decimal('0.018')), ('Olej rzepakowy', Decimal('0.009')), ('Cukier puder', Decimal('0.004')),
     ]),
