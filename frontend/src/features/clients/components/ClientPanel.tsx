@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, MapPinOff, Pencil, Phone, X } from 'lucide-react';
 import { fetchClientCard, type AppClient, type ClientCard } from '../../../services/api';
+import { DashboardListScrollbar } from '../../dashboard/components/DashboardListScrollbar';
 import { useDialogFocus } from '../../dashboard/components/useDialogFocus';
 import { formatMoney } from '../../finance/lib/money';
 import { AccountHistory } from '../../users/components/AccountHistory';
@@ -112,7 +113,12 @@ export function ClientPanel({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-6">
+        <DashboardListScrollbar
+          className="dashboard-main-scrollbar flex-1 min-h-0"
+          viewportClassName="overscroll-contain"
+          contentClassName="px-5 sm:px-6 py-5 flex flex-col gap-6"
+          thumbTrackPadding={8}
+        >
           <div className="grid grid-cols-2 gap-2.5">
             <button type="button" onClick={onEdit} className={`${ACTION} ${client.phone ? '' : 'col-span-2'}`}>
               <Pencil aria-hidden className="w-4 h-4" />
@@ -271,7 +277,7 @@ export function ClientPanel({
             </button>
           </section>
 
-        </div>
+        </DashboardListScrollbar>
       </aside>
     </div>,
     document.body

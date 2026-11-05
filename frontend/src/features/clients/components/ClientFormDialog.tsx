@@ -103,6 +103,7 @@ export function ClientFormDialog({
       title={editing ? 'Edycja klienta' : 'Nowy klient'}
       subtitle={editing ? editing.name : 'Punkt dostaw trafi na wybraną trasę.'}
       closeDisabled={saving}
+      customScrollbar
       initialFocusSelector="#client-name"
       onClose={onClose}
     >

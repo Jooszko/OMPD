@@ -1,6 +1,7 @@
 import { type ReactNode, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { DashboardListScrollbar } from './DashboardListScrollbar';
 import { useDialogFocus } from './useDialogFocus';
 
 export function Modal({
@@ -9,6 +10,7 @@ export function Modal({
   icon,
   initialFocusSelector,
   closeDisabled = false,
+  customScrollbar = false,
   size = 'md',
   onClose,
   children,
@@ -18,6 +20,7 @@ export function Modal({
   icon?: ReactNode;
   initialFocusSelector?: string;
   closeDisabled?: boolean;
+  customScrollbar?: boolean;
   size?: 'md' | 'xl';
   onClose: () => void;
   children: ReactNode;
@@ -38,9 +41,11 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full ${size === 'xl' ? 'sm:max-w-3xl' : 'sm:max-w-md'} bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-4 flex flex-col gap-3 text-bakery-dark max-h-[90vh] overflow-y-auto`}
+        className={`w-full ${size === 'xl' ? 'sm:max-w-3xl' : 'sm:max-w-md'} bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-4 flex flex-col gap-3 text-bakery-dark max-h-[90vh] ${
+          customScrollbar ? 'h-[90vh] overflow-hidden' : 'overflow-y-auto'
+        }`}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex shrink-0 items-start justify-between gap-2">
           <div>
             <h2 id={titleId} className="m-0 text-base font-bold flex items-center gap-2">
               {icon} {title}
@@ -57,7 +62,11 @@ export function Modal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children}
+        {customScrollbar ? (
+          <DashboardListScrollbar className="min-h-0 flex-1" contentClassName="pr-3" thumbTrackPadding={6}>
+            {children}
+          </DashboardListScrollbar>
+        ) : children}
       </div>
     </div>,
     document.body

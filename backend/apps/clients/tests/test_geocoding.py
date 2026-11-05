@@ -39,6 +39,16 @@ class GeocodeAddressTests(SimpleTestCase):
         self.assertEqual(result, GeocodeMatch(Decimal('49.7275'), Decimal('18.9031'), 'Leśna 22, Brenna, Polska'))
 
     @mock.patch('clients.services.geocoding.urllib.request.urlopen')
+    def test_lookup_rounds_coordinates_to_six_decimal_places(self, mock_urlopen):
+        mock_urlopen.return_value = _mock_response(
+            [{'lat': '49.7275009', 'lon': '18.9031005', 'display_name': 'Leśna 22, Brenna, Polska'}]
+        )
+
+        result = lookup_address('Leśna 22, Brenna')
+
+        self.assertEqual((result.latitude, result.longitude), (Decimal('49.727501'), Decimal('18.903101')))
+
+    @mock.patch('clients.services.geocoding.urllib.request.urlopen')
     def test_skips_matches_from_another_town(self, mock_urlopen):
         mock_urlopen.return_value = _mock_response([
             {'lat': '51.04', 'lon': '21.82', 'display_name': '9, Górna, Józefów nad Wisłą, Polska'},
