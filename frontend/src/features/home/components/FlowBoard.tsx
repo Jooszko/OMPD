@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { DashboardListScrollbar } from '../../dashboard/components/DashboardListScrollbar';
 
 export type FlowTone = 'neutral' | 'amber' | 'blue' | 'violet' | 'green';
 
@@ -132,31 +133,37 @@ export function FlowBoard({ title, link, lanes, initialKey, empty }: FlowBoardPr
                   {lane.cards.length === 0 ? (
                     <span className="text-[13px] font-semibold text-[#5f5a58]">Nic tu teraz nie ma.</span>
                   ) : (
-                    <ul className="m-0 p-0 list-none flex flex-col gap-1.5 max-h-88 overflow-y-auto overscroll-contain">
-                      {lane.cards.map((card) => (
-                        <li
-                          key={card.key}
-                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                        >
-                          <span
-                            aria-hidden
-                            className={`shrink-0 size-8 rounded-[10px] flex items-center justify-center text-xs font-extrabold ${
-                              card.failed ? 'bg-[#f8cccc] text-[#8f1616]' : tone.badge
-                            }`}
+                    <DashboardListScrollbar
+                      className="max-h-88"
+                      viewportClassName="max-h-88 overscroll-contain"
+                      contentClassName="pr-2"
+                    >
+                      <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
+                        {lane.cards.map((card) => (
+                          <li
+                            key={card.key}
+                            className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                           >
-                            {card.badge}
-                          </span>
-                          <span className="flex-1 min-w-0 flex flex-col gap-px">
-                            <span className="text-[13px] font-extrabold truncate">{card.title}</span>
                             <span
-                              className={`text-xs font-semibold truncate ${card.failed ? 'text-[#8f1616]' : 'text-[#5f5a58]'}`}
+                              aria-hidden
+                              className={`shrink-0 size-8 rounded-[10px] flex items-center justify-center text-xs font-extrabold ${
+                                card.failed ? 'bg-[#f8cccc] text-[#8f1616]' : tone.badge
+                              }`}
                             >
-                              {card.detail}
+                              {card.badge}
                             </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                            <span className="flex-1 min-w-0 flex flex-col gap-px">
+                              <span className="text-[13px] font-extrabold truncate">{card.title}</span>
+                              <span
+                                className={`text-xs font-semibold truncate ${card.failed ? 'text-[#8f1616]' : 'text-[#5f5a58]'}`}
+                              >
+                                {card.detail}
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </DashboardListScrollbar>
                   )}
                 </div>
               );

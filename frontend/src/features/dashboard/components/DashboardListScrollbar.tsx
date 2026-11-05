@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 type DashboardListScrollbarProps = {
   children: React.ReactNode;
   className?: string;
+  viewportClassName?: string;
   contentClassName?: string;
   thumbTrackPadding?: number;
   horizontalTrackPadding?: number;
@@ -11,6 +12,7 @@ type DashboardListScrollbarProps = {
 export const DashboardListScrollbar: React.FC<DashboardListScrollbarProps> = ({
   children,
   className = '',
+  viewportClassName = '',
   contentClassName = 'pr-0',
   thumbTrackPadding = 0,
   horizontalTrackPadding = 8,
@@ -121,7 +123,7 @@ export const DashboardListScrollbar: React.FC<DashboardListScrollbarProps> = ({
       <div
         ref={viewportRef}
         onScroll={updateScrollbar}
-        className="dashboard-list-scrollbar h-full overflow-auto"
+        className={`dashboard-list-scrollbar h-full overflow-auto ${viewportClassName}`}
       >
         <div className={contentClassName}>{children}</div>
       </div>
