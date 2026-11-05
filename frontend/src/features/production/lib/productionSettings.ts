@@ -90,6 +90,21 @@ export function validateBakeSpec(draft: BakeSpecDraft): string | null {
   return null;
 }
 
+export type SuggestionVerdict = 'very_good' | 'good' | 'weak';
+
+/** Ocena podpowiedzi ciasta: bardzo dobra od 95%, dobra od progu z backendu, poniżej — słaba. */
+export function suggestionVerdict(score: number, goodMatch: number): SuggestionVerdict {
+  if (score >= 0.95) return 'very_good';
+  if (score >= goodMatch) return 'good';
+  return 'weak';
+}
+
+export const VERDICT_LABELS: Record<SuggestionVerdict, string> = {
+  very_good: 'bardzo dobre dopasowanie',
+  good: 'dobre dopasowanie',
+  weak: 'słabe dopasowanie',
+};
+
 export const CATEGORY_LABELS: Record<string, string> = {
   bread: 'Chleby',
   buns: 'Bułki/Drożdżówki',

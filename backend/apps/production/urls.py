@@ -7,6 +7,7 @@ from .views import (
     BatchWasteView,
     DoughDetailView,
     DoughListView,
+    DoughSuggestionsView,
     MixerDetailView,
     MixerListView,
     ProductionBoardView,
@@ -28,4 +29,8 @@ urlpatterns = [
     path('doughs/', DoughListView.as_view(), name='production-dough-list'),
     path('doughs/<int:pk>/', DoughDetailView.as_view(), name='production-dough-detail'),
     path('bake-specs/<int:product_id>/', BakeSpecDetailView.as_view(), name='production-bake-spec'),
+    path(
+        'products/<int:product_id>/dough-suggestions/', DoughSuggestionsView.as_view(),
+        name='production-dough-suggestions',
+    ),
 ]

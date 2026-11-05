@@ -6,6 +6,7 @@ import {
   productMatches,
   recipeMassLooksWrong,
   recipeMassPerKg,
+  suggestionVerdict,
   validateBakeSpec,
   validateDough,
   validateMixer,
@@ -105,6 +106,16 @@ describe('validateBakeSpec', () => {
       /Waga/
     );
     expect(validateBakeSpec({ dough_id: 1, piece_weight_kg: '0,58', bake_temp_c: '230', bake_time_min: '35' })).toBeNull();
+  });
+});
+
+describe('suggestionVerdict', () => {
+  it('ocenia zgodność względem progu z backendu', () => {
+    expect(suggestionVerdict(1, 0.8)).toBe('very_good');
+    expect(suggestionVerdict(0.95, 0.8)).toBe('very_good');
+    expect(suggestionVerdict(0.86, 0.8)).toBe('good');
+    expect(suggestionVerdict(0.8, 0.8)).toBe('good');
+    expect(suggestionVerdict(0.79, 0.8)).toBe('weak');
   });
 });
 

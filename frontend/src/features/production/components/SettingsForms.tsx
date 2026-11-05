@@ -1,8 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, Lock, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Lock, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { fetchDoughSuggestions } from '../../../services/api';
 import type {
   BakeSpecValues,
   DoughInput,
+  DoughSuggestion,
+  DoughSuggestions,
   MixerInput,
   ProductBakeSpecRow,
   ProductionDough,
@@ -14,12 +17,15 @@ import {
   parseDecimal,
   recipeMassLooksWrong,
   recipeMassPerKg,
+  suggestionVerdict,
   validateBakeSpec,
   validateDough,
   validateMixer,
+  VERDICT_LABELS,
   type BakeSpecDraft,
   type DoughDraft,
   type MixerDraft,
+  type SuggestionVerdict,
 } from '../lib/productionSettings';
 import { DANGER_BUTTON, ERROR_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 
@@ -351,6 +357,24 @@ export function BakeSpecForm({
     bake_time_min: String(row.spec?.bake_time_min ?? 30),
   });
   const { saving, error, submit } = useSubmit(onSaved);
+  const [suggestions, setSuggestions] = useState<DoughSuggestions | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+
+  const loadSuggestions = async () => {
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      setSuggestions(await fetchDoughSuggestions(row.product_id));
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : 'Nie udało się pobrać podpowiedzi.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: DoughSuggestion) =>
+    setDraft({ ...draft, dough_id: suggestion.dough_id, piece_weight_kg: String(Number(suggestion.piece_weight_kg)) });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -381,6 +405,14 @@ export function BakeSpecForm({
             ))}
           </select>
         </Field>
+        <DoughSuggestionsPanel
+          suggestions={suggestions}
+          loading={suggesting}
+          error={suggestError}
+          selectedDoughId={draft.dough_id}
+          onLoad={loadSuggestions}
+          onApply={applySuggestion}
+        />
         <Field label="Waga surowego kęsa [kg]" hint="Ciasto przed wypiekiem, np. 0,58 dla bochenka 500 g.">
           <input className={INPUT} inputMode="decimal" value={draft.piece_weight_kg} onChange={(e) => setDraft({ ...draft, piece_weight_kg: e.target.value })} />
         </Field>
@@ -396,6 +428,106 @@ export function BakeSpecForm({
         <FormActions saving={saving} onCancel={onClose} />
       </form>
     </Modal>
+  );
+}
+
+const VERDICT_CLASS: Record<SuggestionVerdict, string> = {
+  very_good: 'bg-[#e8f5ec] text-[#1f6b3a]',
+  good: 'bg-[#eef4fb] text-[#1d4f86]',
+  weak: 'bg-[#fff6e5] text-[#7a4a00]',
+};
+
+function DoughSuggestionsPanel({
+  suggestions,
+  loading,
+  error,
+  selectedDoughId,
+  onLoad,
+  onApply,
+}: {
+  suggestions: DoughSuggestions | null;
+  loading: boolean;
+  error: string | null;
+  selectedDoughId: number | '';
+  onLoad: () => void;
+  onApply: (suggestion: DoughSuggestion) => void;
+}) {
+  if (!suggestions) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <button
+          type="button"
+          onClick={onLoad}
+          disabled={loading}
+          className="self-start inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-bakery-btnBorder bg-white text-[13px] font-extrabold text-bakery-dark cursor-pointer hover:border-bakery-dark disabled:opacity-60"
+        >
+          <Sparkles aria-hidden className="w-3.5 h-3.5 text-bakery-accent" />
+          {loading ? 'Szukam pasującego ciasta…' : 'Zaproponuj ciasto na podstawie receptury'}
+        </button>
+        <FormError message={error} />
+      </div>
+    );
+  }
+
+  if (!suggestions.has_recipe || suggestions.suggestions.length === 0) {
+    return (
+      <p className="m-0 rounded-xl bg-[#f3efed] px-3.5 py-2.5 text-xs font-semibold text-[#5f5a58]">
+        Wyrób nie ma jeszcze receptury — dodaj ją w zakładce Produkty, żeby dostać podpowiedź ciasta.
+      </p>
+    );
+  }
+
+  const goodMatch = Number(suggestions.good_match);
+  const bestIsWeak = suggestionVerdict(Number(suggestions.suggestions[0].score), goodMatch) === 'weak';
+
+  return (
+    <section aria-label="Podpowiedzi ciasta" className="flex flex-col gap-2">
+      <ul className="m-0 p-0 list-none flex flex-col gap-2">
+        {suggestions.suggestions.map((suggestion) => {
+          const verdict = suggestionVerdict(Number(suggestion.score), goodMatch);
+          const selected = selectedDoughId === suggestion.dough_id;
+          return (
+            <li
+              key={suggestion.dough_id}
+              className={`flex items-start justify-between gap-3 rounded-xl border px-3.5 py-2.5 bg-white ${selected ? 'border-bakery-dark' : 'border-[#e6e1df]'}`}
+            >
+              <span className="flex flex-col gap-1 min-w-0">
+                <span className="text-sm font-extrabold text-bakery-dark">{suggestion.dough_name}</span>
+                <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#5f5a58]">
+                  <span className={`rounded-full px-2 py-0.5 font-extrabold ${VERDICT_CLASS[verdict]}`}>
+                    {Math.round(Number(suggestion.score) * 100)}% · {VERDICT_LABELS[verdict]}
+                  </span>
+                  kęs {Number(suggestion.piece_weight_kg).toLocaleString('pl-PL')} kg
+                </span>
+                {suggestion.additions.length > 0 && (
+                  <span className="text-xs font-semibold text-[#5f5a58]">
+                    dodatki: {suggestion.additions.map((a) => a.name).join(', ')}
+                  </span>
+                )}
+                {suggestion.missing.length > 0 && (
+                  <span className="text-xs font-semibold text-[#a35a00]">
+                    brak w recepturze: {suggestion.missing.join(', ')}
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => onApply(suggestion)}
+                disabled={selected}
+                className="shrink-0 h-9 px-3 rounded-lg border border-bakery-btnBorder bg-white text-xs font-extrabold text-bakery-dark cursor-pointer hover:border-bakery-dark disabled:cursor-default disabled:bg-bakery-dark disabled:text-white"
+              >
+                {selected ? 'Wybrane' : 'Wybierz'}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="m-0 text-xs font-semibold text-[#5f5a58]">
+        {bestIsWeak
+          ? 'Żadne ciasto nie pasuje dobrze do receptury — rozważ utworzenie nowego ciasta.'
+          : 'Po zapisaniu część receptury ponad ciasto zostanie zapisana jako dodatki wyrobu.'}
+      </p>
+    </section>
   );
 }
 

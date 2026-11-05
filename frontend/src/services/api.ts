@@ -1569,6 +1569,32 @@ export function deleteBakeSpec(productId: number): Promise<void> {
   return sendProductionSettings(`bake-specs/${productId}/`, 'DELETE');
 }
 
+export interface DoughSuggestion {
+  dough_id: number;
+  dough_name: string;
+  /** Zgodność składu 0–1. */
+  score: string;
+  piece_weight_kg: string;
+  /** Surowce ponad część z ciasta — po przypisaniu staną się dodatkami. */
+  additions: { ingredient_id: number; name: string; unit: string; amount: string }[];
+  /** Surowce ciasta, których brak w recepturze wyrobu. */
+  missing: string[];
+}
+
+export interface DoughSuggestions {
+  product_id: number;
+  has_recipe: boolean;
+  good_match: string;
+  suggestions: DoughSuggestion[];
+}
+
+export async function fetchDoughSuggestions(productId: number): Promise<DoughSuggestions> {
+  const response = await apiFetch(`${API_BASE}/production/products/${productId}/dough-suggestions/`, {
+    headers: authHeaders(),
+  });
+  return productionJson(response);
+}
+
 export type AuditCategory = 'accounts' | 'clients' | 'products' | 'orders' | 'finance' | 'logistics' | 'production';
 
 export interface AuditChange {

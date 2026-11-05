@@ -16,11 +16,13 @@ from . import audit as production_audit
 from .models import BatchStageLog, Dough, Mixer, ProductBakeSpec, ProductionBatch, ProductionPlan, WasteRecord
 from .serializers import BakeSpecSerializer, DoughSerializer, MixerSerializer
 from .services import recipes
+from .services.recommend import recommend_doughs
 from common.openapi import error_response
 from .openapi import (
     DELIVERY_DATE_PARAM, FORBIDDEN, FORM_ERROR, NOT_FOUND, BakeSpecRowSerializer, BatchActionResultSerializer,
-    DeliveryDateInputSerializer, PlanCalendarDaySerializer, ProductionBoardSerializer, ProductionPlanSerializer, ProductionSettingsSerializer,
-    StageInputSerializer, WasteInputSerializer, WasteResultSerializer,
+    DeliveryDateInputSerializer, DoughSuggestionsSerializer, PlanCalendarDaySerializer, ProductionBoardSerializer,
+    ProductionPlanSerializer, ProductionSettingsSerializer, StageInputSerializer, WasteInputSerializer,
+    WasteResultSerializer,
 )
 from .services.lifecycle import (
     BatchActionError,
@@ -565,6 +567,26 @@ class DoughDetailView(APIView):
                 status=http_status.HTTP_409_CONFLICT,
             )
         return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class DoughSuggestionsView(APIView):
+    """Podpowiedź ciasta dla wyrobu: ranking ciast według zgodności z recepturą wyrobu."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Rekomendacja ciasta dla wyrobu',
+        description=(
+            'Porównuje recepturę wyrobu ze składem każdego ciasta i zwraca do 3 najlepiej pasujących, '
+            'z proponowaną wagą kęsa i dodatkami spoza ciasta. Tylko podpowiedź – niczego nie zapisuje.'
+        ),
+        responses={200: DoughSuggestionsSerializer, 403: FORBIDDEN, 404: NOT_FOUND},
+    )
+    def get(self, request, product_id):
+        if request.user.role not in PRODUCTION_ROLES:
+            return _forbidden()
+        product = get_object_or_404(Product, pk=product_id)
+        return Response(DoughSuggestionsSerializer(recommend_doughs(product)).data)
 
 
 class BakeSpecDetailView(APIView):
