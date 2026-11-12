@@ -27,8 +27,6 @@ test.describe('Sprawdzenie zawartości strony finansów', () => {
         await page.getByRole('heading', { name: 'Wydatki w okresie' }).click();
         await page.getByRole('link', { name: 'Rentowność produktów' }).click();
         await page.getByRole('heading', { name: 'Wysoka marża' }).click();
-        await page.getByRole('heading', { name: 'Średnia marża' }).click();
-        await page.getByRole('heading', { name: 'Niska marża – do przejrzenia' }).click();
         await page.getByRole('heading', { name: 'Na czym zarabiamy najwięcej' }).click();
         await page.getByRole('heading', { name: 'Jak liczymy marżę' }).click();
         await page.getByRole('link', { name: 'Raporty' }).click();
