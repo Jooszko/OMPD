@@ -55,7 +55,7 @@ class UserListCreateView(APIView):
         summary='Założenie konta pracownika',
         description='Podane hasło jest tymczasowe – pracownik musi je zmienić przy pierwszym logowaniu.',
         request=UserSerializer,
-        responses={201: UserSerializer, 400: VALIDATION_ERROR},
+        responses={201: StaffUserSerializer, 400: VALIDATION_ERROR},
     )
     def post(self, request):
         serializer = UserSerializer(data=request.data)
@@ -67,7 +67,7 @@ class UserListCreateView(APIView):
                 request, category='accounts', action='user.created', obj=user, object_label=user.full_name,
                 description=f'Założono konto {user.full_name} (login {user.username}, {user.get_role_display()}).',
             )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(StaffUserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 USER_AUDIT_LABELS = {

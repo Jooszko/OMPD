@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+import ipaddress
 
 from django.db import models
 
@@ -29,7 +30,15 @@ def field_changes(before, after, labels):
 
 
 def client_ip(request):
-    return request.META.get('REMOTE_ADDR') if request is not None else None
+    if request is None:
+        return None
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+    for candidate in (forwarded, request.META.get('REMOTE_ADDR')):
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return None
 
 
 def record_event(request, *, category, action, description, obj=None, object_label='', changes=None,

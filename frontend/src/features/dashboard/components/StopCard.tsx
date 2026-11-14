@@ -103,7 +103,7 @@ export function StopCard({
           const busy = updatingId === order.do_id;
           return (
             <li key={order.do_id} className="px-3.5 py-2 flex flex-col gap-1">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 @lg:grid-cols-[minmax(0,1fr)_112px_176px]">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 @lg:grid-cols-[minmax(0,1fr)_132px_auto]">
                 <span className="col-span-2 @lg:col-span-1 min-w-0 text-[13px] font-bold">
                   {order.product_name}{' '}
                   <span className="font-semibold text-[#5f5a58] tabular-nums">× {order.quantity}</span>
