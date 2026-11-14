@@ -11,6 +11,7 @@ import {
   type OrderDayStop,
 } from '../../../services/api';
 import { useDialogFocus } from '../../dashboard/components/useDialogFocus';
+import { DashboardListScrollbar } from '../../dashboard/components/DashboardListScrollbar';
 import { ERROR_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../../users/lib/formStyles';
 import { apiErrorMessage } from '../../users/lib/staff';
 import {
@@ -133,7 +134,12 @@ export function OrderPanel({
           <span className="text-sm font-bold text-[#cfc8c4] first-letter:uppercase">Na {formatDayHeading(date)}</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-5">
+        <DashboardListScrollbar
+          className="dashboard-main-scrollbar flex-1 min-h-0"
+          viewportClassName="overscroll-contain"
+          contentClassName="px-5 sm:px-6 py-5 flex flex-col gap-5"
+          thumbTrackPadding={8}
+        >
           {loadError && (
             <p role="alert" className={ERROR_CLASS}>
               {loadError}
@@ -148,7 +154,9 @@ export function OrderPanel({
                   clients={data.clients}
                   value={clientId}
                   onChange={chooseClient}
-                  badge={(client) => (stops.some((stop) => stop.client_id === client.client_id) ? 'ma zamówienie' : null)}
+                  badge={(client) =>
+                    stops.some((stop) => stop.client_id === client.client_id) ? 'ma zamówienie' : null
+                  }
                 />
               )}
 
@@ -178,7 +186,7 @@ export function OrderPanel({
               <ItemsEditor items={items} products={data.products} onChange={setItems} />
             </>
           )}
-        </div>
+        </DashboardListScrollbar>
 
         <div className="px-5 sm:px-6 py-4 border-t border-[#e2dcda] bg-bakery-card flex flex-col gap-3">
           {error && (

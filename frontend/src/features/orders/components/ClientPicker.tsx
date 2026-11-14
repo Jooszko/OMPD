@@ -73,7 +73,10 @@ export function ClientPicker({
       {open && (
         <div className="rounded-xl border-[1.5px] border-bakery-accent bg-white overflow-hidden">
           <div className="relative border-b border-[#eee9e7]">
-            <Search aria-hidden className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#8a8482]" />
+            <Search
+              aria-hidden
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#8a8482]"
+            />
             <input
               type="search"
               autoFocus
@@ -91,7 +94,11 @@ export function ClientPicker({
               className="w-full h-12 pl-11 pr-4 text-[15px] font-semibold outline-none"
             />
           </div>
-          <DashboardListScrollbar className="h-[320px] max-h-[40vh] shrink-0" contentClassName="p-1">
+          <DashboardListScrollbar
+            className="dashboard-main-scrollbar h-[320px] max-h-[40vh] shrink-0"
+            contentClassName="p-1 pr-3"
+            thumbTrackPadding={6}
+          >
             <ul id={listId} role="listbox" aria-label="Klienci" className="m-0 list-none">
               {options.length === 0 && (
                 <li className="px-3 py-3 text-[13px] font-semibold text-[#5f5a58]">Żaden aktywny klient nie pasuje.</li>
