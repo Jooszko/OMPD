@@ -9,6 +9,7 @@ from audit.models import AuditEntry
 from clients.models import Client, Route
 from finance.models import Supplier, SupplierIngredient
 from orders.models import DailyOrder
+from production.models import Dough, DoughIngredient
 from products.models import Ingredient, IngredientStock, Product, Recipe, StockMovement
 from products.stock import recalculate_min_stock, record_movement, warehouse_row
 from users.models import Notification, User
@@ -343,6 +344,43 @@ class WarehouseApiTests(TestCase):
         self.assertEqual(response.data['name'], 'Mąka pszenna')
         self.assertEqual(Decimal(response.data['min_stock_level']), Decimal('20'))
         self.assertEqual(AuditEntry.objects.get(action='ingredient.updated').object_id, str(self.flour.pk))
+
+    def test_unit_can_change_while_ingredient_is_unused(self):
+        self.api.force_authenticate(self.admin)
+
+        response = self.api.patch(f'/api/products/ingredients/{self.flour.pk}/', {'unit': 'g'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['unit'], 'g')
+        self.assertFalse(response.data['unit_locked'])
+
+    def test_unit_is_locked_when_ingredient_is_in_recipe(self):
+        bread = Product.objects.create(name='Chleb', base_price=Decimal('5.00'))
+        Recipe.objects.create(product=bread, ingredient=self.flour, amount=Decimal('0.5'))
+        self.api.force_authenticate(self.admin)
+        url = f'/api/products/ingredients/{self.flour.pk}/'
+
+        response = self.api.patch(url, {'unit': 'g'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('receptury wyrobów', response.data['unit'][0])
+        self.flour.refresh_from_db()
+        self.assertEqual(self.flour.unit, 'kg')
+        self.assertTrue(warehouse_row(self.flour)['unit_locked'])
+
+        renamed = self.api.patch(url, {'name': 'Mąka typ 650', 'unit': 'kg'}, format='json')
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.data['name'], 'Mąka typ 650')
+
+    def test_unit_is_locked_when_ingredient_is_in_dough(self):
+        dough = Dough.objects.create(name='Ciasto pszenne')
+        DoughIngredient.objects.create(dough=dough, ingredient=self.flour, amount_per_kg=Decimal('0.6'))
+        self.api.force_authenticate(self.admin)
+
+        response = self.api.patch(f'/api/products/ingredients/{self.flour.pk}/', {'unit': 'g'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('składy ciast', response.data['unit'][0])
 
     def test_warehouse_reports_daily_usage_and_days_left(self):
         record_movement(self.flour.pk, StockMovement.KIND_PRODUCTION, Decimal('-28'))

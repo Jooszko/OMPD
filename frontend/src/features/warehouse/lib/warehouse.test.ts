@@ -20,6 +20,7 @@ function row(overrides: Partial<WarehouseRow>): WarehouseRow {
     ingredient_id: 1,
     name: 'Mąka',
     unit: 'kg',
+    unit_locked: false,
     current_stock: '100.000',
     min_stock_level: '20.000',
     daily_usage: '5.000',

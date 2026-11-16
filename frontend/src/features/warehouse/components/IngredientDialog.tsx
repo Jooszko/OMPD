@@ -33,6 +33,7 @@ export function IngredientDialog({
         ? 'Cenę wpisz jako liczbę większą od zera, np. 4,50.'
         : null;
   const missingPrice = !item && priceValue === null;
+  const unitLocked = item?.unit_locked ?? false;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -85,11 +86,16 @@ export function IngredientDialog({
             Jednostka
             <Select.Root
               value={unit}
+              disabled={unitLocked}
               onValueChange={(value) => {
                 if (typeof value === 'string') setUnit(value);
               }}
             >
-              <Select.Trigger className={`${FIELD_CLASS} inline-flex items-center justify-between gap-2 text-left cursor-pointer`}>
+              <Select.Trigger
+                className={`${FIELD_CLASS} inline-flex items-center justify-between gap-2 text-left ${
+                  unitLocked ? 'cursor-not-allowed bg-[#f6f2f0] text-[#5f5a58]' : 'cursor-pointer'
+                }`}
+              >
                 <Select.Value>{unit}</Select.Value>
                 <Select.Icon>
                   <ChevronDown aria-hidden className="size-4 shrink-0 text-[#5f5a58]" />
@@ -129,6 +135,12 @@ export function IngredientDialog({
             </Select.Root>
           </label>
         </div>
+
+        {unitLocked && (
+          <p className="m-0 -mt-2 text-xs font-semibold text-[#5f5a58]">
+            Jednostki nie można zmienić – składnik jest już w recepturach albo w produkcji, a ilości są tam zapisane w {item?.unit}.
+          </p>
+        )}
 
         {!item && (
           <div className="grid grid-cols-2 gap-3">

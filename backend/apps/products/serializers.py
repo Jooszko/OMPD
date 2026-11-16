@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 from .models import Ingredient, Product, StockMovement
-from .stock import MANUAL_KINDS
+from .stock import MANUAL_KINDS, ingredient_usages
 
 STOCK_FIELD = {'max_digits': 10, 'decimal_places': 3, 'min_value': Decimal('0')}
 
@@ -27,6 +27,15 @@ class IngredientSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         name = attrs.get('name', getattr(self.instance, 'name', ''))
         unit = attrs.get('unit', getattr(self.instance, 'unit', ''))
+        if self.instance and unit != self.instance.unit:
+            usages = ingredient_usages(self.instance)
+            if usages:
+                raise serializers.ValidationError({
+                    'unit': (
+                        f'Nie można zmienić jednostki – składnik jest już używany ({", ".join(usages)}), '
+                        f'a ilości są tam zapisane w {self.instance.unit}.'
+                    )
+                })
         duplicates = Ingredient.objects.filter(name__iexact=name, unit__iexact=unit)
         if self.instance:
             duplicates = duplicates.exclude(pk=self.instance.pk)

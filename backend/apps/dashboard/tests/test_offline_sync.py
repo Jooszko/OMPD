@@ -1,6 +1,7 @@
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -15,6 +16,10 @@ from users.models import User
 
 class OfflineSyncTests(TestCase):
     def setUp(self):
+        noon = timezone.make_aware(datetime.combine(date.today(), time(12, 0)))
+        clock = mock.patch('django.utils.timezone.now', return_value=noon)
+        clock.start()
+        self.addCleanup(clock.stop)
         self.api = APIClient()
         self.driver = User.objects.create_user(
             username='driver_8', password='x', role='driver', full_name='Driver 8'

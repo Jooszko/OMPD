@@ -554,6 +554,7 @@ export interface WarehouseRow {
   ingredient_id: number;
   name: string;
   unit: string;
+  unit_locked: boolean;
   current_stock: string;
   min_stock_level: string;
   daily_usage: string;

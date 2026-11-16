@@ -18,6 +18,29 @@ USAGE_WINDOW_DAYS = 7
 CONSUMPTION_KINDS = (StockMovement.KIND_PRODUCTION, StockMovement.KIND_LOSS)
 MANUAL_KINDS = (StockMovement.KIND_DELIVERY, StockMovement.KIND_LOSS, StockMovement.KIND_COUNT)
 THOUSANDTH = Decimal('0.001')
+UNIT_LOCKING_USAGES = {
+    'recipe': 'receptury wyrobów',
+    'product_additions': 'dodatki do wyrobów',
+    'dough_usages': 'składy ciast',
+    'batch_usages': 'dzieże w produkcji',
+}
+
+
+def ingredients_in_use(ingredient_ids=None):
+    used = set()
+    for lookup in UNIT_LOCKING_USAGES:
+        query = Ingredient.objects.filter(**{f'{lookup}__isnull': False})
+        if ingredient_ids is not None:
+            query = query.filter(pk__in=ingredient_ids)
+        used.update(query.values_list('pk', flat=True))
+    return used
+
+
+def ingredient_usages(ingredient):
+    return [
+        label for lookup, label in UNIT_LOCKING_USAGES.items()
+        if Ingredient.objects.filter(pk=ingredient.pk, **{f'{lookup}__isnull': False}).exists()
+    ]
 CENT = Decimal('0.01')
 
 
@@ -137,6 +160,7 @@ def warehouse_rows(ingredient_ids=None):
 
     usage = weekly_usage(ingredient_ids)
     offers = delivery_offers(ingredient_ids)
+    in_use = ingredients_in_use(ingredient_ids)
     last_delivery = dict(
         movements.filter(kind=StockMovement.KIND_DELIVERY)
         .values('ingredient_id').annotate(last=Max('created_at')).values_list('ingredient_id', 'last')
@@ -154,6 +178,7 @@ def warehouse_rows(ingredient_ids=None):
             'ingredient_id': ingredient.pk,
             'name': ingredient.name,
             'unit': ingredient.unit,
+            'unit_locked': ingredient.pk in in_use,
             'current_stock': str(current),
             'min_stock_level': str(minimum),
             'daily_usage': str(daily_usage),

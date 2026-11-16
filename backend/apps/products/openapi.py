@@ -55,6 +55,9 @@ class WarehouseRowSerializer(serializers.Serializer):
     ingredient_id = serializers.IntegerField()
     name = serializers.CharField()
     unit = serializers.CharField()
+    unit_locked = serializers.BooleanField(
+        help_text='Surowiec jest w recepturze, dodatkach, składzie ciasta albo dzieży – jednostki nie można zmienić.'
+    )
     current_stock = serializers.DecimalField(max_digits=10, decimal_places=3)
     min_stock_level = serializers.DecimalField(
         max_digits=10, decimal_places=3, help_text='Suma zużycia w produkcji z ostatnich 7 dni.'

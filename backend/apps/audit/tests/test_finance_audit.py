@@ -22,20 +22,26 @@ class FinanceAuditTests(TestCase):
     def test_new_supplier_lists_filled_fields_and_catalog(self):
         self.api.post(
             '/api/finance/suppliers/',
-            {'name': 'Młyn Kowalski', 'products': [{'product_id': self.water.pk}, {'product_id': self.flour.pk}]},
+            {
+                'name': 'Młyn Kowalski',
+                'products': [
+                    {'product_id': self.water.pk, 'last_price': '2.00'},
+                    {'product_id': self.flour.pk, 'last_price': '3.50'},
+                ],
+            },
             format='json',
         )
 
         entry = AuditEntry.objects.get(action='supplier.created')
         rows = change_rows(entry)
         self.assertIn(('Nazwa', None, 'Młyn Kowalski'), rows)
-        self.assertIn(('Asortyment i ceny', None, 'Mąka, Woda'), rows)
+        self.assertIn(('Asortyment i ceny', None, 'Mąka (3.50 zł/kg), Woda (2.00 zł/l)'), rows)
         self.assertNotIn('Telefon', [label for label, _, _ in rows])
 
     def test_supplier_edit_shows_changed_data_and_catalog(self):
         supplier = Supplier.objects.create(name='Młyn Kowalski')
-        SupplierIngredient.objects.create(supplier=supplier, ingredient=self.flour)
-        SupplierIngredient.objects.create(supplier=supplier, ingredient=self.water)
+        SupplierIngredient.objects.create(supplier=supplier, ingredient=self.flour, last_price='3.50')
+        SupplierIngredient.objects.create(supplier=supplier, ingredient=self.water, last_price='2.00')
 
         self.api.put(
             f'/api/finance/suppliers/{supplier.pk}/',
@@ -48,7 +54,11 @@ class FinanceAuditTests(TestCase):
             change_rows(entry),
             [
                 ('Telefon', '', '500600700'),
-                ('Asortyment i ceny', 'Mąka, Woda', 'Mąka, Woda (nieprzypisany)'),
+                (
+                    'Asortyment i ceny',
+                    'Mąka (3.50 zł/kg), Woda (2.00 zł/l)',
+                    'Mąka (3.50 zł/kg), Woda (2.00 zł/l) (nieprzypisany)',
+                ),
             ],
         )
 
